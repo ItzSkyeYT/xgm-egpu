@@ -1,0 +1,1063 @@
+#!/usr/bin/env bash
+# xgm-egpu — activate/deactivate the XG Mobile eGPU on an ASUS ROG Flow X13 (GV301QH).
+#
+# Why this exists: writing egpu_enable makes ACPI eject the *internal* dGPU slot.
+# NVIDIA's nv_pci_remove() then spins in a poll-and-wait loop until the internal
+# GPU's usage count hits zero. If anything still holds /dev/nvidia*, the ACPI
+# hotplug mutex is held forever and the writing process parks in uninterruptible
+# D state — unkillable, terminal wedged, reboot required.
+#
+# So: release the internal GPU completely BEFORE the write, and never let the
+# write block the foreground shell.
+#
+# Refs: drivers/platform/x86/asus-armoury.c :: egpu_enable_current_value_store()
+#       include/linux/platform_data/x86/asus-wmi.h (DEVID 0x00090019)
+
+set -uo pipefail
+
+FW=/sys/class/firmware-attributes/asus-armoury/attributes
+ATTR_ENABLE=$FW/egpu_enable/current_value
+ATTR_CONNECTED=$FW/egpu_connected/current_value
+ATTR_DGPU=$FW/dgpu_disable/current_value
+
+INTERNAL_DGPU=0000:01:00.0        # GTX 1650 Mobile — disappears when the eGPU comes up
+ROOT_PORT=0000:00:01.1            # bridge hosting that slot, and the XGM's lanes
+INTERNAL_DEVID=0x1f9d             # TU117M. The XGM port shares the internal dGPU's PCIe
+                                  # lanes (that is *why* activation ejects it), so the eGPU
+                                  # may well claim 01:00.0 itself. Identify it by device ID,
+                                  # never by address.
+NV_MODULES=(nvidia_drm nvidia_modeset nvidia_uvm nvidia)
+NV_SERVICES=(nvidia-powerd nvidia-persistenced)
+
+# The write legitimately takes a long time: it drives a full ACPI eject and PCI
+# rescan cycle synchronously. Observed 2026-07-31 — an 'off' that "timed out" at
+# 25s had in fact completed successfully a short while later. Slow is not stuck,
+# and calling it stuck sent me chasing a hardware fault that wasn't there.
+PATIENCE=20           # seconds before saying "still working" — informational only
+TIMEOUT=180           # seconds before treating the write as genuinely wedged
+
+# The EC block the platform's own AML consults before it will switch anything.
+# From osy's annotated ACPI (Docs/ACPI_Annotated.asl), WMNB/DEVS 0x00090019 reads
+# 4 bytes at EC offset 0x1C and REFUSES to proceed if AC is lost or the connector
+# lock is not engaged. Reading it tells us what the firmware sees, with no risk.
+EC_IO=/sys/kernel/debug/ec/ec0/io
+EC_XGM_OFF=28         # 0x1C
+WEDGE_SAMPLE=4        # seconds to watch a D-state task before believing it is stuck
+SETTLE=20             # seconds to wait for the eGPU to enumerate after activation
+FORCE_KILL=0
+DRY_RUN=0
+# How much to tear down before the write. Evidence from 2026-07-31, four attempts:
+# the ONLY one that did not kill the machine was the one where nvidia was still
+# loaded and bound, and Linux performed a genuine eject. Every additional bit of
+# pre-emptive cleanup made it fail harder and faster.
+#
+# The AML explains why. Step 3's SUMA(0x01) sends eject notify 0x03 and then calls
+# WAT1(), a polling loop that WAITS FOR THE OS TO ACTUALLY EJECT. Strip the device
+# and driver out beforehand and acpiphp has nothing to do, no state transition
+# happens, and the firmware polls for something that will never arrive — then
+# carries on to FGON() regardless.
+#
+#   minimal — stop nvidia-powerd/persistenced only. Driver stays bound, so the
+#             eject is real and the firmware sees what it polls for. DEFAULT.
+#   unload  — also unbind the driver and rmmod the stack.
+#   remove  — also remove the device from the PCI tree. Most aggressive; worst
+#             observed results.
+RELEASE_LEVEL=minimal
+RELOAD_NVIDIA=1       # modprobe the NVIDIA stack back after a successful switch;
+                      # --no-reload leaves the eGPU enumerated but unbound
+
+# Default OFF. Setting ASPM to "performance" keeps the link at its top speed
+# instead of idling down to Gen1 — which sounded right and made things strictly
+# worse on 2026-07-31: held at Gen3 the link died in ~18s at idle, whereas at Gen1
+# it survived 15 minutes. Left available because it is the correct lever if the
+# connectors are ever fixed.
+ASPM_PERF=0
+
+# Target PCIe generation to pin on the root port before switching. Empty leaves
+# the firmware's choice alone. `--link-gen 1` is the mitigation for this machine:
+# the link is stable at a steady Gen1 and cannot complete training at Gen2 or Gen3.
+LINK_GEN=
+
+# ---------------------------------------------------------------- output helpers
+
+if [[ -t 1 ]]; then
+    C_R=$'\e[31m'; C_G=$'\e[32m'; C_Y=$'\e[33m'; C_B=$'\e[34m'; C_0=$'\e[0m'
+else
+    C_R=; C_G=; C_Y=; C_B=; C_0=
+fi
+# Mirror everything into the journal. This machine has persistent journald, so if
+# an attempt takes the kernel down with it, 'journalctl -b -1 -t xgm-egpu' still
+# says how far we got — terminal scrollback does not survive a forced power-off.
+_log() { command -v logger >/dev/null 2>&1 && logger -t xgm-egpu -p "user.$1" -- "$2"; }
+
+info() { printf '%s==>%s %s\n' "$C_B" "$C_0" "$*";     _log info  "$*"; }
+ok()   { printf '%s ok %s %s\n' "$C_G" "$C_0" "$*";    _log notice "$*"; }
+warn() { printf '%s  ! %s %s\n' "$C_Y" "$C_0" "$*" >&2; _log warning "$*"; }
+die()  { printf '%sfail%s %s\n' "$C_R" "$C_0" "$*" >&2; _log err "$*"; exit 1; }
+
+# ---------------------------------------------------------------- preconditions
+
+need_root() {
+    [[ $EUID -eq 0 ]] || die "must run as root (sysfs write + module unload)"
+}
+
+check_interface() {
+    [[ -e $ATTR_ENABLE ]] || die "$ATTR_ENABLE missing — is asus-armoury loaded? (modprobe asus-armoury)"
+}
+
+# Decode the errno the kernel's store() handler returned. The message text from
+# tee/printf is generic; these are the paths that actually produce each code.
+decode_errno() {
+    case "$1" in
+        *"No such file or directory"*|*ENOENT*)
+            echo "ENOENT — kernel says EGPU_CONNECTED is 0. The board's detect line is not"
+            echo "        asserted, or the EC does not believe it. Check the cable, then"
+            echo "        re-read egpu_connected." ;;
+        *"No such device"*|*ENODEV*)
+            echo "ENODEV — the GPU MUX check failed. On a GV301QH there is no MUX, so this"
+            echo "        should be unreachable; if you see it, the kernel took a path meant"
+            echo "        for a different model." ;;
+        *"Input/output error"*|*EIO*)
+            echo "EIO   — the WMI call returned a result the driver does not accept. The"
+            echo "        raw value is logged: journalctl -k | grep 'eGPU status'"
+            echo "        Per osy's Software.md the AML returns 0 = Error, 1 = Success,"
+            echo "        2 = Reboot required; anything but 1 or 2 becomes -EIO."
+            echo ""
+            echo "        'wmi result is 0x0' most often just means the eGPU is ALREADY in"
+            echo "        the state you asked for, or is not attached — check egpu_enable"
+            echo "        and egpu_connected before treating this as a fault. Seen"
+            echo "        2026-07-31 running 'off' after a reboot had already cleared it." ;;
+        *"Invalid argument"*|*EINVAL*)
+            echo "EINVAL — value out of range. Valid: 0..3 (map 0x0, 0x1, 0x101, 0x201)." ;;
+        *"Operation not permitted"*|*EPERM*)
+            echo "EPERM — not root, or the attribute is locked by firmware." ;;
+        *"Device or resource busy"*|*EBUSY*)
+            echo "EBUSY — deactivation only. The WMI call reported success (0x01), but"
+            echo "        the driver then re-read ASUS_WMI_DEVID_EGPU and found it still"
+            echo "        non-zero, so it refused to claim the eGPU was off:"
+            echo "            if (!enable) { get_devstate(...); if (result != 0) return -EBUSY; }"
+            echo ""
+            echo "        UNPLUG THE DOCK AND RUN 'off' AGAIN. Observed 2026-07-31:"
+            echo "        'off' succeeds with egpu_connected=0 and returns EBUSY every"
+            echo "        time with egpu_connected=1. The EC will not report the eGPU"
+            echo "        devstate as zero while the dock is attached and powered, so"
+            echo "        retrying in place cannot work — the condition never changes."
+            echo "        Disabling has no egpu_connected precondition, so unplugging"
+            echo "        first is always allowed." ;;
+        "") : ;;
+        *)  echo "unrecognised: $1" ;;
+    esac
+}
+
+# ---------------------------------------------------------------- state readout
+
+read_attr() { cat "$1" 2>/dev/null || echo "?"; }
+
+# Tasks genuinely stuck, as opposed to merely passing through D. Threaded IRQ
+# handlers (irq/33-pciehp especially, which is the hotplug line we are poking)
+# and kworkers dip into D constantly as part of normal operation.
+#
+# Note ps 'etimes' is thread AGE, not time spent in D — kernel threads are as old
+# as the boot, so an age threshold marks every one of them as wedged. The only
+# honest test is to watch: sample twice and report what never left D.
+wedged_tasks() {
+    local candidates pid stat
+    candidates=$(ps -eo pid,stat,comm --no-headers |
+        awk '$2 ~ /D/ && $3 !~ /^irq\// { print $1 }')
+    [[ -z $candidates ]] && return 0
+
+    sleep "$WEDGE_SAMPLE"
+
+    for pid in $candidates; do
+        stat=$(ps -o stat= -p "$pid" 2>/dev/null) || continue
+        [[ $stat == D* ]] && ps -o pid,stat,etimes,comm --no-headers -p "$pid"
+    done
+}
+
+nv_holders() {
+    # Processes with an open handle on any /dev/nvidia* node. These are what
+    # nv_pci_remove() waits on. Root-only: most holders are root daemons.
+    local out
+    out=$(lsof -Fpc -- /dev/nvidia* 2>/dev/null | awk '
+        /^p/ { pid = substr($0,2) }
+        /^c/ { print pid, substr($0,2) }' | sort -u)
+    printf '%s' "$out"
+}
+
+# Raw XGM state block from the EC. Returns "b0 b1 b2 b3" as decimal, or nothing.
+ec_xgm_bytes() {
+    [[ -r $EC_IO ]] || modprobe ec_sys 2>/dev/null
+    [[ -r $EC_IO ]] || return 1
+    dd if="$EC_IO" bs=1 skip="$EC_XGM_OFF" count=4 status=none 2>/dev/null |
+        od -An -tu1 | tr -s ' ' | sed 's/^ *//;s/ *$//'
+}
+
+# Does the EC block at EC_XGM_OFF actually describe THIS machine's XGM state?
+#
+# EC_XGM_OFF comes from osy's annotated ACPI, which was dumped from a different
+# ASUS model. EC RAM layouts are model-specific, so the offset is a hypothesis,
+# not a fact. egpu_connected via WMI is known-good — if the EC byte disagrees with
+# it, we are reading the wrong address and must not draw conclusions from it.
+# Verified wrong on this GV301QH on 2026-07-31: WMI said connected, EC 0x1C read
+# 00 00 00 00.
+ec_offset_is_valid() {
+    local b b1 wmi
+    b=$(ec_xgm_bytes) || return 1
+    [[ -n $b ]] || return 1
+    read -r _ b1 _ _ <<<"$b"
+    wmi=$(read_attr "$ATTR_CONNECTED")
+    [[ $wmi == 0 || $wmi == 1 ]] || return 1
+    [[ $(( b1 & 1 )) == "$wmi" ]]
+}
+
+# Full EC RAM, for locating the real XGM block empirically: dump with the dock
+# attached, dump again detached, diff. The bytes that move are the block.
+ec_dump() {
+    need_root
+    [[ -r $EC_IO ]] || modprobe ec_sys 2>/dev/null
+    [[ -r $EC_IO ]] || die "cannot read $EC_IO"
+    od -Ax -tx1 "$EC_IO"
+}
+
+# Decode per the annotated AML. Byte 0: 0x40 established / 0x80 not established.
+# Byte 1: bit0 connected, bit1 lock engaged. Byte 2: bit0 AC power loss.
+cmd_ec() {
+    need_root
+    local b; b=$(ec_xgm_bytes) || die "cannot read $EC_IO (need root; 'modprobe ec_sys')"
+    [[ -n $b ]] || die "EC read returned nothing"
+
+    local b0 b1 b2 b3; read -r b0 b1 b2 b3 <<<"$b"
+    printf 'EC 0x1C raw      %02x %02x %02x %02x\n' "$b0" "$b1" "$b2" "$b3"
+
+    case $b0 in
+        64)  printf '%-16s %s\n' "link"      "0x40 established" ;;
+        128) printf '%-16s %s\n' "link"      "0x80 NOT established" ;;
+        *)   printf '%-16s %s\n' "link"      "$(printf '0x%02x' "$b0") — undocumented" ;;
+    esac
+    printf '%-16s %s\n' "connected" "$(( b1 & 1 ))"
+    printf '%-16s %s\n' "lock"      "$(( (b1 >> 1) & 1 ))"
+    printf '%-16s %s\n' "AC lost"   "$(( b2 & 1 ))"
+
+    echo
+    if ! ec_offset_is_valid; then
+        warn "THIS DECODE IS NOT TRUSTWORTHY — ignore the lines above."
+        warn ""
+        warn "The connected bit here says $(( b1 & 1 )), but WMI reports egpu_connected="
+        warn "$(read_attr "$ATTR_CONNECTED"). WMI is the reliable source, so offset"
+        warn "$(printf '0x%02x' "$EC_XGM_OFF") is not where this machine keeps its XGM state."
+        warn ""
+        warn "That offset came from osy's annotated ACPI, dumped from a different ASUS"
+        warn "model; EC RAM layouts are model-specific. Find the real one empirically:"
+        warn ""
+        warn "  $0 ec --dump > /tmp/ec-attached.txt     # dock plugged in"
+        warn "  $0 ec --dump > /tmp/ec-detached.txt     # dock unplugged"
+        warn "  diff /tmp/ec-attached.txt /tmp/ec-detached.txt"
+        warn ""
+        warn "The bytes that move between those two dumps are the XGM state block."
+        return 1
+    fi
+
+    if (( (b1 >> 1) & 1 )); then
+        ok "lock engaged — the AML's precondition is satisfied"
+    else
+        warn "LOCK NOT ENGAGED. The platform AML refuses to switch without it, and"
+        warn "its _QF5/_QF6 handlers disable the eGPU whenever the lock drops. If this"
+        warn "line is unstable on the DIY board, it can deassert mid-activation and"
+        warn "collide with the switch already in flight."
+    fi
+    (( b2 & 1 )) && warn "AC POWER LOSS flagged — the AML fails the switch on this."
+    return 0
+}
+
+UDEV_RULE=/etc/udev/rules.d/99-xgm-egpu-pm.rules
+MODPROBE_CONF=/etc/modprobe.d/nvidia-xgm-egpu.conf
+
+# Persist the power-management pinning so it survives reboots and applies the
+# instant the device appears — before anything can suspend it.
+#
+# Boot of 2026-07-31 19:38 showed why this must be udev and not a kernel
+# parameter: pcie_port_pm=off pinned the root port (suspended_ms=0) and the PCIe
+# link stayed up — no pciehp Link Down at all — but the ENDPOINT was still
+# control=auto, suspended into D3cold, and never came back (NVRM Xid 79, 38s in).
+# The port and the card need pinning separately.
+cmd_install_rules() {
+    need_root
+
+    cat > "$UDEV_RULE" <<EOF
+# Installed by xgm-egpu. Keeps the XG Mobile eGPU and its root port out of
+# runtime suspend: on this machine a D3cold transition never resumes, and the
+# GPU drops off the bus (NVRM Xid 79) roughly 30-40s after it goes idle.
+ACTION=="add|bind", SUBSYSTEM=="pci", ATTR{vendor}=="0x10de", ATTR{power/control}="on"
+ACTION=="add|bind", SUBSYSTEM=="pci", KERNEL=="$ROOT_PORT", ATTR{power/control}="on"
+EOF
+    ok "wrote $UDEV_RULE"
+
+    cat > "$MODPROBE_CONF" <<'EOF'
+# Installed by xgm-egpu. The NVIDIA driver has its own runtime power management
+# that suspends the GPU into D3cold independently of the PCI core's, which is a
+# second route to the same "GPU has fallen off the bus" failure.
+options nvidia NVreg_DynamicPowerManagement=0
+EOF
+    ok "wrote $MODPROBE_CONF"
+
+    udevadm control --reload-rules 2>/dev/null && ok "udev rules reloaded"
+    info "Applying to devices already present:"
+    local d
+    for d in "$ROOT_PORT" $(egpu_functions "$(egpu_bdf || echo)"); do
+        [[ -n $d ]] && pm_pin_on "$d"
+    done
+    echo
+    info "Remove with:  rm $UDEV_RULE $MODPROBE_CONF"
+    return 0
+}
+
+cmd_status() {
+    check_interface
+    printf '%-18s %s\n' "egpu_connected" "$(read_attr "$ATTR_CONNECTED")  (1 = board detected by the EC)"
+    printf '%-18s %s\n' "egpu_enable"    "$(read_attr "$ATTR_ENABLE")"
+    printf '%-18s %s\n' "dgpu_disable"   "$(read_attr "$ATTR_DGPU")"
+
+    printf '%-18s %s\n' "pending_reboot" "$(read_attr "$FW/pending_reboot")"
+
+    local ac ac_online=0
+    for ac in /sys/class/power_supply/*/; do
+        [[ $(cat "$ac/type" 2>/dev/null) == Mains ]] || continue
+        printf '%-18s %s\n' "$(basename "$ac") online" "$(cat "$ac/online" 2>/dev/null)"
+        [[ $(cat "$ac/online" 2>/dev/null) == 1 ]] && ac_online=1
+    done
+    (( ac_online )) || warn "ON BATTERY — the AML refuses the switch without mains power"
+
+    # The trap: EC says "use the eGPU", so the internal dGPU is switched off, but
+    # no eGPU is attached to take its place. Net result is no discrete GPU at all,
+    # and it persists across reboots because this lives in the EC, not in Linux.
+    if [[ $(read_attr "$ATTR_ENABLE") != 0 && $(read_attr "$ATTR_CONNECTED") == 0 ]]; then
+        echo
+        warn "egpu_enable is on but no eGPU is connected — the internal dGPU is"
+        warn "disabled with nothing replacing it. Run '$0 off' to get it back."
+    fi
+
+    echo
+    info "NVIDIA devices on the bus"
+    lspci -nn | grep -i nvidia || echo "  (none)"
+
+    echo
+    info "NVIDIA modules"
+    lsmod | grep -E '^nvidia' || echo "  (none loaded)"
+
+    echo
+    info "Open handles on /dev/nvidia* (these block the ACPI eject)"
+    local h; h=$(nv_holders)
+    if [[ -n $h ]]; then
+        printf '  %s\n' "$h"
+    elif [[ $EUID -ne 0 ]]; then
+        echo "  (none visible — but as a normal user lsof cannot see root daemons"
+        echo "   such as nvidia-powerd. Re-run as root for a truthful answer.)"
+    else
+        echo "  (none)"
+    fi
+
+    echo
+    info "Tasks in uninterruptible D state"
+    local d; d=$(ps -eo pid,stat,etimes,comm --no-headers | awk '$2 ~ /D/')
+    if [[ -n $d ]]; then printf '  %s\n' "$d"; else echo "  (none)"; fi
+    local w; w=$(wedged_tasks)
+    if [[ -n $w ]]; then
+        warn "still in D after ${WEDGE_SAMPLE}s — a previous attempt is wedged:"
+        printf '  %s\n' "$w" >&2
+    fi
+    return 0
+}
+
+# ---------------------------------------------------------------- gpu release
+
+# Detach the nvidia driver from the internal dGPU explicitly, before anything
+# touches egpu_enable.
+#
+# This is the difference between a bad day and a reboot. Unbinding runs
+# nv_pci_remove() in *our* process context. Letting the ACPI eject trigger it
+# instead runs the same code inside the kacpi_hotplug worker while it holds the
+# ACPI hotplug mutex — so a stall there wedges every subsequent hotplug event and
+# parks the writer in unkillable D state. Same teardown, survivable context.
+unbind_internal() {
+    local drv=/sys/bus/pci/devices/$INTERNAL_DGPU/driver
+    [[ -e $drv ]] || { info "  internal dGPU already unbound"; return 0; }
+
+    local name; name=$(basename "$(readlink -f "$drv")")
+    info "  unbinding $name from $INTERNAL_DGPU"
+    [[ $DRY_RUN -eq 1 ]] && return 0
+
+    if ! guarded_write "$INTERNAL_DGPU" "$drv/unbind"; then
+        die "unbind stalled or failed. Something still holds the internal GPU.
+     Nothing was written to egpu_enable, the ACPI mutex is untouched, and the
+     machine is still usable — which is the whole point of unbinding first."
+    fi
+    ok "  internal dGPU unbound"
+}
+
+# Take the internal dGPU out of Linux's PCI tree entirely, not just unbind its
+# driver.
+#
+# Why this and not just unbind: at step 3 the platform AML sends eject notify 0x03
+# and then keeps going — step 6 reprograms the PCIe bridge via M018(), step 8
+# powers the dock via FGON(). Linux's acpiphp receives that notify and starts its
+# own teardown of the same slot at the same time, walking config space on a bridge
+# the firmware is actively reconfiguring. Unbinding the driver does not prevent
+# that; the PCI device is still there for acpiphp to act on. Removing it leaves
+# acpiphp nothing to race against.
+#
+# Reversible without a reboot: echo 1 > /sys/bus/pci/rescan
+pci_remove_internal() {
+    [[ $RELEASE_LEVEL == remove ]] || return 0
+    local dev=/sys/bus/pci/devices/$INTERNAL_DGPU
+    [[ -e $dev ]] || { info "  $INTERNAL_DGPU already absent from the PCI tree"; return 0; }
+
+    info "  removing $INTERNAL_DGPU from the PCI tree (acpiphp then has nothing to eject)"
+    [[ $DRY_RUN -eq 1 ]] && return 0
+
+    if ! guarded_write 1 "$dev/remove"; then
+        die "PCI remove stalled. egpu_enable was not touched and the ACPI mutex is
+     clean. Recover the device with: echo 1 > /sys/bus/pci/rescan"
+    fi
+    sleep 1
+    [[ -e $dev ]] && warn "  $INTERNAL_DGPU still present after remove"
+    return 0
+}
+
+release_internal_gpu() {
+    info "Releasing the internal dGPU before the ACPI eject"
+
+    local svc
+    for svc in "${NV_SERVICES[@]}"; do
+        if systemctl is-active --quiet "$svc"; then
+            info "  stopping $svc"
+            [[ $DRY_RUN -eq 1 ]] || systemctl stop "$svc"
+        fi
+    done
+
+    local h; h=$(nv_holders)
+    if [[ -n $h ]]; then
+        warn "still holding /dev/nvidia*:"
+        printf '    %s\n' "$h" >&2
+        if [[ $FORCE_KILL -eq 1 ]]; then
+            local pid
+            while read -r pid _; do
+                [[ -n $pid ]] || continue
+                info "  SIGTERM $pid"
+                [[ $DRY_RUN -eq 1 ]] || kill -TERM "$pid" 2>/dev/null
+            done <<<"$h"
+            sleep 3
+            while read -r pid _; do
+                [[ -n $pid ]] || continue
+                kill -0 "$pid" 2>/dev/null || continue
+                warn "  SIGKILL $pid"
+                [[ $DRY_RUN -eq 1 ]] || kill -KILL "$pid" 2>/dev/null
+            done <<<"$(nv_holders)"
+            sleep 2
+        else
+            die "refusing to proceed — close these first, or re-run with --force-kill.
+     Writing egpu_enable now would park this shell in D state."
+        fi
+    fi
+
+    if [[ $RELEASE_LEVEL == minimal ]]; then
+        ok "holders cleared; leaving the driver bound so the eject is a real one"
+        info "  (the AML's SUMA/WAT1 polls for the OS to complete it — see RELEASE_LEVEL)"
+        return 0
+    fi
+
+    unbind_internal
+
+    # Unload in dependency order. Refcounts can be transiently non-zero while a
+    # teardown is still in flight (nvidia_modeset held by a half-unloaded
+    # nvidia_drm, say), so retry before giving up — a single-shot check reports a
+    # blocker that would have cleared on its own a second later.
+    local attempt m rc holders remaining
+    for attempt in 1 2 3 4 5; do
+        remaining=()
+        for m in "${NV_MODULES[@]}"; do
+            [[ -d /sys/module/$m ]] || continue
+            [[ $DRY_RUN -eq 1 ]] && { remaining+=("$m"); continue; }
+            rmmod "$m" 2>/dev/null || remaining+=("$m")
+        done
+        [[ ${#remaining[@]} -eq 0 ]] && break
+        (( attempt < 5 )) && sleep 1
+    done
+
+    if [[ ${#remaining[@]} -gt 0 && $DRY_RUN -eq 0 ]]; then
+        warn "modules still loaded after 5 attempts:"
+        for m in "${remaining[@]}"; do
+            rc=$(cat "/sys/module/$m/refcnt" 2>/dev/null || echo '?')
+            holders=$(ls "/sys/module/$m/holders" 2>/dev/null | tr '\n' ' ')
+            warn "    $m  refcnt=$rc  holders=[${holders:-none}]"
+        done
+        die "not writing egpu_enable — an unloaded-but-referenced module means the
+     internal GPU is still live, which is exactly what stalls the ACPI eject."
+    fi
+    pci_remove_internal
+    ok "internal dGPU released"
+}
+
+# Pin runtime PM to "on" so the link cannot be suspended out from under us.
+#
+# Observed 2026-07-31: activation succeeded completely — 3060 enumerated, BARs
+# assigned, nvidia-drm initialised, HDMI audio registered, zero AER errors — and
+# then ten seconds later:
+#
+#   pcieport 0000:00:01.1: pciehp: Slot(0): Link Down
+#   pcieport 0000:00:01.1: pciehp: Slot(0): Card not present
+#   NVRM: Xid 79, GPU has fallen off the bus.
+#
+# The root port defaults to power/control=auto with autosuspend_delay_ms=100, so
+# once the freshly-bound GPU went idle the bridge dropped to D3cold and the link
+# never came back. Same signature as the failed boots. Pin the bridge BEFORE the
+# switch, and every eGPU function after it appears.
+# Push ASPM to "performance", which disables the L0s/L1 low-power link states.
+#
+# The link on this machine cannot change speed (see cmd_link_speed). It idles down
+# to Gen1 and then cannot climb back. Keeping ASPM out of the picture is the
+# cheapest way to stop it descending in the first place, so no retrain is needed.
+# Runtime-writable, and reverts on reboot.
+aspm_performance() {
+    local p=/sys/module/pcie_aspm/parameters/policy
+    [[ -w $p ]] || { info "  ASPM policy not writable — skipping"; return 0; }
+    local cur; cur=$(sed -n 's/.*\[\([a-z]*\)\].*/\1/p' "$p" 2>/dev/null)
+    [[ $cur == performance ]] && { info "  ASPM policy already 'performance'"; return 0; }
+    if echo performance > "$p" 2>/dev/null; then
+        ok "  ASPM policy: $cur -> performance"
+    else
+        warn "  could not set ASPM policy (was '$cur')"
+    fi
+}
+
+pm_pin_on() {
+    local d p
+    for d in "$@"; do
+        p=/sys/bus/pci/devices/$d/power/control
+        [[ -w $p ]] || continue
+        [[ $(cat "$p" 2>/dev/null) == on ]] && continue
+        if echo on > "$p" 2>/dev/null; then
+            info "  runtime PM pinned on for $d"
+        else
+            warn "  could not pin runtime PM for $d"
+        fi
+    done
+}
+
+# Every PCI function of the eGPU (the GPU plus its HDMI audio sibling).
+egpu_functions() {
+    local bdf=${1:-}
+    [[ -n $bdf ]] || return 0
+    local base=${bdf%.*}
+    local f
+    for f in /sys/bus/pci/devices/"$base".*; do
+        [[ -e $f ]] && basename "$f"
+    done
+}
+
+reload_nvidia() {
+    # Binding the driver is a prime suspect in its own right: on Windows, deep
+    # interrogation of this card by GPU-Z bugchecks with a surprise-removal
+    # subcode while FurMark runs fine. Being able to stop *before* the bind
+    # separates "enumeration killed it" from "the NVIDIA driver killed it".
+    if [[ $RELOAD_NVIDIA -eq 0 ]]; then
+        info "Skipping the NVIDIA reload (--no-reload)"
+        info "  the eGPU is enumerated but unbound. If the machine is still alive"
+        info "  now, enumeration is safe and the driver bind is the killer."
+        info "  Bind manually when ready with:  modprobe nvidia"
+        return 0
+    fi
+    info "Reloading the NVIDIA stack"
+    [[ $DRY_RUN -eq 1 ]] && return 0
+    # NVreg_DynamicPowerManagement=0 stops the NVIDIA driver runtime-suspending
+    # the GPU into D3cold on its own, which is a second route to the same
+    # link-down death that the bridge's runtime PM causes.
+    modprobe nvidia NVreg_DynamicPowerManagement=0 2>/dev/null ||
+        modprobe nvidia || warn "modprobe nvidia failed"
+    modprobe nvidia_modeset  || true
+    modprobe nvidia_uvm      || true
+    modprobe nvidia_drm      || true
+    # Deliberately NOT restarting nvidia-powerd. It manages Dynamic Boost on the
+    # internal dGPU, which is switched off in eGPU mode, and it is the daemon
+    # whose 15 open fds stalled the very first activation for 856 seconds.
+}
+
+# ---------------------------------------------------------------- guarded write
+
+# Write to sysfs without ever blocking the caller. The write runs in a background
+# subshell; we poll it against a deadline. A D-state task cannot be killed, so on
+# timeout we report and bail rather than pretending we can clean up.
+guarded_write() {
+    local value=$1 path=$2
+    local errfile; errfile=$(mktemp)
+
+    ( printf '%s' "$value" > "$path" ) 2>"$errfile" &
+    local wpid=$!
+
+    local waited=0 nudged=0
+    while kill -0 "$wpid" 2>/dev/null; do
+        if (( waited >= PATIENCE && nudged == 0 )); then
+            nudged=1
+            info "  still working after ${PATIENCE}s — this is normal, it drives a full"
+            info "  ACPI eject and PCI rescan. Waiting up to ${TIMEOUT}s before giving up."
+        fi
+        if (( waited >= TIMEOUT )); then
+            local st; st=$(awk '{print $3}' "/proc/$wpid/stat" 2>/dev/null || echo '?')
+            warn "write to $(basename "$(dirname "$path")") did not return after ${TIMEOUT}s (state=$st)"
+            if [[ $st == D* ]]; then
+                warn "task $wpid is in uninterruptible sleep — the teardown is stalled."
+                warn "kernel stack:"
+                sed 's/^/      /' "/proc/$wpid/stack" 2>/dev/null >&2 || warn "      (unreadable)"
+                warn ""
+                warn "A holder of the internal GPU survived the release step; PID $wpid is"
+                warn "now unkillable. If the stack shows acpiphp_disable_and_eject_slot the"
+                warn "ACPI hotplug mutex is held and the machine needs 'systemctl reboot'"
+                warn "(escalate to 'systemctl reboot -ff'). If it shows only nv_pci_remove"
+                warn "from a driver unbind, releasing the holder may still let it complete."
+            fi
+            rm -f "$errfile"
+            return 124
+        fi
+        # One second per tick. This used to sleep 0.5 and increment by 1, so every
+        # threshold fired at half its stated value — PATIENCE=20 announced itself
+        # at 10s and TIMEOUT=180 would have given up at 90s. Caught by comparing
+        # journal timestamps against the numbers the script printed.
+        sleep 1
+        waited=$(( waited + 1 ))
+    done
+
+    wait "$wpid"; local rc=$?
+    local err; err=$(<"$errfile"); rm -f "$errfile"
+
+    if (( rc != 0 )); then
+        warn "write failed (rc=$rc)"
+        [[ -n $err ]] && warn "  $err"
+        decode_errno "$err" | sed 's/^/      /' >&2
+        return "$rc"
+    fi
+    return 0
+}
+
+# ---------------------------------------------------------------- link status
+
+egpu_bdf() {
+    # The first NVIDIA display-class function that is not the internal TU117M.
+    # Matching on device ID rather than address, because the eGPU can legitimately
+    # enumerate at 0000:01:00.0 — the slot the internal dGPU just vacated. Audio
+    # functions (class 0403) are skipped so we return the GPU, not its HDMI codec.
+    local d ven dev cls
+    for d in /sys/bus/pci/devices/*/; do
+        ven=$(cat "$d/vendor" 2>/dev/null) || continue
+        [[ $ven == 0x10de ]] || continue
+        dev=$(cat "$d/device" 2>/dev/null)
+        [[ $dev == "$INTERNAL_DEVID" ]] && continue
+        cls=$(cat "$d/class" 2>/dev/null)
+        [[ $cls == 0x0300* || $cls == 0x0302* ]] || continue
+        basename "$d"
+        return 0
+    done
+    return 1
+}
+
+# Pin the link to a fixed PCIe generation on the root port.
+#
+# Why: on 2026-07-31 the link proved stable at a steady speed but unable to CHANGE
+# speed. It idles at Gen1 (NVIDIA downtrains at P8); when load arrives it tries to
+# climb to Gen3, reaches Gen2, and stalls:
+#
+#   pciehp: Slot(0): Cannot train link: status 0x3882
+#     bits 3:0 = 2      -> current speed Gen2
+#     bits 9:4 = 8      -> width x8
+#     bit 11   = 1      -> link training in progress
+#
+# followed by Xid 79. Same mechanism as the Windows GPU-Z bugcheck, which forces a
+# retrain, while FurMark at an already-established Gen3 runs fine.
+#
+# Target Link Speed lives in Link Control 2, bits 3:0, at CAP_EXP+0x30. Setting it
+# does not retrain by itself — bit 5 (0x20) of Link Control at CAP_EXP+0x10 is the
+# Retrain Link bit. Reverts on reboot; nothing here is persistent.
+set_target_link_speed() {
+    local gen=$1 retrain=${2:-1}
+    command -v setpci >/dev/null 2>&1 || { warn "setpci not installed (pciutils)"; return 1; }
+
+    local lnkctl2 cur new
+    lnkctl2=$(setpci -s "$ROOT_PORT" CAP_EXP+30.w 2>/dev/null) ||
+        { warn "could not read Link Control 2 on $ROOT_PORT"; return 1; }
+    cur=$(( 0x$lnkctl2 & 0xF ))
+
+    if (( cur == gen )); then
+        info "  $ROOT_PORT already targeting Gen$gen"
+    else
+        new=$(printf '%04x' $(( (0x$lnkctl2 & 0xFFF0) | gen )))
+        info "  $ROOT_PORT target link speed Gen$cur -> Gen$gen (0x$lnkctl2 -> 0x$new)"
+        setpci -s "$ROOT_PORT" CAP_EXP+30.w="$new" ||
+            { warn "write to Link Control 2 failed"; return 1; }
+    fi
+
+    (( retrain )) || return 0
+    local lnkctl
+    lnkctl=$(setpci -s "$ROOT_PORT" CAP_EXP+10.w 2>/dev/null) || return 0
+    setpci -s "$ROOT_PORT" CAP_EXP+10.w="$(printf '%04x' $(( 0x$lnkctl | 0x20 )))" ||
+        warn "  retrain write failed"
+    sleep 2
+    return 0
+}
+
+cmd_link_speed() {
+    need_root
+    local gen=${1:-}
+    case "$gen" in
+        1|2|3|4) ;;
+        *) die "usage: $0 link-speed <1|2|3|4>   (target PCIe generation)" ;;
+    esac
+    info "Pinning $ROOT_PORT target link speed to Gen$gen"
+    set_target_link_speed "$gen" 1 || die "could not set the target link speed"
+    echo
+    cmd_link
+}
+
+cmd_link() {
+    local bdf=${1:-$(egpu_bdf)}
+    [[ -n $bdf ]] || die "no external NVIDIA device found on the bus"
+    local d=/sys/bus/pci/devices/$bdf
+
+    # sysfs, not `lspci -vv` — the latter needs root for the capability block and
+    # silently prints nothing without it, which previously read as "no link".
+    info "PCIe link for $bdf"
+    printf '  %-22s %s x%s\n' "current" "$(cat "$d/current_link_speed" 2>/dev/null)" "$(cat "$d/current_link_width" 2>/dev/null)"
+    printf '  %-22s %s x%s\n' "device capability" "$(cat "$d/max_link_speed" 2>/dev/null)" "$(cat "$d/max_link_width" 2>/dev/null)"
+
+    # nvidia-smi reports the NEGOTIATED ceiling for this link, which is the number
+    # that matters. sysfs max_link_speed is the card's own capability (16 GT/s
+    # x16 on a 3060) and says nothing about what the XGM path can carry.
+    local gen_cur='' gen_max='' width='' pstate=''
+    if command -v nvidia-smi >/dev/null 2>&1; then
+        local q
+        q=$(nvidia-smi --query-gpu=pstate,pcie.link.gen.current,pcie.link.gen.max,pcie.link.width.current \
+            --format=csv,noheader,nounits 2>/dev/null | head -1)
+        # nvidia-smi writes "No devices were found" to STDOUT, not stderr, so a
+        # non-empty $q is NOT proof of a valid reading. Without the numeric check
+        # that error text gets split into the fields and printed as
+        # "Gen x / perf state Nodeviceswerefound".
+        IFS=',' read -r pstate gen_cur gen_max width <<<"$q"
+        pstate=${pstate// /}; gen_cur=${gen_cur// /}; gen_max=${gen_max// /}; width=${width// /}
+        if [[ $gen_max =~ ^[0-9]+$ && $gen_cur =~ ^[0-9]+$ && $width =~ ^[0-9]+$ ]]; then
+            printf '  %-22s Gen%s x%s\n' "negotiated ceiling" "$gen_max" "$width"
+            printf '  %-22s Gen%s  (perf state %s)\n' "running at" "$gen_cur" "$pstate"
+        else
+            gen_cur=''; gen_max=''; width=''; pstate=''
+            printf '  %-22s %s\n' "nvidia-smi" "no usable reading — driver not bound, or GPU is off the bus"
+        fi
+    fi
+
+    # The root port's Target Link Speed is the real cap — it is what --link-gen
+    # sets, and it is NOT nvidia-smi's pcie.link.gen.max, which reports the
+    # device's own capability and stays at 3 even when the port is pinned to 1.
+    # Confusing the two makes a pinned, safe link look like it is about to ramp.
+    local tls=''
+    if command -v setpci >/dev/null 2>&1; then
+        local l2; l2=$(setpci -s "$ROOT_PORT" CAP_EXP+30.w 2>/dev/null)
+        if [[ $l2 =~ ^[0-9a-fA-F]+$ ]]; then
+            tls=$(( 0x$l2 & 0xF ))
+            printf '  %-22s Gen%s  (root port cap, what --link-gen sets)\n' "target link speed" "$tls"
+        fi
+    else
+        printf '  %-22s %s\n' "target link speed" "unknown — needs root (setpci)"
+    fi
+
+    echo
+    if [[ $tls == 1 ]]; then
+        ok "Pinned to Gen 1. On this machine that is the ONLY speed the link has"
+        ok "sustained: it stalls mid-training at Gen 2 and dies within seconds at"
+        ok "Gen 3. ~2 GB/s, but it stays up. It should NOT ramp under load — if"
+        ok "you see the current speed rise above Gen 1, the pin has been lost."
+    elif [[ -n $tls ]] && (( tls > 1 )); then
+        warn "Target link speed is Gen$tls. This link has never survived above Gen 1"
+        warn "— 'Cannot train link' at Gen 2, and death in ~18s at Gen 3, even idle."
+        warn "Pin it with:  $0 link-speed 1   (or activate with --link-gen 1)"
+    else
+        case "$gen_max" in
+            3) info "Device reports a Gen 3 x$width capability (this is NOT the port cap)." ;;
+            *) warn "could not read the negotiated ceiling (is the driver bound?)" ;;
+        esac
+    fi
+
+    if [[ -n $gen_cur && -n $tls ]] && (( gen_cur > tls )); then
+        warn "Running at Gen$gen_cur, above the Gen$tls cap — the pin is not holding."
+    fi
+
+    echo
+    info "AER error counters (non-zero here is the real marginal-link signal)"
+    local f nz
+    for f in aer_dev_correctable aer_dev_nonfatal aer_dev_fatal; do
+        [[ -r $d/$f ]] || continue
+        nz=$(grep -v ' 0$' "$d/$f" 2>/dev/null | tr '\n' ' ')
+        printf '  %-22s %s\n' "$f" "${nz:-all zero}"
+    done
+}
+
+# ---------------------------------------------------------------- commands
+
+cmd_on() {
+    need_root; check_interface
+
+    [[ $(read_attr "$ATTR_CONNECTED") == 1 ]] || die "egpu_connected is not 1 — the EC does not see the board. Not writing."
+    if [[ $(read_attr "$ATTR_ENABLE") == 1 ]]; then
+        ok "egpu_enable is already 1"
+        # Honour --link-gen even here: asking for a generation on an already-active
+        # eGPU is a clear request to change it, and silently dropping the flag
+        # leaves the caller believing a pin was applied when it was not.
+        if [[ -n $LINK_GEN ]]; then
+            local now
+            now=$(setpci -s "$ROOT_PORT" CAP_EXP+30.w 2>/dev/null)
+            now=$(( 0x${now:-0} & 0xF ))
+            if (( now != LINK_GEN )); then
+                warn "--link-gen $LINK_GEN would RETRAIN a link that is currently up at Gen$now."
+                warn "Changing speed is the exact operation this link fails at. If it goes"
+                warn "wrong you lose the working eGPU and need the full recovery cycle."
+                warn "To do it anyway, deliberately:  $0 link-speed $LINK_GEN"
+            else
+                info "already pinned to Gen$LINK_GEN"
+            fi
+        fi
+        cmd_link
+        return 0
+    fi
+
+    # AC is a hard precondition in the AML (step 2 fails on "AC power loss", and
+    # 0xBB is a dedicated External Power Loss event). Unlike EC RAM, the standard
+    # power_supply sysfs works fine here, so there is no excuse for not checking.
+    # Powering up a desktop 3060 on battery is a bad idea independently.
+    local ac_online=0 ac
+    for ac in /sys/class/power_supply/*/; do
+        [[ $(cat "$ac/type" 2>/dev/null) == Mains ]] || continue
+        [[ $(cat "$ac/online" 2>/dev/null) == 1 ]] && ac_online=1
+    done
+    (( ac_online )) || die "the laptop is on BATTERY — no mains adapter online.
+     The platform AML refuses the switch on AC power loss (it is the same
+     condition behind the 0xBB External Power Loss event), and spinning up the
+     eGPU unplugged is a bad idea regardless. Plug in the charger and retry."
+
+    # Check the AML's own preconditions before handing it the request. It reads
+    # EC 0x1C and fails on AC loss or an unengaged lock; asking anyway just means
+    # discovering that the hard way. Advisory if the EC is unreadable.
+    # Only enforce this if the EC offset has been corroborated against WMI. An
+    # unverified offset reads zeros and would block activation forever on a
+    # phantom "lock disengaged" — which is exactly what it did on first use.
+    local ecb
+    if ec_offset_is_valid && ecb=$(ec_xgm_bytes); then
+        local e0 e1 e2; read -r e0 e1 e2 _ <<<"$ecb"
+        info "EC $(printf '0x%02x' "$EC_XGM_OFF"): $(printf '%02x %02x %02x' "$e0" "$e1" "$e2")  (connected=$(( e1 & 1 )) lock=$(( (e1 >> 1) & 1 )) ac_lost=$(( e2 & 1 )))"
+        (( e2 & 1 )) && die "EC reports AC power loss. The platform AML fails the switch on this."
+        (( (e1 >> 1) & 1 )) || die "EC reports the connector lock is NOT engaged.
+     The platform AML requires it, and its _QF5/_QF6 handlers disable the eGPU
+     whenever the lock drops — including partway through a switch."
+    else
+        info "skipping the EC lock/AC precheck — offset $(printf '0x%02x' "$EC_XGM_OFF") is unverified on"
+        info "this model (see '$0 ec'). The AML performs these checks itself regardless."
+    fi
+
+    local d; d=$(wedged_tasks)
+    [[ -n $d ]] && die "a task stayed in D state across ${WEDGE_SAMPLE}s of sampling — a previous
+     attempt is wedged and only a reboot clears it:
+$(printf '     %s\n' "$d")"
+
+    release_internal_gpu
+
+    info "Writing 1 to egpu_enable (timeout ${TIMEOUT}s)"
+    [[ $DRY_RUN -eq 1 ]] && { ok "dry run — stopping before the write"; return 0; }
+
+    # Pin the bridge before the switch. It survives the eject, and if it ever
+    # autosuspends the link drops and the eGPU is gone.
+    pm_pin_on "$ROOT_PORT"
+    [[ $ASPM_PERF -eq 1 ]] && aspm_performance
+    [[ -n $LINK_GEN ]] && set_target_link_speed "$LINK_GEN"
+
+    # Flush the journal before the write. Everything after this point can take the
+    # machine down, and an unflushed buffer is the one thing that would leave us
+    # with no record of how far it got.
+    command -v journalctl >/dev/null 2>&1 && journalctl --flush 2>/dev/null
+    sync
+    # Capture the status directly. Inside `if ! cmd; then`, $? is the status of the
+    # negation — always 0 — so reading it there silently loses the 124 and skips
+    # the warning below, which is the most important thing this script ever prints.
+    guarded_write 1 "$ATTR_ENABLE"
+    local wrc=$?
+    if (( wrc != 0 )); then
+        if (( wrc == 124 )); then
+            warn ""
+            warn "READ THIS BEFORE REBOOTING."
+            warn ""
+            warn "A timeout does NOT mean the write was rejected. In the kernel the WMI"
+            warn "call (armoury_set_devstate) runs FIRST and commits to the EC; only then"
+            warn "does armoury_pci_rescan() take pci_rescan_remove_lock — which is where"
+            warn "this stalls, because the ACPI eject that same WMI call triggered is"
+            warn "already holding it. So the EC has very likely accepted the change even"
+            warn "though the write never returned and current_value still reads 0."
+            warn ""
+            warn "egpu_enable is PERSISTENT EC STATE. It survives a reboot, and a"
+            warn "forced power-off. On the next boot the internal dGPU will be disabled."
+            warn "If the eGPU is attached and its link does not train, the machine may"
+            warn "fail to boot at all."
+            warn ""
+            warn "Recover by DISCONNECTING the eGPU, booting, and running:  $0 off"
+            warn "('off' works with the eGPU unplugged: the egpu_connected guard in the"
+            warn "kernel applies only to enabling, not to disabling.)"
+        fi
+        return "$wrc"
+    fi
+
+    ok "write returned; the kernel performs its own PCI rescan (armoury_pci_rescan)"
+
+    info "Waiting up to ${SETTLE}s for the eGPU to enumerate"
+    local i bdf=
+    for ((i=0; i<SETTLE; i++)); do
+        bdf=$(egpu_bdf); [[ -n $bdf ]] && break
+        sleep 1
+    done
+
+    if [[ -z $bdf ]]; then
+        warn "no external NVIDIA device appeared after ${SETTLE}s"
+        warn "egpu_enable now reads: $(read_attr "$ATTR_ENABLE")"
+        warn "check: dmesg | grep -iE 'pci|asus|egpu' | tail -40"
+        return 1
+    fi
+    ok "eGPU enumerated at $bdf"
+
+    # Pin every function of the eGPU (GPU + HDMI audio) before binding a driver,
+    # so nothing can suspend the link once the GPU goes idle.
+    # shellcheck disable=SC2046
+    pm_pin_on $(egpu_functions "$bdf") "$ROOT_PORT"
+
+    # Re-pin the speed after enumeration: the AML reconfigures the bridge at its
+    # step 6 (M018()), which can undo what we set before the switch.
+    [[ -n $LINK_GEN ]] && set_target_link_speed "$LINK_GEN"
+
+    reload_nvidia
+    sleep 2
+    echo; cmd_link "$bdf"
+    echo; info "nvidia-smi"; nvidia-smi 2>&1 | head -15
+}
+
+cmd_off() {
+    need_root; check_interface
+
+    # Short-circuit when already off. Without this the AML is asked to disable
+    # something that is not enabled, returns result 0x0 ("Error"), and the driver
+    # turns that into -EIO — which reads like a fault when nothing is wrong.
+    if [[ $(read_attr "$ATTR_ENABLE") == 0 ]]; then
+        ok "egpu_enable is already 0 — nothing to do"
+        [[ $(read_attr "$FW/pending_reboot") == 1 ]] &&
+            info "pending_reboot is set; reboot to settle the last change"
+        return 0
+    fi
+
+    release_internal_gpu
+    info "Writing 0 to egpu_enable (timeout ${TIMEOUT}s)"
+    [[ $DRY_RUN -eq 1 ]] && { ok "dry run — stopping before the write"; return 0; }
+    command -v journalctl >/dev/null 2>&1 && journalctl --flush 2>/dev/null
+    sync
+
+    guarded_write 0 "$ATTR_ENABLE"
+    local wrc=$?
+    if (( wrc == 124 )); then
+        # This exact case burned us on 2026-07-31: 'off' hit the timeout, looked
+        # like a failed recovery, and had in fact completed. Do not let the next
+        # person conclude the machine is unrecoverable.
+        warn ""
+        warn "Do not panic, and do not power-cycle yet."
+        warn ""
+        warn "A timeout on 'off' does not mean the disable failed. This has been"
+        warn "observed completing successfully on its own shortly afterwards. The"
+        warn "EC commit happens before the part that blocks."
+        warn ""
+        warn "Wait a couple of minutes, then check:  $0 status"
+        warn "You are looking for egpu_enable=0 and the internal dGPU back on the bus."
+        return "$wrc"
+    fi
+    (( wrc != 0 )) && return "$wrc"
+
+    ok "egpu_enable now reads: $(read_attr "$ATTR_ENABLE")"
+    [[ $(read_attr "$FW/pending_reboot") == 1 ]] &&
+        info "pending_reboot is set (WMI result 0x02) — reboot to settle the change"
+    reload_nvidia
+    return 0
+}
+
+usage() {
+    cat <<'EOF'
+xgm-egpu — XG Mobile eGPU control for the ROG Flow X13 (GV301QH)
+
+  xgm-egpu status              show attributes, bus, modules, blockers
+  xgm-egpu on                  release the internal dGPU, then activate
+  xgm-egpu off                 deactivate and restore the internal dGPU
+  xgm-egpu link [BDF]          PCIe link speed/width and error counters
+  xgm-egpu link-speed <1-4>    pin the root port's target PCIe generation and
+                               retrain — the link on this machine is stable at a
+                               steady speed but fails when changing speed
+  xgm-egpu ec                  decode the EC's XGM state block (connect/lock/AC)
+  xgm-egpu install-rules       persist the runtime-PM pinning via udev +
+                               modprobe.d, so the eGPU survives reboots
+
+Options:
+  --force-kill    kill processes holding /dev/nvidia* instead of refusing
+  --release LEVEL how much to tear down first (default: minimal)
+                    minimal  stop nvidia-powerd/persistenced only; the driver
+                             stays bound so the ACPI eject is a real one, which
+                             is what the AML's SUMA/WAT1 loop polls for
+                    unload   also unbind the driver and rmmod the stack
+                    remove   also remove the device from the PCI tree
+                  On this machine 'minimal' is the only level that has ever
+                  survived; 'remove' fails fastest. See the RELEASE_LEVEL comment.
+  --no-reload     stop after the eGPU enumerates, without binding the NVIDIA
+                  driver — separates an enumeration fault from a driver fault
+  --link-gen N    pin the root port's target PCIe generation (1-4) before the
+                  switch and again after enumeration. On this machine the link
+                  cannot complete training above Gen1: '--link-gen 1' is the
+                  working mitigation (~2 GB/s, but stable).
+  --aspm-performance
+                  disable ASPM so the link holds its top speed. Sounds right,
+                  measured worse here: pinned at Gen3 it died in ~18s at idle,
+                  where Gen1 ran 15 minutes. Off by default.
+  --dry-run       do everything except the sysfs write
+  --timeout N     seconds to wait on the write before declaring a wedge (default 180)
+
+A timeout is not a rollback. The kernel commits to the EC (armoury_set_devstate)
+BEFORE it calls armoury_pci_rescan(), and it is the rescan that blocks — on a lock
+the ACPI eject already holds. So a write that never returns has very likely taken
+effect anyway, and egpu_enable lives in the EC across reboots and power cycles.
+Never read a timeout as "nothing happened".
+
+'on' refuses to write unless every handle on the internal GPU is released.
+That refusal is the point: writing with a holder present wedges the machine.
+EOF
+}
+
+CMD=${1:-status}; shift || true
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --force-kill) FORCE_KILL=1 ;;
+        --release)    RELEASE_LEVEL=$2; shift ;;
+        --release=*)  RELEASE_LEVEL=${1#*=} ;;
+        --no-reload)  RELOAD_NVIDIA=0 ;;
+        --aspm-performance) ASPM_PERF=1 ;;
+        --link-gen)   LINK_GEN=$2; shift ;;
+        --link-gen=*) LINK_GEN=${1#*=} ;;
+        --dry-run)    DRY_RUN=1 ;;
+        --timeout)    TIMEOUT=$2; shift ;;
+        -h|--help)    usage; exit 0 ;;
+        *)            break ;;
+    esac
+    shift
+done
+
+case "$CMD" in
+    status)     cmd_status ;;
+    on)         cmd_on ;;
+    off)        cmd_off ;;
+    link)       cmd_link "${1:-}" ;;
+    link-speed) cmd_link_speed "${1:-}" ;;
+    ec)         [[ ${1:-} == --dump ]] && ec_dump || cmd_ec ;;
+    install-rules) cmd_install_rules ;;
+    -h|--help)  usage ;;
+    *)          usage; exit 1 ;;
+esac
