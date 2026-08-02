@@ -1,0 +1,18 @@
+# Reference copy. `sudo xgm-egpu install-rules` generates this with YOUR root
+# port address substituted — prefer that over copying this file by hand.
+#
+# Keeps the XG Mobile eGPU and its root port out of runtime suspend. On the
+# reference machine a D3cold transition never resumes: the root port
+# runtime-suspends 100ms after idle and the GPU drops off the bus
+# (NVRM Xid 79) roughly 10-40s after it goes quiet.
+#
+# Both lines are required. Pinning only the port leaves the endpoint at
+# power/control=auto, which reaches D3cold by itself. `pcie_port_pm=off` on the
+# kernel command line does NOT cover the endpoint either.
+#
+# Harmless when no eGPU is connected.
+
+ACTION=="add|bind", SUBSYSTEM=="pci", ATTR{vendor}=="0x10de", ATTR{power/control}="on"
+
+# Replace 0000:00:01.1 with your root port — see docs/PORTING.md
+ACTION=="add|bind", SUBSYSTEM=="pci", KERNEL=="0000:00:01.1", ATTR{power/control}="on"
