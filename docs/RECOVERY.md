@@ -44,6 +44,20 @@ answering.
    ```
    **Expect this to block for a long time — well past 25 seconds.** Let it run.
    It is doing a real ACPI transition. See [Findings §3](../FINDINGS.md#3-blocking-is-structural-and-slow-is-not-stuck).
+
+   **If it refuses instead of blocking**, with `refusing to proceed — close these
+   first`, something still holds `/dev/nvidia*`. That guard is protecting you
+   from a D-state wedge, but it also stands between you and your recovery. Close
+   whatever it lists, or override it:
+
+   ```sh
+   sudo xgm-egpu off --force-kill
+   ```
+
+   `--force-kill` sends SIGTERM to the listed processes, waits 3 s, then SIGKILL.
+   In the unbootable-machine case there is usually nothing holding the GPU
+   anyway — `egpu_enable=1` means the internal card is switched off, so no
+   driver is bound to anything.
 5. Reboot to clear `pending_reboot`.
 
 Your internal dGPU comes back, bound to `nvidia`.
@@ -204,6 +218,8 @@ your internal GPU:
 sudo xgm-egpu off       # be patient, it blocks
 sudo reboot
 ```
+
+If `off` refuses because something holds `/dev/nvidia*`, add `--force-kill`.
 
 If `xgm-egpu` itself is unavailable, the same thing by hand:
 

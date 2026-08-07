@@ -38,6 +38,30 @@ not reaching the EC — a hardware problem, not a software one.
 
 ---
 
+## `refusing to proceed — close these first`
+
+Both `on` and `off` refuse to write while anything holds `/dev/nvidia*`, because
+writing then would park your shell in unkillable `D` state. The message lists
+the processes.
+
+Close them, or override:
+
+```sh
+sudo xgm-egpu on  --force-kill      # SIGTERM, wait 3s, SIGKILL
+sudo xgm-egpu off --force-kill
+```
+
+Note this applies to `off` as well, which matters because `off` is the recovery
+path — see [RECOVERY.md](RECOVERY.md).
+
+Common holders: `nvidia-powerd` and `nvidia-persistenced` (stopped automatically),
+then browsers, Electron apps, VMs, and compositors.
+
+`lsof` is used to find them when present; otherwise the script walks `/proc`
+itself, so a missing `lsof` no longer causes the check to silently pass.
+
+---
+
 ## Write hangs, process unkillable, `Ctrl-C` does nothing
 
 See [RECOVERY.md § terminal wedged](RECOVERY.md#symptom-terminal-wedged-process-unkillable).
