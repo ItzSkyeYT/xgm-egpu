@@ -20,12 +20,34 @@ ATTR_ENABLE=$FW/egpu_enable/current_value
 ATTR_CONNECTED=$FW/egpu_connected/current_value
 ATTR_DGPU=$FW/dgpu_disable/current_value
 
-INTERNAL_DGPU=0000:01:00.0        # GTX 1650 Mobile — disappears when the eGPU comes up
-ROOT_PORT=0000:00:01.1            # bridge hosting that slot, and the XGM's lanes
-INTERNAL_DEVID=0x1f9d             # TU117M. The XGM port shares the internal dGPU's PCIe
-                                  # lanes (that is *why* activation ejects it), so the eGPU
-                                  # may well claim 01:00.0 itself. Identify it by device ID,
-                                  # never by address.
+# Machine topology. Empty on purpose: detect_topology() derives these from sysfs
+# at startup, so the script is not tied to the machine it was written on.
+#
+#   INTERNAL_DGPU  the discrete GPU sharing PCIe lanes with the XGM port, which is
+#                  therefore ejected on activation. EMPTY on hosts that have none
+#                  (ROG Ally) — a supported configuration, not an error. There is
+#                  simply nothing to eject, which removes the hardest part of the
+#                  whole problem.
+#   ROOT_PORT      the bridge hosting that slot, and the XGM's lanes.
+#   INTERNAL_DEVID the internal dGPU's device ID. The XGM port shares its lanes
+#                  (that is *why* activation ejects it), so the eGPU may well claim
+#                  the same address. Identify it by device ID, never by address.
+#
+# Override any of them in /etc/xgm-egpu.conf, via the environment, or with
+# --root-port / --internal-dgpu. If detection gets it wrong, please open an issue:
+# it is meant to work everywhere and a machine it fails on is a bug worth fixing.
+INTERNAL_DGPU=${INTERNAL_DGPU:-}
+ROOT_PORT=${ROOT_PORT:-}
+INTERNAL_DEVID=${INTERNAL_DEVID:-}
+
+CONFIG_FILE=${XGM_CONFIG:-/etc/xgm-egpu.conf}
+
+# Cache for facts only learnable while egpu_enable=0. Once the eGPU is active it
+# occupies the internal dGPU's address, so "which display device is the internal
+# one" stops being answerable by looking at the bus.
+STATE_DIR=${XGM_STATE_DIR:-/var/lib/xgm-egpu}
+STATE_FILE=$STATE_DIR/topology.conf
+
 NV_MODULES=(nvidia_drm nvidia_modeset nvidia_uvm nvidia)
 NV_SERVICES=(nvidia-powerd nvidia-persistenced)
 
@@ -95,10 +117,190 @@ ok()   { printf '%s ok %s %s\n' "$C_G" "$C_0" "$*";    _log notice "$*"; }
 warn() { printf '%s  ! %s %s\n' "$C_Y" "$C_0" "$*" >&2; _log warning "$*"; }
 die()  { printf '%sfail%s %s\n' "$C_R" "$C_0" "$*" >&2; _log err "$*"; exit 1; }
 
+# ---------------------------------------------------------------- topology detection
+#
+# Everything here reads sysfs only: no root, no lspci parsing, no setpci, nothing
+# that can perturb the bus. Safe to run in any state.
+
+# Parent BDF of a PCI device, or empty if it hangs directly off the host bridge.
+pci_parent() {
+    local p
+    p=$(basename "$(dirname "$(readlink -f "/sys/bus/pci/devices/$1" 2>/dev/null)")" 2>/dev/null)
+    [[ $p == 0000:* ]] && printf '%s' "$p"
+}
+
+# Every PCI display-class device (0x03xxxx: VGA, 3D controller, display).
+display_devices() {
+    local d c
+    for d in /sys/bus/pci/devices/*/; do
+        c=$(cat "$d/class" 2>/dev/null) || continue
+        [[ $c == 0x03* ]] && basename "$d"
+    done
+}
+
+# The pcieport bridge whose secondary bus is $1 (decimal).
+port_for_bus() {
+    local want=$1 d drv
+    for d in /sys/bus/pci/devices/*/; do
+        drv=$(basename "$(readlink -f "$d/driver" 2>/dev/null)" 2>/dev/null)
+        [[ $drv == pcieport ]] || continue
+        [[ $(cat "$d/secondary_bus_number" 2>/dev/null) == "$want" ]] || continue
+        basename "$d"; return 0
+    done
+    return 1
+}
+
+# Hotplug-capable slots, as "PORT_BDF SLOT_NAME OCCUPIED".
+#
+# pciehp registers these in /sys/bus/pci/slots. The slot address is
+# domain:bus:dev of the *downstream* side, so the port is the bridge whose
+# secondary bus number matches. This is how we find the XGM port on a host with
+# no internal dGPU: there is no display device to walk up from, but the empty
+# hotplug slot is still there.
+hotplug_slots() {
+    local s addr bus port occupied
+    for s in /sys/bus/pci/slots/*/; do
+        addr=$(cat "$s/address" 2>/dev/null) || continue
+        bus=${addr#*:}; bus=${bus%%:*}
+        port=$(port_for_bus "$((16#$bus))") || continue
+        occupied=0
+        compgen -G "/sys/bus/pci/devices/0000:$bus:*" >/dev/null && occupied=1
+        printf '%s %s %s\n' "$port" "$(basename "$s")" "$occupied"
+    done
+}
+
+# The internal discrete GPU: a display device that is not the firmware's primary
+# adapter. boot_vga=1 marks that primary, which on every ASUS laptop in scope is
+# the APU's integrated graphics.
+#
+# ONLY valid while egpu_enable=0. Once the eGPU is up it sits at the address the
+# internal dGPU vacated and is also a non-boot_vga display device, so this would
+# happily return the eGPU. Callers must respect that, which is what the state
+# cache below is for.
+detect_internal_dgpu() {
+    local bdf
+    for bdf in $(display_devices); do
+        [[ $(cat "/sys/bus/pci/devices/$bdf/boot_vga" 2>/dev/null || echo 0) == 1 ]] && continue
+        printf '%s' "$bdf"; return 0
+    done
+    return 1
+}
+
+load_state()  { [[ -r $STATE_FILE ]] && . "$STATE_FILE"; return 0; }
+
+save_state() {
+    [[ $EUID -eq 0 ]] || return 0          # best effort; unprivileged runs just skip it
+    mkdir -p "$STATE_DIR" 2>/dev/null || return 0
+    cat > "$STATE_FILE" 2>/dev/null <<EOF
+# Written by xgm-egpu. Detected while egpu_enable=0, when the internal dGPU was
+# still visible. Delete this file to force re-detection.
+INTERNAL_DGPU=$INTERNAL_DGPU
+INTERNAL_DEVID=$INTERNAL_DEVID
+ROOT_PORT=$ROOT_PORT
+EOF
+    return 0
+}
+
+# Work out this machine's topology. Anything already set — by /etc/xgm-egpu.conf,
+# the environment, or a command-line flag — is left alone.
+_TOPOLOGY_DONE=0
+detect_topology() {
+    # Idempotent: the dispatcher runs this before every command, and cmd_detect
+    # calls it too. Without the guard, anything it warns about gets printed twice.
+    [[ $_TOPOLOGY_DONE -eq 1 ]] && return 0
+    _TOPOLOGY_DONE=1
+
+    [[ -r $CONFIG_FILE ]] && . "$CONFIG_FILE"
+
+    local egpu_state; egpu_state=$(cat "$ATTR_ENABLE" 2>/dev/null || echo 0)
+
+    if [[ $egpu_state == 0 ]]; then
+        # Internal dGPU, if any, is visible right now. This is the only moment we
+        # can tell it apart from an eGPU at the same address.
+        if [[ -z $INTERNAL_DGPU ]]; then
+            INTERNAL_DGPU=$(detect_internal_dgpu || true)
+        fi
+        if [[ -n $INTERNAL_DGPU && -z $INTERNAL_DEVID ]]; then
+            INTERNAL_DEVID=$(cat "/sys/bus/pci/devices/$INTERNAL_DGPU/device" 2>/dev/null || true)
+        fi
+    else
+        # eGPU active: the internal dGPU is gone. Recover its identity from cache
+        # so egpu_bdf() can still exclude it, rather than guessing.
+        load_state
+    fi
+
+    if [[ -z $ROOT_PORT ]]; then
+        if [[ -n $INTERNAL_DGPU ]]; then
+            # The XGM shares the internal dGPU's lanes, so its port is that dGPU's
+            # parent bridge.
+            ROOT_PORT=$(pci_parent "$INTERNAL_DGPU")
+        else
+            # No internal dGPU (ROG Ally). Fall back to the hotplug slots: if
+            # exactly one is unoccupied, that is the XGM port. More than one and we
+            # refuse to guess.
+            local empty; empty=$(hotplug_slots | awk '$3 == 0 {print $1}')
+            if [[ $(printf '%s\n' "$empty" | grep -c .) -eq 1 ]]; then
+                ROOT_PORT=$empty
+            elif [[ -n $empty ]]; then
+                warn "several empty hotplug slots; cannot tell which is the XGM port:"
+                printf '    %s\n' $empty >&2
+                warn "set ROOT_PORT in $CONFIG_FILE or pass --root-port. See docs/PORTING.md"
+            fi
+        fi
+    fi
+
+    [[ $egpu_state == 0 && -n $ROOT_PORT ]] && save_state
+    return 0
+}
+
+cmd_detect() {
+    check_interface
+    detect_topology
+
+    printf '%-16s %s\n' "egpu_enable" "$(read_attr "$ATTR_ENABLE")"
+    echo
+    echo "Detected topology:"
+    printf '  %-16s %s\n' "ROOT_PORT" "${ROOT_PORT:-<none — set it manually>}"
+    if [[ -n $INTERNAL_DGPU ]]; then
+        printf '  %-16s %s (devid %s)\n' "INTERNAL_DGPU" "$INTERNAL_DGPU" "${INTERNAL_DEVID:-?}"
+    else
+        printf '  %-16s %s\n' "INTERNAL_DGPU" "none — this host has no internal dGPU"
+        echo "                   Nothing to eject: the hardest part of this problem does"
+        echo "                   not apply to you. See docs/PORTING.md."
+    fi
+    echo
+    echo "Display devices:"
+    local bdf
+    for bdf in $(display_devices); do
+        printf '  %s  %s:%s  boot_vga=%s  parent=%s\n' "$bdf" \
+            "$(cat /sys/bus/pci/devices/$bdf/vendor 2>/dev/null)" \
+            "$(cat /sys/bus/pci/devices/$bdf/device 2>/dev/null)" \
+            "$(cat /sys/bus/pci/devices/$bdf/boot_vga 2>/dev/null || echo 0)" \
+            "$(pci_parent "$bdf")"
+    done
+    echo
+    echo "Hotplug slots (port, slot, occupied):"
+    hotplug_slots | sed 's/^/  /' || echo "  none"
+    echo
+    [[ -r $CONFIG_FILE ]] && echo "Config:  $CONFIG_FILE (in use)" || echo "Config:  $CONFIG_FILE (absent)"
+    [[ -r $STATE_FILE  ]] && echo "Cache:   $STATE_FILE" || echo "Cache:   $STATE_FILE (not yet written)"
+    echo
+    echo "If any of this is wrong, please open an issue with this output —"
+    echo "detection failing on a machine is a bug, not something to work around."
+    return 0
+}
+
 # ---------------------------------------------------------------- preconditions
 
 need_root() {
     [[ $EUID -eq 0 ]] || die "must run as root (sysfs write + module unload)"
+}
+
+# Guard for the paths that genuinely need a root port (link speed, PM pinning).
+need_root_port() {
+    [[ -n $ROOT_PORT ]] || die "could not determine the PCIe root port for the XGM.
+     Run 'xgm-egpu detect' to see what was found, then set ROOT_PORT in
+     $CONFIG_FILE or pass --root-port BDF. See docs/PORTING.md."
 }
 
 check_interface() {
@@ -283,12 +485,26 @@ MODPROBE_CONF=/etc/modprobe.d/nvidia-xgm-egpu.conf
 cmd_install_rules() {
     need_root
 
+    # The vendor rule alone still covers the card, so a missing root port
+    # degrades rather than fails: worth a warning, not a refusal.
+    local port_rule="ACTION==\"add|bind\", SUBSYSTEM==\"pci\", KERNEL==\"$ROOT_PORT\", ATTR{power/control}=\"on\""
+    if [[ -z $ROOT_PORT ]]; then
+        warn "root port unknown — writing the endpoint rule only."
+        warn "The card will be pinned but its bridge will not. Run 'xgm-egpu detect',"
+        warn "then set ROOT_PORT in $CONFIG_FILE and re-run this."
+        port_rule="# root port was not detected when this file was written; see docs/PORTING.md"
+    fi
+
     cat > "$UDEV_RULE" <<EOF
 # Installed by xgm-egpu. Keeps the XG Mobile eGPU and its root port out of
 # runtime suspend: on this machine a D3cold transition never resumes, and the
 # GPU drops off the bus (NVRM Xid 79) roughly 30-40s after it goes idle.
+#
+# Both lines matter. Pinning only the port leaves the endpoint at
+# power/control=auto, which reaches D3cold on its own — and pcie_port_pm=off on
+# the kernel command line does not cover the endpoint either.
 ACTION=="add|bind", SUBSYSTEM=="pci", ATTR{vendor}=="0x10de", ATTR{power/control}="on"
-ACTION=="add|bind", SUBSYSTEM=="pci", KERNEL=="$ROOT_PORT", ATTR{power/control}="on"
+$port_rule
 EOF
     ok "wrote $UDEV_RULE"
 
@@ -379,6 +595,10 @@ cmd_status() {
 # ACPI hotplug mutex — so a stall there wedges every subsequent hotplug event and
 # parks the writer in unkillable D state. Same teardown, survivable context.
 unbind_internal() {
+    # No internal dGPU at all (ROG Ally and similar). Nothing shares the XGM's
+    # lanes, so activation triggers no eject and there is nothing to release.
+    [[ -n $INTERNAL_DGPU ]] || { info "  no internal dGPU on this host — nothing to unbind"; return 0; }
+
     local drv=/sys/bus/pci/devices/$INTERNAL_DGPU/driver
     [[ -e $drv ]] || { info "  internal dGPU already unbound"; return 0; }
 
@@ -408,6 +628,7 @@ unbind_internal() {
 # Reversible without a reboot: echo 1 > /sys/bus/pci/rescan
 pci_remove_internal() {
     [[ $RELEASE_LEVEL == remove ]] || return 0
+    [[ -n $INTERNAL_DGPU ]] || return 0
     local dev=/sys/bus/pci/devices/$INTERNAL_DGPU
     [[ -e $dev ]] || { info "  $INTERNAL_DGPU already absent from the PCI tree"; return 0; }
 
@@ -677,6 +898,7 @@ egpu_bdf() {
 # Retrain Link bit. Reverts on reboot; nothing here is persistent.
 set_target_link_speed() {
     local gen=$1 retrain=${2:-1}
+    need_root_port
     command -v setpci >/dev/null 2>&1 || { warn "setpci not installed (pciutils)"; return 1; }
 
     local lnkctl2 cur new
@@ -988,6 +1210,9 @@ usage() {
 xgm-egpu — XG Mobile eGPU control for the ROG Flow X13 (GV301QH)
 
   xgm-egpu status              show attributes, bus, modules, blockers
+  xgm-egpu detect              show the autodetected topology and how it was
+                               derived — run this first on a new machine, and
+                               paste it into an issue if anything looks wrong
   xgm-egpu on                  release the internal dGPU, then activate
   xgm-egpu off                 deactivate and restore the internal dGPU
   xgm-egpu link [BDF]          PCIe link speed/width and error counters
@@ -1020,6 +1245,19 @@ Options:
                   where Gen1 ran 15 minutes. Off by default.
   --dry-run       do everything except the sysfs write
   --timeout N     seconds to wait on the write before declaring a wedge (default 180)
+  --root-port BDF override the detected PCIe root port (e.g. 0000:00:01.1)
+  --internal-dgpu BDF
+                  override the detected internal dGPU
+
+Topology is autodetected from sysfs; you should not normally need to tell this
+script anything about your machine. Persist overrides in /etc/xgm-egpu.conf:
+
+    ROOT_PORT=0000:00:01.1
+    INTERNAL_DGPU=0000:01:00.0
+    INTERNAL_DEVID=0x1f9d
+
+Hosts with no internal dGPU (ROG Ally) are supported: there is nothing sharing
+the XGM's lanes, so activation triggers no eject and the release path is a no-op.
 
 A timeout is not a rollback. The kernel commits to the EC (armoury_set_devstate)
 BEFORE it calls armoury_pci_rescan(), and it is the rescan that blocks — on a lock
@@ -1044,14 +1282,26 @@ while [[ $# -gt 0 ]]; do
         --link-gen=*) LINK_GEN=${1#*=} ;;
         --dry-run)    DRY_RUN=1 ;;
         --timeout)    TIMEOUT=$2; shift ;;
+        --root-port)  ROOT_PORT=$2; shift ;;
+        --root-port=*) ROOT_PORT=${1#*=} ;;
+        --internal-dgpu)   INTERNAL_DGPU=$2; shift ;;
+        --internal-dgpu=*) INTERNAL_DGPU=${1#*=} ;;
         -h|--help)    usage; exit 0 ;;
         *)            break ;;
     esac
     shift
 done
 
+# Work out the machine before dispatching. Anything set above by flag, by the
+# environment, or by /etc/xgm-egpu.conf survives — detection only fills blanks.
+case "$CMD" in
+    -h|--help) ;;
+    *) [[ -e $ATTR_ENABLE ]] && detect_topology ;;
+esac
+
 case "$CMD" in
     status)     cmd_status ;;
+    detect)     cmd_detect ;;
     on)         cmd_on ;;
     off)        cmd_off ;;
     link)       cmd_link "${1:-}" ;;

@@ -28,9 +28,10 @@ Next steps:
   1. Read docs/RECOVERY.md. Do this before your first activation, not after.
      egpu_enable is persistent EC state and survives a power-off.
 
-  2. If you are NOT on a ROG Flow X13 GV301QH, set your machine's constants at
-     the top of the script (lines 23-25). See docs/PORTING.md.
-     On a ROG Ally, only ROOT_PORT matters.
+  2. Check what it worked out about your machine. Topology is autodetected;
+     there is normally nothing to configure.
+
+       xgm-egpu detect
 
   3. Check the interface is present and your dock is detected:
 

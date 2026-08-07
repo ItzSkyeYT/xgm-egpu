@@ -1,6 +1,6 @@
 # xgm-egpu
 
-Activating an ASUS XG Mobile eGPU on an ordinary Linux distribution — including
+Activating an ASUS XG Mobile eGPU on an ordinary Linux distribution - including
 DIY docks built from [osy/XG_Mobile_Station](https://github.com/osy/XG_Mobile_Station).
 
 Not a SteamOS plugin. No Decky Loader, no Gaming Mode, no immutable-root
@@ -19,8 +19,8 @@ meet them undocumented.**
 | Activation (eGPU enumerates on the PCIe bus) | **Works** |
 | NVIDIA driver binds, DRM nodes appear | **Works** |
 | Link stays up under runtime power management | **Works**, with the shipped udev + modprobe rules |
-| Link trains above PCIe Gen1 | **Fails on the reference machine** — see [Findings](FINDINGS.md#pcie-link-speed) |
-| GPU initialises and renders | **Open** — `Xid 154 GPU Reset Required` |
+| Link trains above PCIe Gen1 | **Fails on the reference machine** - see [Findings](FINDINGS.md#pcie-link-speed) |
+| GPU initialises and renders | **Open** - `Xid 154 GPU Reset Required` |
 
 The reference machine is the most marginal configuration that exists: a DIY dock
 with substituted connectors, on the oldest Flow model. If you have an official
@@ -34,12 +34,12 @@ simply not be there for you.
 
 **Probably no if:** you are on SteamOS or Bazzite. Use
 [Kentronix57/Decky-Loader-XGMobile-Manager](https://github.com/Kentronix57/Decky-Loader-XGMobile-Manager)
-instead — it handles the immutable root and Gaming Mode integration properly,
+instead - it handles the immutable root and Gaming Mode integration properly,
 which this does not attempt.
 
 ## The one thing to read first
 
-**[docs/RECOVERY.md](docs/RECOVERY.md)** — how to get your machine back.
+**[docs/RECOVERY.md](docs/RECOVERY.md)** - how to get your machine back.
 
 `egpu_enable` is **persistent EC state.** It survives a reboot and a forced
 power-off. If it commits and no eGPU enumerates, you have no discrete GPU at
@@ -60,7 +60,8 @@ sudo ./install.sh          # installs bin/xgm-egpu, udev rule, modprobe.d conf
 Then, with the dock connected and locked, and on AC power:
 
 ```sh
-xgm-egpu status            # safe, read-only — always start here
+xgm-egpu detect            # safe, read-only - what it worked out about your machine
+xgm-egpu status            # safe, read-only - always start here
 sudo xgm-egpu on
 ```
 
@@ -68,7 +69,7 @@ sudo xgm-egpu on
 before you attempt anything that can wedge the machine. If it reads `0`, stop:
 nothing else in this repo will help until the EC sees the board.
 
-**The write takes a long time — up to a couple of minutes.** It drives a full
+**The write takes a long time - up to a couple of minutes.** It drives a full
 ACPI eject and PCI rescan synchronously. Slow is not stuck. A timeout does *not*
 mean the write was rejected; the EC has usually already committed by then. See
 [Findings §2](FINDINGS.md#2-a-timed-out-write-has-usually-already-succeeded).
@@ -77,6 +78,7 @@ mean the write was rejected; the EC has usually already committed by then. See
 
 ```
 xgm-egpu status              attributes, bus state, modules, blockers
+xgm-egpu detect              autodetected topology, and how it was derived
 xgm-egpu on                  release the internal dGPU, then activate
 xgm-egpu off                 deactivate, restore the internal dGPU
 xgm-egpu link [BDF]          PCIe link speed/width and error counters
@@ -91,15 +93,18 @@ Useful options:
 --dry-run        everything except the sysfs write
 --release LEVEL  minimal (default) | unload | remove
 --link-gen N     pin PCIe generation 1-4 before switching
---no-reload      enumerate without binding NVIDIA — separates enumeration
+--no-reload      enumerate without binding NVIDIA - separates enumeration
                  faults from driver faults
 --timeout N      default 180s
+--root-port BDF  override the autodetected PCIe root port
+--internal-dgpu BDF
+                 override the autodetected internal dGPU
 ```
 
 `--release minimal` is the default **and on the reference machine it is the only
 level that has ever survived.** More teardown makes it fail harder and faster.
 That is counterintuitive and it is the single most important finding in this
-repo — [Findings §6](FINDINGS.md#6-less-teardown-not-more).
+repo - [Findings §6](FINDINGS.md#6-less-teardown-not-more).
 
 ## Hardware
 
@@ -109,31 +114,52 @@ repo — [Findings §6](FINDINGS.md#6-less-teardown-not-more).
 | ROG Ally + CachyOS | DIY osy, RTX 3080 | Testing in progress |
 
 If you run this on anything, please [open an
-issue](../../issues) with your `xgm-egpu status` output — see
+issue](../../issues) with your `xgm-egpu status` output - see
 [CONTRIBUTING.md](CONTRIBUTING.md). The tested-hardware table is the most
 valuable thing this repo can accumulate.
 
-## Porting to another machine
+## Other machines
 
-The script currently hardcodes three values for the reference Flow X13. On a
-ROG Ally — which has **no internal dGPU** — the entire hard half of this problem
-does not exist, and only one of those three values matters.
+**Nothing to configure.** Topology is autodetected from sysfs at startup - the
+internal dGPU, its device ID, and the PCIe root port the XG Mobile shares lanes
+with. Check what it worked out:
 
-See [docs/PORTING.md](docs/PORTING.md).
+```sh
+xgm-egpu detect
+```
+
+Hosts with **no internal dGPU** (ROG Ally) are supported and are the easier case:
+nothing shares the XGM's lanes, so activation triggers no eject, and the entire
+release path - the hardest part of this problem - is a no-op. Detection finds the
+root port from the empty hotplug slot instead.
+
+Detection only refuses to guess when a host has several empty hotplug slots and
+no internal dGPU to disambiguate them. It says so, and you set one value:
+
+```sh
+# /etc/xgm-egpu.conf
+ROOT_PORT=0000:00:01.1
+```
+
+`--root-port` and `--internal-dgpu` do the same thing for one run.
+
+If detection gets your machine wrong, that is a bug worth reporting - paste
+`xgm-egpu detect` into an issue. [docs/PORTING.md](docs/PORTING.md) explains how
+the detection works and how to derive the values by hand.
 
 ## Documentation
 
-- **[docs/RECOVERY.md](docs/RECOVERY.md)** — unbootable machine, wedged terminal, stuck EC state
-- **[FINDINGS.md](FINDINGS.md)** — the reverse-engineering: AML decode, teardown ordering, power management, and the dead ends so you don't repeat them
-- **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** — symptom → cause → fix
-- **[docs/PORTING.md](docs/PORTING.md)** — adapting to another Flow or an Ally
+- **[docs/RECOVERY.md](docs/RECOVERY.md)** - unbootable machine, wedged terminal, stuck EC state
+- **[FINDINGS.md](FINDINGS.md)** - the reverse-engineering: AML decode, teardown ordering, power management, and the dead ends so you don't repeat them
+- **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** - symptom → cause → fix
+- **[docs/PORTING.md](docs/PORTING.md)** - adapting to another Flow or an Ally
 
 ## Credits
 
-- **[osy/XG_Mobile_Station](https://github.com/osy/XG_Mobile_Station)** — the DIY dock, and `Docs/ACPI_Annotated.asl` + `Docs/Software.md`, which are the single most useful references for any of this. Most of [FINDINGS.md](FINDINGS.md) is applied osy.
-- **[stensmir/xg-mobile-linux](https://github.com/stensmir/xg-mobile-linux)** — first to show the sysfs write is all you need on SteamOS.
-- **[Kentronix57/Decky-Loader-XGMobile-Manager](https://github.com/Kentronix57/Decky-Loader-XGMobile-Manager)** — the mature SteamOS/Bazzite implementation.
-- **Luke Jones and the [asus-linux](https://asus-linux.org/) project** — `asus-wmi` and `asus-armoury`, which are what make any of this possible from userspace.
+- **[osy/XG_Mobile_Station](https://github.com/osy/XG_Mobile_Station)** - the DIY dock, and `Docs/ACPI_Annotated.asl` + `Docs/Software.md`, which are the single most useful references for any of this. Most of [FINDINGS.md](FINDINGS.md) is applied osy.
+- **[stensmir/xg-mobile-linux](https://github.com/stensmir/xg-mobile-linux)** - first to show the sysfs write is all you need on SteamOS.
+- **[Kentronix57/Decky-Loader-XGMobile-Manager](https://github.com/Kentronix57/Decky-Loader-XGMobile-Manager)** - the mature SteamOS/Bazzite implementation.
+- **Luke Jones and the [asus-linux](https://asus-linux.org/) project** - `asus-wmi` and `asus-armoury`, which are what make any of this possible from userspace.
 
 ## Maintenance
 
@@ -143,4 +169,4 @@ but do not expect timely fixes. Forks are encouraged.
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).
