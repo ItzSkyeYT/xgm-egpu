@@ -273,9 +273,9 @@ cmd_detect() {
     local bdf
     for bdf in $(display_devices); do
         printf '  %s  %s:%s  boot_vga=%s  parent=%s\n' "$bdf" \
-            "$(cat /sys/bus/pci/devices/$bdf/vendor 2>/dev/null)" \
-            "$(cat /sys/bus/pci/devices/$bdf/device 2>/dev/null)" \
-            "$(cat /sys/bus/pci/devices/$bdf/boot_vga 2>/dev/null || echo 0)" \
+            "$(cat "/sys/bus/pci/devices/$bdf/vendor" 2>/dev/null)" \
+            "$(cat "/sys/bus/pci/devices/$bdf/device" 2>/dev/null)" \
+            "$(cat "/sys/bus/pci/devices/$bdf/boot_vga" 2>/dev/null || echo 0)" \
             "$(pci_parent "$bdf")"
     done
     echo
@@ -376,13 +376,38 @@ wedged_tasks() {
     done
 }
 
+# Fallback holder scan, needing no packages at all. Walks /proc for file
+# descriptors pointing at an nvidia device node. As root this is authoritative —
+# it is the same information lsof reports, read from the same place.
+proc_nv_holders() {
+    local fd target pid comm
+    for fd in /proc/[0-9]*/fd/*; do
+        target=$(readlink -- "$fd" 2>/dev/null) || continue
+        [[ $target == /dev/nvidia* ]] || continue
+        pid=${fd#/proc/}; pid=${pid%%/*}
+        comm=$(cat "/proc/$pid/comm" 2>/dev/null) || continue
+        printf '%s %s\n' "$pid" "$comm"
+    done | sort -u
+}
+
 nv_holders() {
     # Processes with an open handle on any /dev/nvidia* node. These are what
     # nv_pci_remove() waits on. Root-only: most holders are root daemons.
+    #
+    # lsof is NOT a base package on Arch or Debian — it turns up as a dependency
+    # of something else, if at all. This used to call it unconditionally, so on a
+    # machine without lsof it produced nothing, the caller read that as "no
+    # holders", and the check that exists to prevent an unkillable D-state wedge
+    # silently passed. A safety guard that fails OPEN is worse than no guard,
+    # because it is trusted. Hence the fallback rather than a hard dependency.
     local out
-    out=$(lsof -Fpc -- /dev/nvidia* 2>/dev/null | awk '
-        /^p/ { pid = substr($0,2) }
-        /^c/ { print pid, substr($0,2) }' | sort -u)
+    if command -v lsof >/dev/null 2>&1; then
+        out=$(lsof -Fpc -- /dev/nvidia* 2>/dev/null | awk '
+            /^p/ { pid = substr($0,2) }
+            /^c/ { print pid, substr($0,2) }' | sort -u)
+    else
+        out=$(proc_nv_holders)
+    fi
     printf '%s' "$out"
 }
 
@@ -1306,7 +1331,9 @@ case "$CMD" in
     off)        cmd_off ;;
     link)       cmd_link "${1:-}" ;;
     link-speed) cmd_link_speed "${1:-}" ;;
-    ec)         [[ ${1:-} == --dump ]] && ec_dump || cmd_ec ;;
+    # Not `A && B || C`: if ec_dump's od fails, C would run too and print the
+    # decode after the dump.
+    ec)         if [[ ${1:-} == --dump ]]; then ec_dump; else cmd_ec; fi ;;
     install-rules) cmd_install_rules ;;
     -h|--help)  usage ;;
     *)          usage; exit 1 ;;
