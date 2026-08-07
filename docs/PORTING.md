@@ -1,129 +1,182 @@
 # Porting to another machine
 
-`bin/xgm-egpu` currently hardcodes three values for the reference ROG Flow X13
-GV301QH. They are at the top of the script, lines 23–25:
+**You should not need this file.** Topology is autodetected from sysfs at
+startup. Run:
 
-```bash
-INTERNAL_DGPU=0000:01:00.0        # GTX 1650 Mobile
-ROOT_PORT=0000:00:01.1            # bridge hosting that slot, and the XGM's lanes
-INTERNAL_DEVID=0x1f9d             # TU117M
+```sh
+xgm-egpu detect
 ```
 
-Autodetection is not implemented yet. Editing these three lines is the entire
-porting process.
+If it prints the right thing, you are done — there is nothing to configure.
+
+This document exists for two reasons: to explain what detection does so you can
+tell whether it got it right, and to help if it did not.
 
 ---
 
-## First: does your machine have an internal dGPU?
+## What gets detected, and how
 
-This determines how much work you have to do, and it is a much bigger fork than
-it looks.
+Three values, all derived from sysfs. No root, no `lspci` parsing, nothing that
+can perturb the bus.
 
-```sh
-lspci -nn | grep -iE 'vga|3d|display'
+### `INTERNAL_DGPU` — the discrete GPU sharing the XGM's lanes
+
+Every PCI display-class device (`class` = `0x03xxxx`) that is **not** the
+firmware's primary adapter. `boot_vga=1` marks that primary, which on every ASUS
+laptop in scope is the APU's integrated graphics.
+
+```
+0000:01:00.0  0x10de:0x1f9d  boot_vga=0  parent=0000:00:01.1   <- internal dGPU
+0000:08:00.0  0x1002:0x1638  boot_vga=1  parent=0000:00:08.1   <- iGPU, skipped
 ```
 
-### No internal dGPU — ROG Ally, and similar
+**Empty on hosts that have no internal dGPU (ROG Ally). That is a supported
+configuration, not a failure** — see below.
+
+### `INTERNAL_DEVID` — its device ID
+
+Read straight from `/sys/bus/pci/devices/<bdf>/device`.
+
+Needed because **the eGPU frequently claims the exact address the internal dGPU
+just vacated.** On the reference machine the RTX 3060 came up at `0000:01:00.0`,
+the GTX 1650's old slot. That is expected: the XG Mobile port *shares those
+lanes*, which is why activation ejects the internal card at all. Everything here
+identifies the eGPU by device ID, never by address, and you should too if you
+build on this.
+
+### `ROOT_PORT` — the bridge hosting the slot
+
+The internal dGPU's parent bridge, since the XGM shares its lanes.
+
+With no internal dGPU there is nothing to walk up from, so detection falls back
+to `/sys/bus/pci/slots/` — the hotplug slots `pciehp` registers. The slot address
+is the *downstream* bus, so the port is the bridge whose `secondary_bus_number`
+matches. If exactly one such slot is unoccupied, that is the XGM port.
+
+---
+
+## Hosts with no internal dGPU (ROG Ally)
 
 **The hard half of this problem does not exist for you.**
 
-There is no dGPU to eject, so there is no `nv_pci_remove()` stall, no 856-second
-hang, no `WAT1()` teardown-ordering trap, and no unkillable `D`-state process.
+Nothing shares the XGM's lanes, so activation triggers no ACPI eject. That means
+no `nv_pci_remove()` stall, no 856-second hang, no `WAT1()` teardown-ordering
+trap, and no unkillable `D`-state process.
 [Findings §4](../FINDINGS.md#4-what-actually-stalls-the-eject) and
-[§6](../FINDINGS.md#6-less-teardown-not-more) are informational only for you.
+[§6](../FINDINGS.md#6-less-teardown-not-more) are background reading for you, not
+instructions. The release path is a no-op and says so:
 
-The release path is a **no-op by construction**: `unbind_internal()` finds no
-driver at the configured path and returns early, and `pci_remove_internal()`
-only runs at `--release remove`, which you should not use.
+```
+==> Releasing the internal dGPU before the ACPI eject
+==>   no internal dGPU on this host — nothing to unbind
+```
 
-So of the three constants, **only `ROOT_PORT` matters for you** — it is used for
-runtime-PM pinning, which you *will* need. Set `INTERNAL_DGPU` and
-`INTERNAL_DEVID` to anything; they will never be dereferenced.
+What still applies, and will bite if you skip it:
 
-What still applies to you, and will bite if you skip it:
-
-- [§7 Runtime power management](../FINDINGS.md#7-runtime-power-management-drops-the-link) — you will hit `Link Down` / `Xid 79` without the udev rules
-- [§1 Persistent EC state](../FINDINGS.md#1-egpu_enable-is-persistent-ec-state) and all of [RECOVERY.md](RECOVERY.md)
+- [§7 Runtime power management](../FINDINGS.md#7-runtime-power-management-drops-the-link)
+  — you *will* hit `Link Down` / `Xid 79` without `xgm-egpu install-rules`
+- [§1 Persistent EC state](../FINDINGS.md#1-egpu_enable-is-persistent-ec-state)
+  and all of [RECOVERY.md](RECOVERY.md)
 - [§3 Slow is not stuck](../FINDINGS.md#3-blocking-is-structural-and-slow-is-not-stuck)
 
 **Handhelds make recovery harder, not easier.** Fewer ports, no easy TTY, and a
 non-booting Ally with committed EC state is genuinely unpleasant to dig out of.
 Read [RECOVERY.md](RECOVERY.md) before your first attempt, not after.
 
-### Internal dGPU present — Flow X13, X16, Zephyrus, etc.
-
-You need all three constants correct, and everything in
-[FINDINGS.md](../FINDINGS.md) applies.
-
 ---
 
-## Finding your values
+## When detection cannot decide
 
-### `INTERNAL_DGPU` and `INTERNAL_DEVID`
+The one ambiguous case: **no internal dGPU, and more than one empty hotplug
+slot.** There is nothing to disambiguate them with, so it refuses to guess rather
+than picking wrong:
 
-Your internal discrete GPU — the one that shares lanes with the XG Mobile port:
+```
+ !  several empty hotplug slots; cannot tell which is the XGM port:
+    0000:00:01.1
+    0000:00:02.2
+ !  set ROOT_PORT in /etc/xgm-egpu.conf or pass --root-port
+```
+
+This degrades rather than fails. `install-rules` still writes the vendor rule
+that pins the card itself; only the bridge goes unpinned. Activation still works.
+
+To resolve it, find which port the XGM is on:
 
 ```sh
-lspci -nn | grep -iE '3d controller|vga.*nvidia|vga.*amd'
-```
+# with the dock attached and active, the eGPU's parent IS the root port
+basename "$(dirname "$(readlink -f /sys/bus/pci/devices/<egpu-bdf>)")"
 
-```
-01:00.0 3D controller [0302]: NVIDIA Corporation TU117M [GeForce GTX 1650 Mobile] [10de:1f9d]
-        ^^^^^^^^^^                                                                      ^^^^
-        INTERNAL_DGPU=0000:01:00.0                                   INTERNAL_DEVID=0x1f9d
-```
-
-On a laptop with a MUX, the internal dGPU is usually the `3D controller`
-(render-offload) or `VGA compatible controller` on bus 01.
-
-### `ROOT_PORT`
-
-The PCIe bridge hosting that device. Walk up the sysfs tree:
-
-```sh
-basename "$(dirname "$(readlink -f /sys/bus/pci/devices/0000:01:00.0)")"
-```
-
-Or read it off the topology:
-
-```sh
-lspci -t -nn
-```
-
-Confirm it is a hotplug-capable port:
-
-```sh
+# or check which ports are hotplug-capable and x8-capable
 sudo lspci -vv -s 0000:00:01.1 | grep -iE 'HotPlug|Slot|LnkCap'
 ```
 
-You want `HotPlug+`. If the bridge you found is not hotplug-capable, you have
-the wrong one.
+Then persist it:
+
+```sh
+# /etc/xgm-egpu.conf
+ROOT_PORT=0000:00:01.1
+```
 
 ---
 
-## The address trap
+## Overriding anything
 
-**The eGPU frequently claims the exact address the internal dGPU just vacated.**
+Three routes, in increasing precedence:
 
-On the reference machine the RTX 3060 came up at `0000:01:00.0` — the GTX 1650's
-old slot. That is expected: the XG Mobile port *shares those lanes*, which is
-why activation ejects the internal card in the first place.
+```sh
+# 1. config file
+cat /etc/xgm-egpu.conf
+ROOT_PORT=0000:00:01.1
+INTERNAL_DGPU=0000:01:00.0
+INTERNAL_DEVID=0x1f9d
 
-**Identify the eGPU by device ID, never by address.** `xgm-egpu` does this
-internally. If you write your own tooling around it, do the same, or you will
-end up operating on whichever card happens to be there.
+# 2. environment
+ROOT_PORT=0000:00:01.1 xgm-egpu status
+
+# 3. flags
+xgm-egpu on --root-port 0000:00:01.1 --internal-dgpu 0000:01:00.0
+```
+
+Detection only fills in blanks — anything you set is left alone.
+
+### The state cache
+
+`/var/lib/xgm-egpu/topology.conf`, written when running as root while
+`egpu_enable=0`.
+
+Once the eGPU is active it occupies the internal dGPU's address, so "which
+display device is the internal one" stops being answerable by looking at the bus.
+The cache preserves the answer from when it *was* answerable. Delete it to force
+re-detection; it is regenerated automatically.
+
+---
+
+## Kernel requirements
+
+```sh
+lsmod | grep -E 'asus_armoury|asus_wmi'
+ls /sys/class/firmware-attributes/asus-armoury/attributes/
+zgrep -E 'ASUS_ARMOURY|ASUS_WMI|HOTPLUG_PCI_PCIE' /proc/config.gz
+```
+
+You want `CONFIG_ASUS_ARMOURY`, `CONFIG_ASUS_WMI` and `CONFIG_HOTPLUG_PCI_PCIE`.
+
+If `asus-armoury` is missing but `/sys/devices/platform/asus-nb-wmi/egpu_enable`
+exists, you are on an older kernel using the deprecated path. The `$FW` paths
+near the top of the script need repointing; everything else applies unchanged.
 
 ---
 
 ## AMD eGPUs
 
-Untested here. The activation path is vendor-neutral — it is an EC/ACPI
-transaction and does not care what card is on the other end. But everything in
-this repo about `nvidia-powerd`, `nv_pci_remove()`, `NVreg_DynamicPowerManagement`
-and `Xid` codes is NVIDIA-specific.
+Untested. The activation path is vendor-neutral — it is an EC/ACPI transaction
+and does not care what card is on the other end — but everything in this repo
+about `nvidia-powerd`, `nv_pci_remove()`, `NVreg_DynamicPowerManagement` and
+`Xid` codes is NVIDIA-specific, including the udev rule's `ATTR{vendor}=="0x10de"`
+match.
 
-With `amdgpu` the eject may behave differently — better or worse, nobody has
-checked. `--release minimal` is still the right starting point, since the
+`--release minimal` should still be right, since the
 [`WAT1()` reasoning](../FINDINGS.md#6-less-teardown-not-more) is about the
 firmware needing the OS to complete a real eject, not about which driver does it.
 
@@ -131,29 +184,8 @@ Reports welcome.
 
 ---
 
-## Kernel requirements
-
-```sh
-# the driver
-lsmod | grep -E 'asus_armoury|asus_wmi'
-
-# the interface
-ls /sys/class/firmware-attributes/asus-armoury/attributes/
-
-# config
-zgrep -E 'ASUS_ARMOURY|ASUS_WMI|HOTPLUG_PCI_PCIE' /proc/config.gz
-```
-
-You want `CONFIG_ASUS_ARMOURY`, `CONFIG_ASUS_WMI` and `CONFIG_HOTPLUG_PCI_PCIE`.
-
-If `asus-armoury` is missing but `/sys/devices/platform/asus-nb-wmi/egpu_enable`
-exists, you are on an older kernel using the deprecated path. The script's
-`$FW` paths at lines 18–21 need repointing, but everything else applies.
-
----
-
 ## Please report what you find
 
-A porting report is the most useful contribution to this repo. Include your
-`xgm-egpu status` output, `lspci -nn`, your three constants, and what happened.
-See [CONTRIBUTING.md](../CONTRIBUTING.md).
+Whether detection worked or not, a hardware report is the most useful
+contribution to this repo. Paste `xgm-egpu detect` and `xgm-egpu status` into an
+issue — see [CONTRIBUTING.md](../CONTRIBUTING.md).

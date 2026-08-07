@@ -14,12 +14,18 @@ That said, some contributions are worth far more than others.
 Open an issue titled `hardware: <your model> + <your dock>` with:
 
 ```sh
+xgm-egpu detect            # topology autodetection — most useful single output
 xgm-egpu status
 uname -r
 cat /sys/class/dmi/id/product_name /sys/class/dmi/id/bios_version
 lspci -nn
 sudo dmesg | grep -iE 'asus|nvidia|pcieport|nvrm|xid|acpi' | tail -60
 ```
+
+**`xgm-egpu detect` getting your machine wrong is itself a bug worth reporting**,
+separately from whether activation works. Detection is meant to need no
+configuration on any ASUS host; a machine where it guesses wrong, or refuses to
+guess, is something to fix in the script rather than work around in your config.
 
 Plus: official dock or DIY? Which osy variant and revision? Which GPU?
 
