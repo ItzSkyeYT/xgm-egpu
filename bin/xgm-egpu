@@ -537,7 +537,9 @@ cmd_logs() {
         for f in "$LOG_DIR"/*.log; do [[ -e $f && $f != *-kernel.log ]] && files+=("$f"); done
         for (( i=${#files[@]}-1; i>=0 && n>0; i--, n-- )); do
             f=${files[i]}
-            local res=refused
+            local res=ran
+            grep -q '^fail' "$f" && res=refused
+            grep -q 'egpu_enable now reads: 0' "$f" && res="off ok"
             grep -q 'LINK SURVIVED' "$f" && res=SURVIVED
             grep -qE 'link DIED|LINK DIED' "$f" && res=DIED
             printf '%-28s %-10s %s\n' "$(basename "$f")" "$res" "$(grep -m1 '^# command:' "$f" | cut -d: -f2-)"
