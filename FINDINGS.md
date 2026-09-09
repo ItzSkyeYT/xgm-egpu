@@ -389,6 +389,38 @@ never took effect (§8 explains why), so that claim was never actually tested.
 > clock / power / link gen every second, since the internal 1650 does the same
 > periodic display probing and lives — whatever differs on the eGPU should be
 > visible in its state right before the drop.
+>
+> ### Current leading hypothesis: a power transient at display-engine bring-up
+>
+> Decoding the last RPC in every dump — `0x731144` is
+> `NV0073_CTRL_CMD_DFP_SET_ELD_AUDIO_CAPS` — the in-flight work at every death is
+> HDMI-audio/VRR setup on the card's physical outputs. The **internal GTX 1650
+> Mobile has no physical outputs at all** (`card0` has no connector entries in
+> sysfs; the DP/HDMI/eDP on this machine belong to `card1`, the AMD iGPU), sits
+> on the *same* hotplug root port, gets the *same* periodic NVKMS probing, and
+> lives. The 3060 has HDMI + 3×DP and dies. So the display path is only lethal
+> on the card that actually has a display engine to power up.
+>
+> osy's `Docs/Diary.md` documents the dock's power delivery as running with
+> margins that were tuned during development: the GPU is fed by **two supplies
+> in parallel** behind **hiccup-mode over-current protection** that "disables
+> the FETs until a timer expires during an over-current condition," and earlier
+> revisions had rails browning out and recovering in disconnect loops.
+>
+> Put together: powering up the display engine on a desktop card is a current
+> step on top of P0. On a hand-built Lite board that step plausibly trips the
+> OCP hiccup or sags a rail; the FETs cut, the slot browns out, the PCIe PHY
+> resets, `pciehp` sees Link Down. **A brownout drops the link cleanly** — which
+> is exactly why the AER counters read zero every time, where a signalling
+> fault would have logged correctable errors first. Core-only survives because
+> the display engine never powers up.
+>
+> `--cap-power` tests this from software: after the core binds (which survives
+> indefinitely), lock the graphics clock to ≤405 MHz and set the card's minimum
+> power limit, *then* load the display path. If the link survives, the fix is
+> to cap power at bring-up and lift it afterwards. Hypothesis — the connectors
+> were called exonerated once already; but this one predicts the zero-AER
+> signature and the core/display split, which nothing else so far has.
 
 ### The RTD3 finding itself (real, worth keeping, not the cause)
 

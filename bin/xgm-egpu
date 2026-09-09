@@ -104,6 +104,10 @@ NO_DRM_POLL=0         # --no-drm-poll: set drm_kms_helper.poll=0 before loading 
 NO_FBDEV=0            # --no-fbdev: load nvidia_drm with fbdev=0. RULED OUT 2026-09-09 (still died).
 NO_KMS=0              # --no-kms: load nvidia_drm with modeset=0 (render node only, no KMS).
                       # If this survives you have a working eGPU for compute / PRIME offload.
+CAP_POWER=0           # --cap-power: after the core binds, lock the GPU to minimum clocks and
+                      # the lowest power limit BEFORE the display engine comes up. Tests the
+                      # power hypothesis: a display-init current step trips the board's OCP
+                      # hiccup (osy Diary: GPU on two parallel supplies, FETs cut on overcurrent).
 MODESET_SAFE=0        # --modeset-safe: nvidia_modeset disable_hdmi_frl=1 disable_vrr_memclk_switch=1
                       # conceal_vrr_caps=1. The RPCs in flight at every death are HDMI-audio /
                       # VRR display setup on the 3060's physical outputs (the 1650 has none).
@@ -723,6 +727,31 @@ smi_line() {
         --format=csv,noheader,nounits 2>/dev/null | head -1 | grep -E '^P[0-9]' || true
 }
 
+# Clamp the GPU to its floor before the display engine powers up. -lgc pins the
+# graphics clock low (the big transient), -pl drops the sustained power limit.
+# Both need the core driver bound and the card responsive, which it is right
+# after `modprobe nvidia` (core alone survives indefinitely). nvidia-smi clamps
+# out-of-range values itself; we just ask for the floor and log what took.
+cap_gpu_power() {
+    command -v nvidia-smi >/dev/null 2>&1 || { warn "nvidia-smi absent; cannot cap power"; return 1; }
+    local bdf=$1
+    [[ $DRY_RUN -eq 1 ]] && { info "  would: nvidia-smi -pm 1; -lgc 0,405; -pl <min>"; return 0; }
+    nvidia-smi -i "$bdf" -pm 1 >/dev/null 2>&1 || true
+    # Lock graphics clock to a low band. 405 MHz is a safe floor across Ampere.
+    if nvidia-smi -i "$bdf" -lgc 0,405 >/dev/null 2>&1; then
+        info "  locked graphics clock to <=405 MHz"
+    else
+        warn "  -lgc not supported here; trying -lmc / -pl only"
+    fi
+    # Lowest allowed power limit, read from the card.
+    local minpl
+    minpl=$(nvidia-smi -i "$bdf" -q -d POWER 2>/dev/null | grep -iE 'Min Power Limit' | head -1 | grep -oE '[0-9]+' | head -1)
+    if [[ -n $minpl ]]; then
+        nvidia-smi -i "$bdf" -pl "$minpl" >/dev/null 2>&1 && info "  set power limit to ${minpl} W (floor)"
+    fi
+    info "  now: $(smi_line)"
+}
+
 # ---------------------------------------------------------------- preconditions
 
 need_root() {
@@ -1263,6 +1292,11 @@ reload_nvidia() {
     # --release minimal the module is never unloaded. The value has to be right
     # at BOOT (modprobe shadow + initramfs), which preflight_rtd3 verifies.
     modprobe nvidia || warn "modprobe nvidia failed"
+    if [[ $CAP_POWER -eq 1 ]]; then
+        # The core is bound now (autoprobe). Clamp BEFORE the display engine.
+        local cb; cb=$(egpu_bdf || echo "")
+        [[ -n $cb ]] && cap_gpu_power "$cb"
+    fi
     if [[ $MODESET_SAFE -eq 1 ]]; then
         info "  loading nvidia_modeset with disable_hdmi_frl=1 disable_vrr_memclk_switch=1 conceal_vrr_caps=1"
         modprobe nvidia_modeset disable_hdmi_frl=1 disable_vrr_memclk_switch=1 conceal_vrr_caps=1 || warn "modprobe nvidia_modeset failed"
@@ -1807,6 +1841,12 @@ Options:
                   No KMS, no fbdev, no display engine bring-up via DRM. If the
                   link survives, the eGPU WORKS for CUDA / Vulkan / PRIME offload
                   onto the laptop screen. Applies to 'on'.
+  --cap-power     after the core binds and before the display engine loads, lock
+                  the GPU to its minimum clocks and lowest power limit. Tests the
+                  leading hypothesis: the display-init current step trips the
+                  board's over-current hiccup (osy Diary documents the GPU on two
+                  parallel supplies with FET-cutting OCP). If the link then
+                  survives, cap power at boot and it works. Applies to 'on'.
   --modeset-safe  load nvidia_modeset with disable_hdmi_frl=1
                   disable_vrr_memclk_switch=1 conceal_vrr_caps=1. The RPCs in
                   flight at every death are HDMI-audio (SET_ELD_AUDIO_CAPS,
@@ -1877,6 +1917,7 @@ while [[ $# -gt 0 ]]; do
         --no-kms)     NO_KMS=1 ;;
         --mask-pciehp) MASK_PCIEHP=1 ;;
         --modeset-safe) MODESET_SAFE=1 ;;
+        --cap-power)  CAP_POWER=1 ;;
         --aspm-performance) ASPM_PERF=1 ;;
         --link-gen)   LINK_GEN=$2; shift ;;
         --link-gen=*) LINK_GEN=${1#*=} ;;

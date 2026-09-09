@@ -193,6 +193,15 @@ DRY_RUN=0
 echo "== smi_line =="
 assert_eq "no nvidia-smi on PATH -> empty, rc 0" "$(PATH=/nonexistent smi_line; echo "rc=$?")" "rc=0"
 
+echo "== cap_gpu_power =="
+out=$(PATH=/nonexistent DRY_RUN=0 sub cap_gpu_power 0000:01:00.0 2>&1); rc=$?
+assert_eq  "no nvidia-smi -> rc 1"                "$rc" "1"
+assert_has "no nvidia-smi -> says so"             "$out" "nvidia-smi absent"
+mkdir -p "$T/fakebin"; printf '#!/bin/sh\nexit 0\n' > "$T/fakebin/nvidia-smi"; chmod +x "$T/fakebin/nvidia-smi"
+out=$(PATH="$T/fakebin:$PATH" DRY_RUN=1 sub cap_gpu_power 0000:01:00.0 2>&1); rc=$?
+assert_eq  "dry-run -> rc 0"                      "$rc" "0"
+assert_has "dry-run announces the clamp plan"     "$out" "would: nvidia-smi -pm 1; -lgc 0,405"
+
 echo "== library mode =="
 assert_rc "sourcing in library mode does not dispatch" 0 bash -c 'XGM_LIBRARY_MODE=1 source bin/xgm-egpu; declare -F cmd_on >/dev/null'
 assert_rc "script still parses"               0 bash -n bin/xgm-egpu
