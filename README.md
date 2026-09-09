@@ -173,7 +173,11 @@ Ctrl+Alt+F3, log in, `xgm-egpu desktop unpin`.
 
 After that, kwin never opens an NVIDIA device, and `on` from a desktop
 terminal only has to close whatever else holds the GPU (a browser with GPU
-acceleration, typically) - the session survives. And when `on` or `off` is
+acceleration, typically) - the session survives, and **whatever `--force-kill`
+closed is started again when the run ends**, as you, into your session, with
+the command line and working directory it had (`--no-relaunch` to skip). A
+killed compositor is the one thing that cannot be brought back, which is what
+the pin is for. And when `on` or `off` is
 run from a **TTY** with a display manager active, the tool stops the display
 manager before the release and starts it again when the run ends, success or
 not, so you land on a login screen rather than a dead console.

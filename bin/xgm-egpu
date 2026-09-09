@@ -135,6 +135,8 @@ RESTART_DESKTOP=auto  # from a TTY with a display manager active: stop it before
                       # console. Inside a desktop session it is left alone (stopping it would
                       # kill this very terminal mid-write). --keep-desktop / --restart-desktop.
 DM_STOPPED=           # which display manager this run stopped, for the exit hook
+RELAUNCH=1            # relaunch what --force-kill closed once the run ends (--no-relaunch)
+KILLED_DIR=           # where their command lines are stashed until then
 FREEZE_LINK=0         # --freeze-link: after the bind, lock the GPU at its max clocks (stays in
                       # P0, so the idle-time PCIe generation downshift never fires) and set
                       # Hardware Autonomous Speed/Width Disable on both ends of the link. With
@@ -1970,13 +1972,71 @@ pci_remove_internal() {
     return 0
 }
 
+# ---------------------------------------------------------------- relaunching what we killed
+#
+# --force-kill closes whatever holds the GPU. On 2026-09-09 that was the user's
+# browser, and once it was kwin — and a Wayland session does not outlive its
+# compositor, so that one cannot be undone (the pin exists so it never has
+# to happen again). Everything else can be brought back: before the SIGTERM,
+# remember the exact command line, working directory and the session
+# variables it was started with; when the run ends, start it again as that
+# user, into the session that is still running.
+COMPOSITORS='kwin_wayland|kwin_x11|Xwayland|Xorg|sddm|sddm-helper|sddm-greeter|gnome-shell|sway|Hyprland|weston|plasmashell'
+remember_holder() {
+    local pid=$1 d
+    [[ -r /proc/$pid/cmdline ]] || return 0
+    [[ -n $KILLED_DIR ]] || KILLED_DIR=$(mktemp -d "${BUGREPORT_DIR}/xgm-killed.XXXXXX") || return 0
+    d=$KILLED_DIR/$pid; mkdir -p "$d" || return 0
+    cp "/proc/$pid/cmdline" "$d/cmdline" 2>/dev/null
+    cat "/proc/$pid/comm" > "$d/comm" 2>/dev/null
+    stat -c %U "/proc/$pid" > "$d/user" 2>/dev/null
+    readlink "/proc/$pid/cwd" > "$d/cwd" 2>/dev/null
+    tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null \
+        | grep -E '^(DISPLAY|WAYLAND_DISPLAY|XDG_RUNTIME_DIR|DBUS_SESSION_BUS_ADDRESS|XAUTHORITY|XDG_SESSION_TYPE|XDG_CURRENT_DESKTOP|HOME|PATH|LANG|USER|LOGNAME)=' > "$d/env"
+    return 0
+}
+# Does this user still have a graphical session to land back in?
+user_has_desktop_session() { pgrep -u "$1" -x kwin_wayland >/dev/null 2>&1 || pgrep -u "$1" -x plasmashell >/dev/null 2>&1 || pgrep -u "$1" -x kwin_x11 >/dev/null 2>&1; }
+relaunch_killed() {
+    [[ -n $KILLED_DIR && -d $KILLED_DIR ]] || return 0
+    local d comm user cwd n=0 args=() envs=()
+    if [[ $RELAUNCH -ne 1 ]]; then info "not relaunching what --force-kill closed (--no-relaunch)"; rm -rf "$KILLED_DIR"; return 0; fi
+    for d in "$KILLED_DIR"/*/; do
+        [[ -f $d/comm ]] || continue; comm=$(<"$d/comm")
+        if [[ $comm =~ ^($COMPOSITORS)$ ]]; then
+            warn "the desktop itself ($comm) was among the holders, so that session is over and its"
+            warn "apps cannot be restored into it — the display manager shows a login screen."
+            warn "So this never happens again:  $0 desktop pin"
+            rm -rf "$KILLED_DIR"; return 0
+        fi
+    done
+    for d in "$KILLED_DIR"/*/; do
+        [[ -s $d/cmdline ]] || continue
+        mapfile -d '' -t args < "$d/cmdline"; [[ ${#args[@]} -gt 0 ]] || continue
+        comm=$(<"$d/comm"); user=$(<"$d/user"); cwd=$(<"$d/cwd"); mapfile -t envs < "$d/env"
+        [[ -n $user && $user != root ]] || continue
+        user_has_desktop_session "$user" || { warn "  no desktop session left for $user to relaunch $comm into"; continue; }
+        if [[ $DRY_RUN -eq 1 ]]; then info "  would relaunch as $user: ${args[*]}"; n=$((n+1)); continue; fi
+        if runuser -u "$user" -- env -i "${envs[@]}" -C "${cwd:-/}" setsid -f "${args[@]}" >/dev/null 2>&1; then
+            info "  relaunched $comm"; n=$((n+1))
+        else
+            warn "  could not relaunch $comm: ${args[*]}"
+        fi
+    done
+    (( n > 0 )) && ok "restored $n process(es) that --force-kill had closed"
+    rm -rf "$KILLED_DIR"; return 0
+}
+
 # SIGTERM every process in the holders list ($1, nv_holders format), wait,
 # SIGKILL whatever still holds /dev/nvidia*. Used by `on --force-kill` and
-# `reload-driver --force-kill`.
+# `reload-driver --force-kill`. Each victim is remembered so relaunch_killed
+# can bring it back when the run ends.
 kill_nv_holders() {
     local h=$1 pid
+    add_exit_hook relaunch_killed
     while read -r pid _; do
         [[ -n $pid ]] || continue
+        remember_holder "$pid"
         info "  SIGTERM $pid"
         [[ $DRY_RUN -eq 1 ]] || kill -TERM "$pid" 2>/dev/null
     done <<<"$h"
@@ -2847,6 +2907,12 @@ Options:
   --force-kill    kill processes holding /dev/nvidia* instead of refusing
   --no-capture    do not arm the hang capture (pstore, panic-on-hang, netconsole)
                   before activating. It is armed by default on every 'on'/'bind'.
+  --no-relaunch   do not bring back the processes --force-kill closed. By default
+                  each victim's command line, cwd and session variables are kept
+                  and it is started again, as you, into your still-running session
+                  when the run ends. A killed compositor cannot be restored (the
+                  session is over — 'desktop pin' prevents that case); the display
+                  manager then shows a login screen.
   --keep-desktop  from a TTY, 'on'/'off' stop the display manager before the release
                   and start it again when the run ends, so you land on a login
                   screen either way. This flag skips that. --restart-desktop
@@ -2986,6 +3052,7 @@ while [[ $# -gt 0 ]]; do
         --audio)      NO_AUDIO=0 ;;
         --freeze-link) FREEZE_LINK=1 ;;
         --keep-desktop) RESTART_DESKTOP=0 ;;
+        --no-relaunch) RELAUNCH=0 ;;
         --restart-desktop) RESTART_DESKTOP=1 ;;
         --no-audio)   NO_AUDIO=1 ;;
         --mask-pciehp) MASK_PCIEHP=1 ;;
