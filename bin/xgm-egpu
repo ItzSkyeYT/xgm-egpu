@@ -126,6 +126,11 @@ MODESET_SAFE=0        # --modeset-safe: nvidia_modeset disable_hdmi_frl=1 disabl
                       # REQUIRES `drm safe` applied first: resident modules ignore modprobe params.
 MASK_PCIEHP=0         # --mask-pciehp: clear the root port's hotplug interrupt enables so a
                       # momentary Link Down is not turned into a surprise-removal teardown.
+NO_AUDIO=1            # keep snd_hda_intel OFF the eGPU's HDMI-audio function (01:00.1). Every
+                      # death on record has the HDA codec active at the instant of Link Down and
+                      # the in-flight GSP RPC is DFP_SET_ELD_AUDIO_CAPS; the survivors had no
+                      # audio driver bound and the internal 1650 has no audio function. --audio
+                      # binds it as before (deliberately reproducing the death).
 SEAL_NVKMS=1          # with --no-kms: bind-mount /dev/null over /dev/nvidia-modeset before the
                       # write, so no userspace client can allocate the eGPU's display engine.
                       # --no-seal skips it (deliberately reproducing the client-triggered death).
@@ -1836,6 +1841,50 @@ aspm_performance() {
     fi
 }
 
+# ---------------------------------------------------------------- the audio function
+#
+# The 3060 is two PCI functions: 01:00.0 (GPU) and 01:00.1 (HDMI audio). With
+# autoprobe on, snd_hda_intel binds .1 the instant it enumerates and starts
+# probing the HDA codec inside the GPU. Journals of the four deaths of
+# 2026-09-09 (15:17, 19:30, 20:52 and the fbdev run) end identically:
+#
+#   pciehp: Slot(0): Link Down
+#   snd_hda_codec_nvhdmi hdaudioC2D0: HDMI: invalid ELD buf size -1   (x17)
+#   snd_hda_intel 0000:01:00.1: GPU sound probed, but not operational
+#
+# and the GSP RPC in flight is always NV0073_CTRL_CMD_DFP_SET_ELD_AUDIO_CAPS —
+# the RM servicing that codec. Both survivors (unbound; `bind core` with
+# autoprobe off) had no driver on .1, and the internal 1650 has no .1 at all.
+# power_save is 0 here, so it is not the codec suspend timer; it is the codec
+# being alive. So: enumerate with autoprobe off, fence .1 with a
+# driver_override no driver can match, bind nvidia to .0 by hand, restore.
+# A udev rule cannot do this: the kernel binds during the rescan, before udev.
+fence_audio_function() {
+    local gpu=$1 aud=${1%.*}.1
+    [[ -e $SYSFS_PCI/$aud ]] || { info "  no audio function at $aud — nothing to fence"; return 0; }
+    if [[ $DRY_RUN -eq 1 ]]; then info "  would write xgm-egpu-noaudio > $SYSFS_PCI/$aud/driver_override"; return 0; fi
+    if echo xgm-egpu-noaudio > "$SYSFS_PCI/$aud/driver_override" 2>/dev/null; then
+        ok "  HDMI audio function $aud fenced off: no driver will bind to it (--audio to allow)"
+    else
+        warn "  could not set driver_override on $aud"; return 1
+    fi
+    local drv; drv=$(basename "$(readlink -f "$SYSFS_PCI/$aud/driver" 2>/dev/null)" 2>/dev/null)
+    [[ -n $drv && $drv != "." ]] && warn "  $aud is ALREADY bound to $drv — autoprobe was not off in time"
+    return 0
+}
+bind_gpu_by_hand() {
+    local gpu=$1
+    [[ $DRY_RUN -eq 1 ]] && { info "  would: modprobe nvidia; echo $gpu > /sys/bus/pci/drivers/nvidia/bind"; return 0; }
+    modprobe nvidia 2>/dev/null || true
+    if [[ -e $SYSFS_PCI/$gpu/driver ]]; then
+        info "  nvidia already bound to $gpu"
+    elif echo "$gpu" > /sys/bus/pci/drivers/nvidia/bind 2>/dev/null; then
+        ok "  nvidia bound to $gpu by hand (audio function left alone)"
+    else
+        warn "  manual bind of nvidia to $gpu failed"; return 1
+    fi
+}
+
 pm_pin_on() {
     local d p
     for d in "$@"; do
@@ -2216,6 +2265,9 @@ $(printf '     %s\n' "$d")"
     if [[ $RELOAD_NVIDIA -eq 0 ]]; then
         info "Disabling PCI driver autoprobe so the eGPU enumerates UNBOUND"
         autoprobe_disable && trap autoprobe_restore EXIT
+    elif [[ $NO_AUDIO -eq 1 ]]; then
+        info "Disabling PCI driver autoprobe so snd_hda_intel cannot grab the audio function (--audio to allow)"
+        autoprobe_disable && trap autoprobe_restore EXIT
     fi
 
     # Every activation is a potential hang, and every hang so far that was not
@@ -2292,6 +2344,12 @@ $(printf '     %s\n' "$d")"
     fi
     ok "eGPU enumerated at $bdf"
 
+    if [[ $NO_AUDIO -eq 1 && $RELOAD_NVIDIA -eq 1 ]]; then
+        fence_audio_function "$bdf"
+        bind_gpu_by_hand "$bdf"
+        autoprobe_restore
+    fi
+
     # Pin every function of the eGPU (GPU + HDMI audio) before binding a driver,
     # so nothing can suspend the link once the GPU goes idle.
     # shellcheck disable=SC2046
@@ -2328,7 +2386,7 @@ $(printf '     %s\n' "$d")"
             # boot). Write+fsync last-known-state every second so a silent hang
             # still leaves the final samples on disk.
             local crumb=/var/tmp/xgm-last-run.txt
-            { echo "run $(date -Is) bdf=$bdf opts: cap=$CAP_POWER drm=$(drm_layer_mode) maskhp=$MASK_PCIEHP msafe=$MODESET_SAFE"; } > "$crumb"; sync
+            { echo "run $(date -Is) bdf=$bdf opts: cap=$CAP_POWER drm=$(drm_layer_mode) audio=$((1-NO_AUDIO)) maskhp=$MASK_PCIEHP msafe=$MODESET_SAFE"; } > "$crumb"; sync
             local t alive=1 prev='' cur
             for ((t=1; t<=SURVIVAL_SECS; t++)); do
                 sleep 1
@@ -2483,6 +2541,15 @@ Options:
   --force-kill    kill processes holding /dev/nvidia* instead of refusing
   --no-capture    do not arm the hang capture (pstore, panic-on-hang, netconsole)
                   before activating. It is armed by default on every 'on'/'bind'.
+  --audio         let snd_hda_intel bind the eGPU's HDMI-audio function (01:00.1).
+                  OFF by default since 2026-09-09 21:30: every recorded death has
+                  the HDA codec active at the instant of Link Down (ELD reads,
+                  "GPU sound probed, but not operational") and the GSP RPC in
+                  flight is always DFP_SET_ELD_AUDIO_CAPS; both survivors had no
+                  driver on that function and the internal 1650 has none. 'on'
+                  enumerates with autoprobe off, fences 01:00.1 with a
+                  driver_override, binds nvidia to 01:00.0 by hand. 'bind audio'
+                  binds it later on purpose.
   --no-seal       with --no-kms, do NOT bind-mount /dev/null over /dev/nvidia-modeset.
                   Sealed by default: kwin allocates the display engine 1.5 s after a
                   GPU appears and every PRIME client does at start (measured), and
@@ -2596,6 +2663,8 @@ while [[ $# -gt 0 ]]; do
         --no-kms)     NO_KMS=1 ;;
         --no-capture) AUTO_CAPTURE=0 ;;
         --no-seal)    SEAL_NVKMS=0 ;;
+        --audio)      NO_AUDIO=0 ;;
+        --no-audio)   NO_AUDIO=1 ;;
         --mask-pciehp) MASK_PCIEHP=1 ;;
         --modeset-safe) MODESET_SAFE=1 ;;
         --cap-power)  CAP_POWER=1 ;;

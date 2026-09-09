@@ -658,7 +658,51 @@ never took effect (§8 explains why), so that claim was never actually tested.
 > `grabOwnership(NULL)`. `on --no-kms` now seals the node before the write and
 > `off` / `reload-driver` unseal it; `--no-seal` reproduces the client death.
 >
-> **7. RM does not consider this an external GPU.** `RmCheckForExternalGpu`
+> **7. The display engine is not the trigger. The HDMI audio codec is (21:30).**
+> Run of 20:51: `modeset=0` loaded (nvidia-drm attached in 83 µs, no
+> `allocateDevice`), `/dev/nvidia-modeset` sealed, RTD3 off, card flat at
+> P0 / 31 W / Gen3 x8 / 28 °C for nine samples — **died at 10 s, identically.**
+> The display engine never came up in that run, so every display hypothesis
+> above (fbdev, KMS bring-up, connector probing, client allocation) is
+> excluded at once. What the persistent kernel logs of all four deaths of the
+> day (15:17, 19:30, 20:52, and the 20:51 run) show at the instant of death,
+> every time:
+>
+> ```
+> pcieport 0000:00:01.1: pciehp: Slot(0): Link Down
+> snd_hda_codec_nvhdmi hdaudioC2D0: HDMI: invalid ELD buf size -1      (x17)
+> snd_hda_intel 0000:01:00.1: GPU sound probed, but not operational: please add a quirk to driver_denylist
+> ```
+>
+> `01:00.1` is the 3060's HDMI-audio function. With autoprobe on,
+> `snd_hda_intel` binds it the moment it enumerates and starts probing the HDA
+> codec inside the GPU (its PCM inputs register ~12 s before the death; the
+> probe is still running at the death). The pieces that never fitted the
+> display theory fit this one exactly:
+>
+> - the GSP RPC in flight at every death is `NV0073_CTRL_CMD_DFP_SET_ELD_AUDIO_CAPS`
+>   — the RM servicing the HDA codec's ELD, not a modeset;
+> - both configurations that survived (unbound; `bind core` with
+>   `drivers_autoprobe=0`) had **no driver on 01:00.1**;
+> - the internal GTX 1650 Mobile, which survives the same driver stack, **has
+>   no audio function at all** (`lspci` shows only `01:00.0`);
+> - `snd_hda_intel.power_save` is 0 here, so it is not the codec suspend timer;
+>   it is the codec being alive on this card at all.
+>
+> Mechanism, as far as the logs allow: the HDA codec probe drives the GPU's
+> HDA block, which asks the RM (through GSP) for ELD/audio capabilities on
+> outputs the display engine has never initialised; about ten seconds into
+> that exchange the GPU stops answering and the link drops. Whether the fault
+> is GSP, the HDA block's power domain, or the board is still open — but the
+> trigger is now a single PCI function that a render-only eGPU does not need.
+>
+> `on` therefore enumerates with autoprobe off, writes a `driver_override` no
+> driver can match onto 01:00.1, binds `nvidia` to 01:00.0 by hand, and
+> restores autoprobe (`--audio` to bind it as before; `bind audio` binds it
+> later on purpose). A udev rule cannot do this: the kernel binds during the
+> rescan, before udev sees the device.
+>
+> **8. RM does not consider this an external GPU.** `RmCheckForExternalGpu`
 > (`osinit.c`) sets `PDB_PROP_GPU_IS_EXTERNAL_GPU` only for an Intel
 > Thunderbolt 3 bridge *and* a surprise-hotplug-capable slot; the XGM root
 > port is AMD. The only consequence found is skipping the platform request
