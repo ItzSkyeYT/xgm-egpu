@@ -311,10 +311,42 @@ never took effect (§8 explains why), so that claim was never actually tested.
 > the EC handshake and the lane switch are all fine** — see the connector
 > section below, which this independently confirms for the third time.
 >
-> Which layer is still open: `nvidia` core, the `nvidia_drm`/`nvidia_modeset`
-> display path, or `snd_hda_intel` on the HDMI function. `xgm-egpu bind
-> <core|drm|audio|all>` binds one layer at a time to an already-enumerated
-> card and reports whether the link survives.
+> **Bisected, 2026-09-09.** `xgm-egpu bind core` (nvidia only, display path
+> unloaded): **survived**, Gen3 x8, P0, `nvidia-smi` reading the card, AER
+> zero. Then `xgm-egpu bind drm` (nvidia_modeset + nvidia_drm on top):
+> **died at ~11s.**
+>
+> ```
+> 13:10:00  Initialized nvidia-drm
+> 13:10:09  nvidia-modeset: Correcting number of heads for current head configuration
+>           <link gone; GSP_RM_CONTROL in flight; Xid 154>
+> ```
+>
+> So GSP init is fine, the core driver is fine, and **the display path kills
+> it.** Not yet known: *what* in the display path.
+>
+> **Hypothesis under test — DRM connector polling.** `drm_probe_helper.c`:
+>
+> ```c
+> #define DRM_OUTPUT_POLL_PERIOD (10*HZ)
+> module_param_named(poll, drm_kms_helper_poll, bool, 0600);
+> ```
+>
+> Ten seconds after a DRM device registers, `output_poll_execute` calls every
+> connector's `detect()`. For nvidia-drm that goes through nvidia-modeset and
+> out to the GPU as a GSP RPC — the "Correcting number of heads" line at +9s
+> and the in-flight `GSP_RM_CONTROL` in every dump fit that. The interval
+> matches to the second, and the poll exists only once `nvidia_drm` is loaded,
+> which is exactly what the bisection found.
+>
+> The knob is runtime-writable. `xgm-egpu bind drm --no-drm-poll` sets
+> `drm_kms_helper.poll=0` *before* loading nvidia_drm so the poll never starts.
+> If the link survives with the display path loaded and the poll off, that is
+> the cause. If it dies anyway, the display path is still implicated but the
+> mechanism is something else in `detect()`/modeset init. **Not yet run.**
+>
+> This is stated as a hypothesis on purpose. Earlier the same day RTD3 was
+> called the root cause on equally good-looking evidence and was wrong.
 
 ### The RTD3 finding itself (real, worth keeping, not the cause)
 
