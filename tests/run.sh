@@ -457,6 +457,15 @@ assert_has "pin reports the checked value"               "$out" "kwin uses $T/dr
 assert_has "pin tells the rollback"                      "$out" "desktop unpin"
 out=$(sub cmd_desktop status 2>&1)
 assert_has "status validates the pin"                    "$out" "next login: kwin uses $T/dri/card1"
+echo "== desktop pin --outputs: kwin may drive the eGPU's ports, still renders on the laptop's card =="
+PIN_OUTPUTS=1
+out=$(DRY_RUN=0 sub cmd_desktop pin 2>&1); rc=$?
+assert_eq  "pin --outputs -> rc 0"                       "$rc" "0"
+# unset first: this test may run inside a session that already exports the pin
+assert_eq  "outputs pin leaves KWIN_DRM_DEVICES unset"   "$(/bin/sh -c 'unset KWIN_DRM_DEVICES; . "$1"; printf %s "$KWIN_DRM_DEVICES"' _ "$PIN")" ""
+assert_eq  "...but still restricts render nodes"         "$(/bin/sh -c 'unset KWIN_RENDER_NODES; . "$1"; printf %s "$KWIN_RENDER_NODES"' _ "$PIN")" "$T/dri/renderD128"
+assert_has "...and validates as outputs mode"            "$out" "outputs mode"
+PIN_OUTPUTS=0
 echo "== desktop_pin_check catches the 2026-09-09 mistake =="
 printf 'export KWIN_DRM_DEVICES=%s\n' "$T/dri/by-path/pci-0000:08:00.0-card" > "$T/bad1.sh"
 assert_rc  "by-path value (contains colons) -> rejected"  1 desktop_pin_check "$T/bad1.sh"

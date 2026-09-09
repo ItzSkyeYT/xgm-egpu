@@ -460,7 +460,7 @@ never took effect (§8 explains why), so that claim was never actually tested.
 > stray DMA either.
 >
 > **Recovery without a power cycle:** `sshd` is running. From a phone or the
-> Pi, `ssh` in and `sudo xgm-egpu off`. The display comes back.
+> another machine, `ssh` in and `sudo xgm-egpu off`. The display comes back.
 >
 > **pciehp is not the cause.** With its interrupts masked, `Xid 79` came
 > *first* — the driver itself found the GPU unresponsive — and Link Down was
@@ -519,7 +519,7 @@ never took effect (§8 explains why), so that claim was never actually tested.
 >
 > **`xgm-egpu capture`** arms the machine at runtime (no reboot): NMI watchdog
 > on, hard/soft-lockup and hung-task and oops → panic, `panic=30` so it comes
-> back on its own, EFI-backed pstore mounted, netconsole to the Pi best-effort.
+> back on its own, EFI-backed pstore mounted, netconsole to another host if configured.
 > The next hang becomes a panic with a backtrace that survives the reboot.
 > **Arm it before every activation from now on.** The survival watch also
 > writes an fsync'd breadcrumb (`/var/tmp/xgm-last-run.txt`) every second.
@@ -791,10 +791,13 @@ never took effect (§8 explains why), so that claim was never actually tested.
 >    LINK SURVIVED 15s past driver init.
 >    ```
 > 3. `drm nokms` with the sealed `/dev/nvidia-modeset`, RTD3 off, runtime PM
->    pinned — the configuration the fix was tested in. Whether the full
->    display path (`modeset=1`) also survives now that nothing retrains the
->    link is the obvious next experiment and is **untested**; on this
->    machine nobody needs the eGPU's ports.
+>    pinned — the configuration the fix was first tested in. **23:09: the
+>    full display path survives too.** `go --display` (`modeset=1 fbdev=0`
+>    with the same freeze) held Gen3 x8 for the watch and PRIME offload worked
+>    inside the session, from the desktop. So the display engine was never
+>    the trigger, and the eGPU's own ports can be used: `desktop pin
+>    --outputs` lets kwin drive them while still rendering on the laptop's
+>    card.
 >
 > What the retrain-death chain leaves unexplained is only the exact policy
 > that chose Gen2 ten seconds in; it lives in the RM and is not readable from
