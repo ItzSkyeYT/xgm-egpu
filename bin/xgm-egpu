@@ -562,6 +562,74 @@ cmd_reload_driver() {
     fi
 }
 
+# Bind one layer of the driver stack to an already-enumerated eGPU and watch
+# whether the link survives. This is the bisection tool for the 2026-09-09
+# result: with drivers_autoprobe=0 an UNBOUND card holds Gen3 x8 indefinitely,
+# while every run with the full stack bound died at exactly 10s.
+#
+#   core   nvidia only, display path unloaded first
+#          -> survives: the display path is the killer
+#          -> dies:     the core module is (GSP init is the suspect)
+#   drm    reload nvidia_modeset + nvidia_drm on top of a bound core
+#   audio  snd_hda_intel on the HDMI function only
+#   all    the whole stack, i.e. what `on` used to do
+cmd_bind() {
+    need_root
+    local what=${1:-core} m
+    local bdf; bdf=$(egpu_bdf) || die "no eGPU on the bus — run '$0 on --no-reload' first"
+    local aud=${bdf%.*}.1
+    device_alive "$bdf" || die "$bdf is already off the bus"
+
+    case $what in
+      core)
+        info "unloading the display path so only the core module binds"
+        [[ $DRY_RUN -eq 1 ]] || modprobe -r nvidia_drm nvidia_modeset nvidia_uvm 2>/dev/null || true
+        for m in nvidia_drm nvidia_modeset; do
+            grep -q "^$m " /proc/modules 2>/dev/null && warn "  $m still loaded — result will be ambiguous"
+        done
+        info "binding nvidia to $bdf"
+        [[ $DRY_RUN -eq 1 ]] || { modprobe nvidia 2>/dev/null || true
+            echo "$bdf" > /sys/bus/pci/drivers/nvidia/bind 2>/dev/null || warn "  bind write failed (already bound?)"; }
+        ;;
+      drm)
+        info "loading nvidia_modeset + nvidia_drm on top of the bound core"
+        [[ $DRY_RUN -eq 1 ]] || { modprobe nvidia_modeset; modprobe nvidia_drm; }
+        ;;
+      audio)
+        info "binding snd_hda_intel to the HDMI audio function $aud"
+        [[ $DRY_RUN -eq 1 ]] || { modprobe snd_hda_intel 2>/dev/null || true
+            echo "$aud" > /sys/bus/pci/drivers/snd_hda_intel/bind 2>/dev/null || warn "  bind write failed"; }
+        ;;
+      all)
+        info "binding the whole stack"
+        [[ $DRY_RUN -eq 1 ]] || { modprobe nvidia
+            echo "$bdf" > /sys/bus/pci/drivers/nvidia/bind 2>/dev/null || true
+            modprobe nvidia_modeset; modprobe nvidia_uvm; modprobe nvidia_drm
+            modprobe snd_hda_intel 2>/dev/null || true
+            echo "$aud" > /sys/bus/pci/drivers/snd_hda_intel/bind 2>/dev/null || true; }
+        ;;
+      *) die "unknown bind target '$what' (core|drm|audio|all)" ;;
+    esac
+    [[ $DRY_RUN -eq 1 ]] && { ok "dry run — nothing bound"; return 0; }
+
+    printf '  driver on %s: %s\n' "$bdf" "$(basename "$(readlink -f "/sys/bus/pci/devices/$bdf/driver" 2>/dev/null)" 2>/dev/null || echo none)"
+    info "Watching the link for ${SURVIVAL_SECS}s..."
+    local t alive=1
+    for ((t=1; t<=SURVIVAL_SECS; t++)); do
+        sleep 1
+        device_alive "$bdf" || { alive=0; break; }
+        (( t % 5 == 0 )) && info "  ${t}s: still up"
+    done
+    if (( alive )); then
+        ok "LINK SURVIVED ${SURVIVAL_SECS}s with '$what' bound."
+        cmd_link "$bdf"
+    else
+        warn "link DIED at ~${t}s with '$what' bound. That layer is implicated."
+        dmesg 2>/dev/null | grep -iE 'Link Down|Xid|NVRM' | tail -6 | sed 's/^/    /' >&2
+        return 1
+    fi
+}
+
 # ---------------------------------------------------------------- preconditions
 
 need_root() {
@@ -1301,9 +1369,10 @@ cmd_link() {
         ok "Gen 3. ~2 GB/s, but it stays up. It should NOT ramp under load — if"
         ok "you see the current speed rise above Gen 1, the pin has been lost."
     elif [[ -n $tls ]] && (( tls > 1 )); then
-        warn "Target link speed is Gen$tls. This link has never survived above Gen 1"
-        warn "— 'Cannot train link' at Gen 2, and death in ~18s at Gen 3, even idle."
-        warn "Pin it with:  $0 link-speed 1   (or activate with --link-gen 1)"
+        # Retired 2026-09-09: an UNBOUND card holds Gen3 x8 indefinitely with
+        # zero AER errors, so the link is not the problem and --link-gen 1 is
+        # not a fix. Kept as an informational line only.
+        info "Target link speed is Gen$tls (root port cap). Unbound, this link holds Gen3 x8."
     else
         case "$gen_max" in
             3) info "Device reports a Gen 3 x$width capability (this is NOT the port cap)." ;;
@@ -1581,6 +1650,11 @@ xgm-egpu — XG Mobile eGPU control for the ROG Flow X13 (GV301QH)
                                value takes effect NOW, no reboot, no initramfs.
                                Refuses if anything holds the GPU. eGPU must be off.
   xgm-egpu on                  release the internal dGPU, then activate
+  xgm-egpu bind <core|drm|audio|all>
+                               bind ONE layer of the driver stack to an already
+                               enumerated eGPU and watch whether the link dies.
+                               Use after 'on --no-reload' to find which layer
+                               kills it. Unbound, the link holds Gen3 x8.
   xgm-egpu watch [SECS] [FILE] sample power state every 0.5s after 'on' —
                                shows exactly what changes when a link dies
   xgm-egpu off                 deactivate and restore the internal dGPU
@@ -1684,6 +1758,7 @@ case "$CMD" in
     status)     cmd_status ;;
     detect)     cmd_detect ;;
     preflight)  cmd_preflight ;;
+    bind)       cmd_bind "${1:-core}" ;;
     reload-driver) cmd_reload_driver ;;
     watch)      cmd_watch "${1:-40}" "${2:-/tmp/xgm-watch.log}" ;;
     on)         cmd_on ;;

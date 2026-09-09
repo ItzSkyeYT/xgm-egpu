@@ -293,11 +293,28 @@ never took effect (§8 explains why), so that claim was never actually tested.
 > history when it notices the GPU has gone, and the in-flight RPC is the one
 > that was outstanding at that moment. `Link Down` precedes all of it.
 >
-> **Still open.** The next test is `xgm-egpu on --no-reload`, which now
-> disables `/sys/bus/pci/drivers_autoprobe` so neither `nvidia` nor
-> `snd_hda_intel` binds. If an entirely unbound card still dies at ten
-> seconds, no driver is involved and the cause is the dock, the EC, or the
-> platform. That test has never been run correctly.
+> **Resolved by that test, 2026-09-09.** With
+> `/sys/bus/pci/drivers_autoprobe=0` so that neither `nvidia` nor
+> `snd_hda_intel` binds, the eGPU enumerated and **held PCIe Gen3 x8
+> indefinitely with zero AER errors**:
+>
+> ```
+> drivers_autoprobe=0  (new devices will NOT be bound)
+> eGPU enumerated at 0000:01:00.0
+>   5s: still up    10s: still up    15s: still up
+> ok  LINK SURVIVED 15s past driver init.
+>     current   8.0 GT/s PCIe x8     AER  all zero
+> ```
+>
+> Six runs with drivers bound died at exactly ten seconds. One run with
+> nothing bound survived. **A driver kills it. The hardware, the connectors,
+> the EC handshake and the lane switch are all fine** — see the connector
+> section below, which this independently confirms for the third time.
+>
+> Which layer is still open: `nvidia` core, the `nvidia_drm`/`nvidia_modeset`
+> display path, or `snd_hda_intel` on the HDMI function. `xgm-egpu bind
+> <core|drm|audio|all>` binds one layer at a time to an already-enumerated
+> card and reports whether the link survives.
 
 ### The RTD3 finding itself (real, worth keeping, not the cause)
 
