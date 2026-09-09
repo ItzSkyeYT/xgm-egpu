@@ -71,6 +71,8 @@ DRM_CONF=${XGM_DRM_CONF:-$ETC_MODPROBE_D/nvidia-xgm-drm.conf}
 PCIE_CONF=${XGM_PCIE_CONF:-$ETC_MODPROBE_D/nvidia-xgm-pcie.conf}
 NVKMS_NODE=${XGM_NVKMS_NODE:-/dev/nvidia-modeset}
 LOG_DIR=${XGM_LOG_DIR:-/var/log/xgm-egpu}        # persistent per-run logs (root fs, survives reboots)
+DRI_BY_PATH=${XGM_DRI_BY_PATH:-/dev/dri/by-path}
+DRM_CLASS=${XGM_DRM_CLASS:-/sys/class/drm}
 RUN_LOG=                                          # set by run_log_start for state-changing commands
 NETCONSOLE_TARGET=${XGM_NETCONSOLE_TARGET:-192.168.1.7}   # the Pi
 BUGREPORT_DIR=${XGM_BUGREPORT_DIR:-/var/tmp}
@@ -237,17 +239,45 @@ boot_vga_bdf() {
     done
     return 1
 }
+# What the pin file will hand kwin at the next login, evaluated the way Plasma
+# does it (startplasma sources every plasma-workspace/env/*.sh with /bin/sh,
+# then reads the environment back). Prints the value; fails unless it is one
+# existing /dev/dri/cardN that is NOT driven by nvidia.
+#
+# 2026-09-09 21:43: the first version exported the by-path name
+# (/dev/dri/by-path/pci-0000:08:00.0-card). KWIN_DRM_DEVICES is a COLON-separated
+# list, so kwin saw three garbage paths, found "No suitable DRM devices", and
+# the session could not start until the file was deleted from a TTY. The value
+# must be the resolved cardN, and it must be checked before anyone logs out.
+desktop_pin_check() {
+    local file=$1 v name drv
+    [[ -r $file ]] || { echo "pin file missing"; return 1; }
+    v=$(/bin/sh -c '. "$1" >/dev/null 2>&1; printf %s "$KWIN_DRM_DEVICES"' _ "$file" 2>/dev/null)
+    [[ -n $v ]] || { echo "sourcing $file yields an EMPTY KWIN_DRM_DEVICES (kwin would then use every GPU — harmless, but not pinned)"; return 1; }
+    [[ $v == *:* ]] && { echo "value '$v' contains ':' — kwin splits on it; the login would fail"; return 1; }
+    name=$(basename "$v")
+    [[ $name =~ ^card[0-9]+$ && -e $v ]] || { echo "value '$v' is not an existing /dev/dri/cardN"; return 1; }
+    drv=$(basename "$(readlink -f "$DRM_CLASS/$name/device/driver" 2>/dev/null)" 2>/dev/null)
+    [[ $drv == nvidia ]] && { echo "value '$v' is the NVIDIA card — that is the one to keep kwin OFF"; return 1; }
+    echo "$v (${drv:-driver unknown})"
+}
+
 cmd_desktop() {
-    local sub=${1:-status} user home f bdf devpath pid
+    local sub=${1:-status} user home f bdf bypath pid chk
     user=${SUDO_USER:-$(id -un)}
     home=${XGM_DESKTOP_HOME:-$(getent passwd "$user" | cut -d: -f6)}
     f="$home/.config/plasma-workspace/env/xgm-egpu-kwin.sh"
     bdf=$(boot_vga_bdf || true)
-    devpath="/dev/dri/by-path/pci-${bdf:-unknown}-card"
+    bypath="$DRI_BY_PATH/pci-${bdf:-unknown}-card"
     case $sub in
       status)
-        printf '  boot_vga card:      %s  (%s)\n' "${bdf:-not found}" "$devpath"
-        printf '  pin file:           %s\n' "$([[ -f $f ]] && echo "$f: $(cat "$f")" || echo "none — kwin may open the NVIDIA GPU and hold it")"
+        printf '  boot_vga card:      %s  -> %s\n' "${bdf:-not found}" "$(readlink -f "$bypath" 2>/dev/null || echo "$bypath (unresolvable)")"
+        if [[ -f $f ]]; then
+            if chk=$(desktop_pin_check "$f"); then printf '  pin file:           %s  -> next login: kwin uses %s\n' "$f" "$chk"
+            else printf '  pin file:           %s  -> BROKEN: %s\n' "$f" "$chk"; printf '                      remove it:  %s desktop unpin\n' "$0"; fi
+        else
+            printf '  pin file:           none — kwin may open the NVIDIA GPU and hold it (%s desktop pin)\n' "$0"
+        fi
         pid=$(pgrep -x kwin_wayland | head -1)
         if [[ -n $pid ]]; then
             printf '  running kwin:       pid %s, KWIN_DRM_DEVICES=%s\n' "$pid" "$( { tr '\0' '\n' < "/proc/$pid/environ"; } 2>/dev/null | grep -oP '^KWIN_DRM_DEVICES=\K.*' || echo "(unreadable or unset — as root: xgm-egpu desktop status; the pin takes effect at next login)")"
@@ -259,12 +289,31 @@ cmd_desktop() {
         ;;
       pin)
         [[ -n $bdf ]] || die "no boot_vga device found under $SYSFS_PCI"
-        [[ $DRY_RUN -eq 1 ]] && { info "would write 'export KWIN_DRM_DEVICES=$devpath' to $f"; return 0; }
-        mkdir -p "$(dirname "$f")" && printf 'export KWIN_DRM_DEVICES=%s\n' "$devpath" > "$f" || die "cannot write $f"
-        [[ $EUID -eq 0 && -n $SUDO_USER ]] && chown -R "$SUDO_USER" "$home/.config/plasma-workspace/env" 2>/dev/null
-        ok "wrote $f"
-        info "kwin will use only the $bdf card from the NEXT login (log out and back in)."
-        info "Confirm after that with:  $0 desktop status   -> KWIN_DRM_DEVICES set, kwin holds NVIDIA: 0 fds"
+        [[ $EUID -eq 0 && -z $SUDO_USER ]] && die "run this as your own user (no sudo), or via sudo from your session — it writes to that user's ~/.config"
+        [[ -e $bypath ]] || die "$bypath does not exist — cannot pin without a stable path to the laptop's card"
+        [[ $DRY_RUN -eq 1 ]] && { info "would write $f (resolves $bypath at each login) and validate it"; return 0; }
+        mkdir -p "$(dirname "$f")" || die "cannot create $(dirname "$f")"
+        cat > "$f" <<EOS
+# xgm-egpu: keep kwin on the laptop's own GPU (boot_vga $bdf) so it never opens or
+# holds the internal dGPU. KWIN_DRM_DEVICES is colon-separated, so it must hold the
+# resolved /dev/dri/cardN — a by-path name contains colons and breaks the login.
+# If the session ever fails to start: from a TTY,  xgm-egpu desktop unpin  (or rm this file).
+xgm_card=\$(readlink -f "$bypath" 2>/dev/null)
+case "\$xgm_card" in
+    */card[0-9]*) export KWIN_DRM_DEVICES="\$xgm_card" ;;
+esac
+unset xgm_card
+EOS
+        [[ $EUID -eq 0 && -n $SUDO_USER ]] && chown "$SUDO_USER:$(id -gn "$SUDO_USER")" "$f" "$(dirname "$f")" 2>/dev/null
+        if chk=$(desktop_pin_check "$f"); then
+            ok "wrote $f"
+            ok "checked the way Plasma sources it: next login, kwin uses $chk and nothing else"
+            info "Log out and back in for it to take effect. Confirm with:  $0 desktop status"
+            info "If the session ever fails to start: Ctrl+Alt+F3, log in, and run:  $0 desktop unpin"
+        else
+            rm -f "$f"
+            die "the pin file did not validate ($chk) — removed it, nothing changed"
+        fi
         ;;
       unpin)
         [[ $DRY_RUN -eq 1 ]] && { info "would remove $f"; return 0; }
@@ -2918,6 +2967,9 @@ if [[ $CMD == --* ]]; then
      $0 on $CMD ${*:-}
      (commands: status detect preflight gsp drm pcie desktop logs reload-driver on off bind watch link link-speed ec install-rules)"
 fi
+# Options are accepted ANYWHERE on the line. The old loop stopped at the first
+# positional word, so `desktop pin --dry-run` silently ran for real (2026-09-09).
+POSITIONAL=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --force-kill) FORCE_KILL=1 ;;
@@ -2949,10 +3001,13 @@ while [[ $# -gt 0 ]]; do
         --internal-dgpu)   INTERNAL_DGPU=$2; shift ;;
         --internal-dgpu=*) INTERNAL_DGPU=${1#*=} ;;
         -h|--help)    usage; exit 0 ;;
-        *)            break ;;
+        --dump)       POSITIONAL+=("$1") ;;   # `ec --dump` takes it as its own argument
+        -*)           warn "ignoring unknown option $1" ;;
+        *)            POSITIONAL+=("$1") ;;
     esac
     shift
 done
+set -- "${POSITIONAL[@]}"
 
 # Work out the machine before dispatching. Anything set above by flag, by the
 # environment, or by /etc/xgm-egpu.conf survives — detection only fills blanks.
