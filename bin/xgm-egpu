@@ -459,10 +459,22 @@ preflight_drm_layer() {
         nokms)   ok "nvidia_drm loaded with modeset=0: the eGPU gets a render node only, no display engine" ;;
         nofbdev) ok "nvidia_drm loaded with fbdev=0: KMS, but no framebuffer console on the eGPU" ;;
         full)    warn "nvidia_drm loaded at the defaults (modeset=1 fbdev=1): the configuration that has"
-                 warn "died every run. Expected only if you are testing 'gsp off'. Otherwise try"
-                 warn "    $0 drm nofbdev     or     $0 drm nokms      (then reload-driver)" ;;
+                 warn "died every run. Expected only if you are testing 'gsp off'. Otherwise:"
+                 warn "    $0 drm nokms      (then reload-driver --force-kill)" ;;
     esac
     return 0
+}
+
+# Name of a live compositor / X server, if any. A graphical session opens the
+# eGPU's KMS node the moment nvidia-drm registers it, and when the card dies
+# the whole desktop freezes into garbage — the 19:30 run on 2026-09-09 ended in
+# a power-cycle with no crash dump for exactly this reason.
+desktop_is_live() {
+    local c
+    for c in kwin_wayland kwin_x11 gnome-shell Xorg sway Hyprland weston; do
+        pgrep -x "$c" >/dev/null 2>&1 && { echo "$c"; return 0; }
+    done
+    return 1
 }
 
 preflight_rtd3() {
@@ -1155,10 +1167,11 @@ cmd_drm() {
         printf '  nvidia in initramfs: %s\n' "$(initramfs_has_nvidia && echo 'yes (drm <mode> rebuilds it)' || echo no)"
         cat <<'EOM'
   modes:
-    nofbdev  modeset=1 fbdev=0   KMS without the framebuffer console. Untested (the
-                                 earlier "ruled out" run was a no-op) — first to try
     nokms    modeset=0           render node only; the display engine is never touched.
-                                 PRIME offload still works via a system-memory path
+                                 PRIME offload still works via a system-memory path.
+                                 The one to try.
+    nofbdev  modeset=1 fbdev=0   KMS without the framebuffer console. Tested for real
+                                 2026-09-09 19:30: died at 8.5s, identical. Ruled out
     safe     nofbdev + nvidia_modeset disable_hdmi_frl=1 disable_vrr_memclk_switch=1
                                  conceal_vrr_caps=1
     default  remove the file: modeset=1 fbdev=1, the configuration that died every run
@@ -2054,6 +2067,19 @@ $(printf '     %s\n' "$d")"
         die "not activating with the wrong DRM layer loaded (see above)"
     fi
 
+    # With modeset=0 there is no KMS node to grab, so this only applies to the
+    # KMS paths (full / nofbdev / safe).
+    local live
+    if [[ $RELOAD_NVIDIA -eq 1 && $NO_KMS -eq 0 ]] && live=$(desktop_is_live); then
+        warn "A graphical session is running ($live). It opens the eGPU's KMS node the"
+        warn "moment it appears; if the card dies, the whole desktop freezes into garbage,"
+        warn "you power-cycle, and the crash dump is lost (2026-09-09 19:30, again)."
+        warn "Safer: Ctrl+Alt+F3, log in, 'sudo systemctl stop sddm', then run this there."
+        warn "(Not needed for --no-kms: a render-only node is invisible to compositors.)"
+        warn "Continuing in 8s — Ctrl+C to stop."
+        sleep 8
+    fi
+
     release_internal_gpu
 
     # --no-reload must mean "the driver does not touch the card". Skipping our
@@ -2260,10 +2286,12 @@ xgm-egpu — XG Mobile eGPU control for the ROG Flow X13 (GV301QH)
                                it booted with — modprobe cannot change a resident
                                module, which is why every earlier --no-fbdev /
                                --no-kms / --modeset-safe run silently ran the default.
-                                 nofbdev  modeset=1 fbdev=0  KMS, no fbcon. UNTESTED;
-                                                             first thing to try
-                                 nokms    modeset=0          render node only; PRIME
-                                                             offload still works
+                                 nokms    modeset=0          render node only; the
+                                                             display engine never
+                                                             comes up. PRIME offload
+                                                             still works. TRY THIS
+                                 nofbdev  modeset=1 fbdev=0  died 2026-09-09 19:30,
+                                                             identical. Ruled out
                                  safe     nofbdev + nvidia_modeset HDMI-FRL/VRR off
                                Writes /etc/modprobe.d/nvidia-xgm-drm.conf and rebuilds
                                the initramfs; reload-driver or reboot applies it.
@@ -2339,9 +2367,9 @@ Options:
                   drop is momentary, this stops pciehp tearing the device down
                   and the eGPU survives it. Restored on exit. 'on' and 'bind'.
   --no-fbdev      require the LOADED nvidia_drm to have fbdev=0 ('drm nofbdev' +
-                  reload-driver). NOT ruled out: the 2026-09-09 run that "died
-                  regardless" was a no-op — the journal shows fb1 still being
-                  created on the eGPU. Untested, and the likeliest single fix.
+                  reload-driver). Tested for real 2026-09-09 19:30 (fbdev=N
+                  verified in the loaded module, no fb1 line): died at 8.5s,
+                  identical signature. Ruled out. Kept for the record.
   --no-drm-poll   set drm_kms_helper.poll=0 before nvidia_drm loads. RULED OUT
                   2026-09-09 by source: nvidia-drm calls drm_kms_helper_poll_disable
                   itself right after init, and marks every non-VGA connector
