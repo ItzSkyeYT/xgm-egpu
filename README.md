@@ -7,12 +7,40 @@ Not a SteamOS plugin. No Decky Loader, no Gaming Mode, no immutable-root
 bind-mount machinery. A shell script, two config files, and a long document
 explaining why the obvious approach hard-hangs your machine.
 
-## Status: partially working. Read this before you start.
+## Status: working (render offload). Read this before you start.
 
-This is a findings dump with a working tool attached, not a finished product.
-It is published because the research is transferable even where the end result
-is not, and because **the failure modes here will destroy your afternoon if you
-meet them undocumented.**
+**2026-09-09, 21:31 and 21:58:** the RTX 3060 on a DIY osy Lite dock runs at
+PCIe Gen3 x8 on a ROG Flow X13 GV301QH under CachyOS, driver bound, zero AER,
+`nvidia-smi` and PRIME render offload working, activated from the desktop
+with the session intact. The one-line version of the cause: **the NVIDIA
+driver retrains the PCIe link about ten seconds after init, when the GPU
+leaves P0, and this link does not survive a retrain at Gen3.** An unbound
+card holds Gen3 x8 forever because nothing retrains it. The fix removes every
+reason to retrain. Details in [Findings §8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause).
+
+The working configuration, persisted once, then one command per boot:
+
+```sh
+sudo xgm-egpu install-rules      # RTD3 off, runtime PM pinned (modprobe.d + udev + initramfs)
+sudo xgm-egpu drm nokms          # nvidia_drm modeset=0: render node only
+sudo xgm-egpu pcie gen3          # NVreg_EnablePCIeGen3=1: the driver may keep Gen3
+sudo xgm-egpu reload-driver --force-kill   # or reboot
+xgm-egpu desktop pin             # kwin off the NVIDIA GPU; log out and in once
+# every boot:
+sudo xgm-egpu on --no-kms --freeze-link --force-kill
+prime-run glxinfo -B             # must name the eGPU; games: prime-run %command%
+```
+
+`--freeze-link` locks the GPU at its maximum clocks so it never leaves P0 and
+sets the PCIe Hardware Autonomous Speed/Width Disable bits on both ends.
+`--no-kms` also seals `/dev/nvidia-modeset` so no client can bring the display
+engine up. What this does **not** give you is a monitor on the eGPU's own
+ports; whether the full display path also survives now that the retrain is
+gone is untested (see the table). It costs about 40 W at idle on the dock.
+
+This is still a findings dump with a working tool attached, published because
+**the failure modes here will destroy your afternoon if you meet them
+undocumented.**
 
 | Stage | State |
 |---|---|
@@ -22,7 +50,8 @@ meet them undocumented.**
 | Link trains at PCIe Gen3 x8 | **Works** - earlier "Gen1 cap" was an idle-state reading, see [Findings](FINDINGS.md#pcie-link-speed) |
 | Link survives **unbound** | **Works** - Gen3 x8 indefinitely, zero AER. The hardware is fine |
 | Link survives with `nvidia` core bound | **Works** - Gen3 x8, P0, `nvidia-smi` reads it |
-| Link survives with the driver stack loaded | **The trigger is found (2026-09-09 21:05): a PCIe speed change.** With every driver-side suspect removed the per-second watch caught the link going 8.0 → 5.0 GT/s under the driver, then `Card present / Link Up` (a retrain through Detect resets the card), then Xid 79. The RM pulls the link down to the generation it allows ~10 s after init; this DIY link cannot survive a retrain at Gen3. Fix: `on --link-gen 2` (Gen2 x8 = 4 GB/s, no equalization) or `pcie gen3` (`NVreg_EnablePCIeGen3=1`). Earlier text of this row:** It dies ~10s after the eGPU appears with the display engine **never initialised** (`modeset=0`, NVKMS sealed) - so it is not the display path. Every recorded death ends with `snd_hda_intel` probing the eGPU's **HDMI-audio function** (`01:00.1`) and the firmware call in flight is `DFP_SET_ELD_AUDIO_CAPS`; both survivors had no driver on that function and the internal 1650 has none. `on` now fences that function off by default (`--audio` to bind it). See [Findings §8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause) |
+| Link survives with the driver stack bound, render-only | **Works** - `drm nokms` + `pcie gen3` + `on --no-kms --freeze-link`: Gen3 x8 held, P0, zero AER, PRIME offload, desktop intact (2026-09-09 21:58) |
+| Monitor on the eGPU's own ports (`modeset=1`) | **Open** - every earlier death was the retrain, not the display engine; `drm default` + `pcie gen3` + `--freeze-link` is the untested next experiment |
 
 The reference machine is the most marginal configuration that exists: a DIY dock
 with substituted connectors, on the oldest Flow model. If you have an official
@@ -228,7 +257,7 @@ repo - [Findings §6](FINDINGS.md#6-less-teardown-not-more).
 
 | Host | Dock | Result |
 |---|---|---|
-| ROG Flow X13 GV301QH | DIY osy Lite v0.6.1, RTX 3060, ALC04-S40EIA-00 connectors | Unbound: Gen3 x8 stable, 0 AER. Bound: dies at exactly 10s ([§8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause)) |
+| ROG Flow X13 GV301QH | DIY osy Lite v0.6.1, RTX 3060, ALC04-S40EIA-00 connectors | **Works**, Gen3 x8, render offload, with `drm nokms` + `pcie gen3` + `on --no-kms --freeze-link` ([§8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause)) |
 | ROG Ally + CachyOS | DIY osy, RTX 3080 | Testing in progress |
 
 If you run this on anything, please [open an
