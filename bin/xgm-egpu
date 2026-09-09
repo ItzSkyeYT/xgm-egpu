@@ -878,35 +878,48 @@ cmd_capture() {
 # teardown, and before the user reaches for the power button.
 collect_gpu_crash_dump() {
     local tag; tag=$(date +%Y%m%d-%H%M%S)
-    local out="$BUGREPORT_DIR/xgm-bugreport-$tag.log.gz"
+    # NO .gz here: the script appends .gz itself ("the file will automatically
+    # be compressed to <file>.gz"). Passing foo.log.gz made it write
+    # foo.log.gz.gz and the check below looked at the wrong name — 2026-09-09,
+    # a real crash dump was lost to that.
+    local base="$BUGREPORT_DIR/xgm-bugreport-$tag.log"
+    local errlog="$BUGREPORT_DIR/xgm-bugreport-$tag.stderr"
     local script; script=$(command -v nvidia-bug-report.sh 2>/dev/null) || { warn "nvidia-bug-report.sh not installed; crash dump not collected"; return 1; }
-    [[ $DRY_RUN -eq 1 ]] && { info "  would run: $script --output-file $out"; return 0; }
-    info "Collecting NVIDIA's crash dump NOW (kernel is alive, module still loaded): $out"
+    [[ $DRY_RUN -eq 1 ]] && { info "  would run: $script --safe-mode --output-file $base  (-> $base.gz)"; return 0; }
+    info "Collecting NVIDIA's crash dump NOW (kernel is alive, module still loaded)"
     info "  this takes 10-40s; the screen may look frozen — it is not the kernel."
-    # --safe-mode skips live GPU queries that would hang on a card that is off
-    # the bus. --output-file is long-standing; fall back to cwd if it errs.
-    if ! "$script" --safe-mode --output-file "$out" >/dev/null 2>&1; then
-        ( cd "$BUGREPORT_DIR" && "$script" --safe-mode >/dev/null 2>&1 && mv -f nvidia-bug-report.log.gz "$out" 2>/dev/null ) || true
-    fi
+    # --safe-mode swaps nvidia-debugdump -D (live GPU queries that hang on a card
+    # that is off the bus) for --ioctl --nvlogonly, which pulls the stored log
+    # via ioctl. Keep stderr this time so a failure is diagnosable.
+    ( cd "$BUGREPORT_DIR" && "$script" --safe-mode --output-file "$base" >"$errlog" 2>&1 ) || true
     sync
-    if [[ -s $out ]]; then
+    local out=""
+    for cand in "$base.gz" "$base" "$BUGREPORT_DIR/nvidia-bug-report.log.gz" "$BUGREPORT_DIR/nvidia-bug-report.log"; do
+        [[ -s $cand ]] && { out=$cand; break; }
+    done
+    if [[ -n $out ]]; then
+        [[ $out != "$base.gz" && $out != "$base" ]] && { mv -f "$out" "$base.gz" 2>/dev/null && out="$base.gz"; }
+        rm -f "$errlog"
         ok "crash dump saved: $out  ($(du -h "$out" | cut -f1))"
-        ok "it survives reboot. Paste the NVRM/Xid/GSP section of:  zcat $out | grep -nA40 'GPU crash dump\|Xid' | head -120"
+        ok "survives reboot. Paste:  zcat $out | grep -nA40 'GPU crash dump\|Xid' | head -150"
     else
-        warn "nvidia-bug-report.sh produced nothing at $out"
+        warn "nvidia-bug-report.sh produced no file. Its output is in: $errlog"
+        tail -5 "$errlog" 2>/dev/null | sed 's/^/    /' >&2
         return 1
     fi
 }
 
 # What to tell a user whose screen just froze: the machine is up.
 death_recovery_hint() {
+    local who=${SUDO_USER:-$(id -un)}
+    local ip; ip=$(ip -4 addr show wlan0 2>/dev/null | grep -oE 'inet [0-9.]+' | awk '{print $2}')
     warn ""
-    warn "THE KERNEL IS STILL RUNNING. Only the display stack froze (compositor +"
-    warn "fbcon). Do NOT power-cycle — that destroys the evidence and the"
-    warn "filesystem journal. From a phone or the Pi:"
-    warn "    ssh $(id -un)@$(ip -4 addr show wlan0 2>/dev/null | grep -oE 'inet [0-9.]+' | awk '{print $2}' || echo '<this-ip>')"
-    warn "    sudo xgm-egpu off      # clean ACPI eject, display comes back"
-    warn "or wait: this command finishes on its own once the dump is collected."
+    warn "The kernel is still running; the display stack is what froze. To get"
+    warn "back WITHOUT a reboot (from this TTY, or ssh ${who}@${ip:-<this-ip>}):"
+    warn "    1. UNPLUG the dock   ('off' returns EBUSY while it is attached)"
+    warn "    2. sudo xgm-egpu off"
+    warn "If that does not bring the desktop back, rebooting is fine — the crash"
+    warn "dump above is already on disk and survives it."
 }
 
 # ---------------------------------------------------------------- preconditions
