@@ -23,7 +23,7 @@ load() {
            XGM_MKINITCPIO_CONF=$T/mkinitcpio.conf XGM_MKINITCPIO_D=$T/mkinitcpio.conf.d \
            XGM_DISTRO_MODPROBE=$T/usrlib/nvidia.conf XGM_ETC_MODPROBE_D=$T/etc \
            XGM_AUTOPROBE=$T/drivers_autoprobe XGM_STATE_DIR=$T/state \
-           XGM_SYS_MODULE=$T/module XGM_SYSFS_PCI=$T/pci XGM_DRM_POLL=$T/drm_poll XGM_PSTORE=$T/pstore XGM_EFI_PSTORE_DISABLE=$T/efi_pstore_disable
+           XGM_SYS_MODULE=$T/module XGM_SYSFS_PCI=$T/pci XGM_DRM_POLL=$T/drm_poll XGM_PSTORE=$T/pstore XGM_EFI_PSTORE_DISABLE=$T/efi_pstore_disable XGM_BUGREPORT_DIR=$T/bugreports
     mkdir -p "$T/gpus" "$T/mkinitcpio.conf.d" "$T/usrlib" "$T/etc" "$T/module" "$T/pci"
     # shellcheck disable=SC1091
     XGM_LIBRARY_MODE=1 source bin/xgm-egpu
@@ -241,6 +241,33 @@ assert_eq  "read with a record -> rc 0"            "$rc" "0"
 assert_has "read prints the record"                "$out" "kernel NULL"
 out=$(sub cmd_capture bogus 2>&1); rc=$?
 assert_eq  "unknown subcommand -> rc 1"            "$rc" "1"
+
+echo "== collect_gpu_crash_dump =="
+mkdir -p "$T/bugreports"
+out=$(PATH=/nonexistent DRY_RUN=0 sub collect_gpu_crash_dump 2>&1); rc=$?
+assert_eq  "no nvidia-bug-report.sh -> rc 1"            "$rc" "1"
+assert_has "says the tool is missing"                   "$out" "not installed"
+mkdir -p "$T/fakebin"
+printf '#!/bin/sh\nexit 0\n' > "$T/fakebin/nvidia-bug-report.sh"; chmod +x "$T/fakebin/nvidia-bug-report.sh"
+out=$(PATH="$T/fakebin:$PATH" DRY_RUN=1 sub collect_gpu_crash_dump 2>&1); rc=$?
+assert_eq  "dry-run -> rc 0"                            "$rc" "0"
+assert_has "dry-run shows the output path in BUGREPORT_DIR" "$out" "$T/bugreports/xgm-bugreport-"
+# a fake reporter that honours --output-file and writes a non-empty gz
+cat > "$T/fakebin/nvidia-bug-report.sh" <<'FAKE'
+#!/bin/sh
+while [ $# -gt 0 ]; do case "$1" in --output-file) shift; printf 'fake' | gzip > "$1";; esac; shift; done
+FAKE
+chmod +x "$T/fakebin/nvidia-bug-report.sh"
+out=$(PATH="$T/fakebin:$PATH" DRY_RUN=0 sub collect_gpu_crash_dump 2>&1); rc=$?
+assert_eq  "real run with a working reporter -> rc 0"   "$rc" "0"
+assert_has "reports the saved path"                     "$out" "crash dump saved"
+assert_eq  "a non-empty dump file exists"               "$(ls "$T/bugreports"/xgm-bugreport-*.log.gz 2>/dev/null | wc -l)" "1"
+# a reporter that produces nothing
+printf '#!/bin/sh\nexit 0\n' > "$T/fakebin/nvidia-bug-report.sh"
+rm -f "$T/bugreports"/*
+out=$(PATH="$T/fakebin:$PATH" DRY_RUN=0 sub collect_gpu_crash_dump 2>&1); rc=$?
+assert_eq  "reporter that writes nothing -> rc 1"       "$rc" "1"
+assert_has "says it produced nothing"                   "$out" "produced nothing"
 
 echo "== library mode =="
 assert_rc "sourcing in library mode does not dispatch" 0 bash -c 'XGM_LIBRARY_MODE=1 source bin/xgm-egpu; declare -F cmd_on >/dev/null'

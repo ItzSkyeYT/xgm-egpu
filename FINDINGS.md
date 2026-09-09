@@ -422,20 +422,52 @@ never took effect (§8 explains why), so that claim was never actually tested.
 > A display-init current step would show as a climb before the drop. There is
 > none. Whatever this is, it is not the card drawing more power.
 >
-> ### The machine hard-hangs, and nothing about the death has ever reached disk
+> ### It is NOT a kernel hang. The kernel is alive; the display stack freezes.
 >
-> The `--cap-power` boot's journal is **hard-cut**: no shutdown lines, and the
-> next boot ran F2FS recovery over half-written files. That run did not just
-> lose the eGPU — the whole machine hung at ~7 s, with the internal panel on
-> the AMD iGPU, which an NVIDIA link-drop should never do by itself. And it left
-> **no record**: pstore is not mounted, there is no ramoops, and
-> `kernel.nmi_watchdog=0`, so an IRQs-off lockup is undetectable by
-> configuration. Every "death" analysed so far was read from the *survivable*
-> runs; the hangs have been blind spots.
+> This was misread for most of a day. The `--mask-pciehp` run settled it: the
+> survival watch's fsync'd breadcrumb reached `end t=8 alive=0`, the journal
+> flushed the Xid 79 / Xid 154 / Link Down lines at 15:00:21, and `capture` —
+> which *was* armed — recorded nothing, because **there was no lockup to
+> catch.** All three need a running kernel.
 >
-> The NVMe is on `00:02.4`, not under the XGM bridge, so this is not the eGPU
-> taking storage down with it. The hang is in the teardown path itself — which
-> rhymes with the D-state eject wedges of §4.
+> What actually happens at the death, when run from a desktop session:
+>
+> ```
+> 15:00:11  kwin_wayland: Failed to open drm device   (x3)
+> 15:00:11  kwin_wayland: eglInitialize failed  EGL_NOT_INITIALIZED
+> 15:00:21  NVRM: Xid 79, GPU has fallen off the bus
+> 15:00:21  wireplumber: card removed
+> ```
+>
+> kwin sees the new NVIDIA DRM device appear, opens it, fails EGL on it, and
+> ten seconds later the device vanishes underneath it. **The compositor
+> freezes.** Meanwhile fbcon hands the console from the dead `fb1` back to
+> amdgpu with the wrong stride — the internal panel fills with a blue field and
+> text fragments. Both displays are unusable, so it *looks* hung, and every
+> time the power button was pressed on a live machine. That is also what the
+> earlier "hard-cut journal" was: a live system power-cycled. No IOMMU faults
+> across four boots (the eGPU sits in a translated DMA-FQ domain), so it is not
+> stray DMA either.
+>
+> **Recovery without a power cycle:** `sshd` is running. From a phone or the
+> Pi, `ssh` in and `sudo xgm-egpu off`. The display comes back.
+>
+> **pciehp is not the cause.** With its interrupts masked, `Xid 79` came
+> *first* — the driver itself found the GPU unresponsive — and Link Down was
+> logged after. The card genuinely stops answering; pciehp only reported it.
+> Eight mechanisms eliminated.
+>
+> ### The evidence that has been destroyed every time
+>
+> Every death prints *"A GPU crash dump has been created. If possible, please
+> run nvidia-bug-report.sh as root to collect this data before the NVIDIA
+> kernel module is unloaded."* That dump is the GPU side's own account — GSP
+> logs, RPC history, whatever fault the card saw — and it lives only in the
+> driver's memory. Every reboot threw it away. The kernel is alive at t=8, so
+> `xgm-egpu on` and `xgm-egpu bind` now run `nvidia-bug-report.sh --safe-mode`
+> the instant the watch detects death, before any teardown, and save it to
+> `/var/tmp/xgm-bugreport-<timestamp>.log.gz`. That file is the next thing
+> to read.
 >
 > **`xgm-egpu capture`** arms the machine at runtime (no reboot): NMI watchdog
 > on, hard/soft-lockup and hung-task and oops → panic, `panic=30` so it comes
