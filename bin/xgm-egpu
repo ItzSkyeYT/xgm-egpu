@@ -60,6 +60,8 @@ MKINITCPIO_D=${XGM_MKINITCPIO_D:-/etc/mkinitcpio.conf.d}
 DISTRO_MODPROBE=${XGM_DISTRO_MODPROBE:-/usr/lib/modprobe.d/nvidia.conf}
 ETC_MODPROBE_D=${XGM_ETC_MODPROBE_D:-/etc/modprobe.d}
 AUTOPROBE=${XGM_AUTOPROBE:-/sys/bus/pci/drivers_autoprobe}
+SYS_MODULE=${XGM_SYS_MODULE:-/sys/module}
+SYSFS_PCI=${XGM_SYSFS_PCI:-/sys/bus/pci/devices}
 
 # The write legitimately takes a long time: it drives a full ACPI eject and PCI
 # rescan cycle synchronously. Observed 2026-07-31 — an 'off' that "timed out" at
@@ -96,6 +98,7 @@ DRY_RUN=0
 #             observed results.
 RELEASE_LEVEL=minimal
 IGNORE_RTD3=0         # --ignore-rtd3: activate even with RTD3 armed (to reproduce the failure)
+SURVIVAL_SECS=15      # after the bind, watch the link this long. It used to die at 10s.
 RELOAD_NVIDIA=1       # modprobe the NVIDIA stack back after a successful switch;
                       # --no-reload leaves the eGPU enumerated but unbound
 
@@ -487,6 +490,76 @@ cmd_watch() {
       echo; echo "--- kernel log tail ---"; dmesg 2>/dev/null | tail -30
     } >> "$out" 2>&1
     ok "saved to $out"
+}
+
+# Open references on the nvidia module beyond its dependent modules. From the
+# handoff notes: refcnt == (open fds) + (number of modules in holders/). Anything
+# above the holders count is a process with /dev/nvidia* open, which would make
+# a reload fail or, worse, stall. Prints the extra count; 0 means safe.
+nvidia_extra_refs() {
+    local rc h
+    rc=$(cat "$SYS_MODULE/nvidia/refcnt" 2>/dev/null) || { echo 0; return 1; }
+    h=$(ls "$SYS_MODULE/nvidia/holders" 2>/dev/null | wc -l)
+    echo $(( rc - h ))
+}
+
+# Is a PCI device still answering? A device that has "fallen off the bus" keeps
+# its sysfs directory for a while, but config-space reads return nothing, so
+# current_link_speed comes back empty. That is the zombie state observed after
+# every 10-second death.
+device_alive() {
+    local d=$SYSFS_PCI/$1
+    [[ -e $d ]] || return 1
+    [[ -n $(cat "$d/current_link_speed" 2>/dev/null) ]]
+}
+
+# Reload the NVIDIA stack on the running system so a new modprobe.d value takes
+# effect without a reboot and without depending on the initramfs at all. Only
+# safe when nothing holds the GPU; refuses otherwise. This is NOT the fatal
+# "--release unload" path: nothing is switching, egpu_enable is untouched, the
+# bus is static. It is a plain driver reload on an idle internal dGPU.
+cmd_reload_driver() {
+    need_root; check_interface
+    [[ $(read_attr "$ATTR_ENABLE") == 0 ]] || die "egpu_enable is 1 — reload the driver only with the eGPU OFF"
+
+    local extra; extra=$(nvidia_extra_refs)
+    if (( extra > 0 )); then
+        warn "nvidia has $extra reference(s) beyond its dependent modules — something holds /dev/nvidia*:"
+        nv_holders | sed 's/^/    /' >&2
+        die "close those first (or: systemctl stop sddm), then retry"
+    fi
+    local h; h=$(nv_holders)
+    [[ -z $h ]] || die "processes hold /dev/nvidia*:\n$h"
+
+    local before; before=$(nvidia_dpm_value)
+    info "loaded DynamicPowerManagement=${before:-<not loaded>}; would-load: $(modprobe --show-depends nvidia 2>/dev/null | tr ' ' '\n' | grep -oP 'NVreg_DynamicPowerManagement=\K\S+' | tail -1)"
+    [[ $DRY_RUN -eq 1 ]] && { ok "dry run — would unload nvidia_drm nvidia_modeset nvidia_uvm nvidia and reload"; return 0; }
+
+    local m attempt
+    for m in nvidia_drm nvidia_modeset nvidia_uvm nvidia; do
+        grep -q "^$m " /proc/modules 2>/dev/null || continue
+        for attempt in 1 2 3 4 5; do
+            modprobe -r "$m" 2>/dev/null && break
+            sleep 1
+        done
+        grep -q "^$m " /proc/modules 2>/dev/null && die "could not unload $m (refcnt $(cat "$SYS_MODULE/$m/refcnt" 2>/dev/null))"
+        info "  unloaded $m"
+    done
+    modprobe nvidia         || die "modprobe nvidia failed"
+    modprobe nvidia_modeset || warn "modprobe nvidia_modeset failed"
+    modprobe nvidia_uvm     || warn "modprobe nvidia_uvm failed"
+    modprobe nvidia_drm     || warn "modprobe nvidia_drm failed"
+    sleep 1
+
+    local after; after=$(nvidia_dpm_value)
+    info "loaded DynamicPowerManagement is now: ${after:-?}"
+    if [[ $after == 0 ]]; then
+        ok "RTD3 disarmed in the running driver. No reboot needed for the test."
+        ok "(For persistence across reboots you still need install-rules + the initramfs rebuild.)"
+    else
+        die "still $after after reload. The value on the modprobe line is not reaching the driver.
+     Check:  modprobe -c | grep -i 'options nvidia'   and   $0 preflight"
+    fi
 }
 
 # ---------------------------------------------------------------- preconditions
@@ -1413,6 +1486,26 @@ $(printf '     %s\n' "$d")"
         if [[ $rtd3 == Enabled* || ( -n $dpm && $dpm != 0 ) ]]; then
             warn "RTD3 is ARMED on the eGPU. Expect Link Down in ~10s. See: $0 preflight"
         fi
+
+        # THE measurement. Before 2026-09-09 the link died at exactly 10s after
+        # driver init, four times out of four. Watch it and say so either way,
+        # so the confirming run reports its own result.
+        if (( SURVIVAL_SECS > 0 )); then
+            info "Watching the link for ${SURVIVAL_SECS}s (the old failure was at 10s)..."
+            local t alive=1
+            for ((t=1; t<=SURVIVAL_SECS; t++)); do
+                sleep 1
+                device_alive "$bdf" || { alive=0; break; }
+                (( t % 5 == 0 )) && info "  ${t}s: still up"
+            done
+            if (( alive )); then
+                ok "LINK SURVIVED ${SURVIVAL_SECS}s past driver init."
+            else
+                warn "link DIED at ~${t}s. dmesg tail:"
+                dmesg 2>/dev/null | grep -iE 'Link Down|Xid|nvrm' | tail -5 | sed 's/^/    /' >&2
+                die "the eGPU fell off the bus. If preflight said 0, this is a NEW failure — report it."
+            fi
+        fi
     fi
     echo; cmd_link "$bdf"
     echo; info "nvidia-smi"; nvidia-smi 2>&1 | head -15
@@ -1473,6 +1566,9 @@ xgm-egpu — XG Mobile eGPU control for the ROG Flow X13 (GV301QH)
                                paste it into an issue if anything looks wrong
   xgm-egpu preflight           is NVIDIA RTD3 disarmed in the LOADED driver?
                                run after every driver/initramfs change
+  xgm-egpu reload-driver       unload+reload the NVIDIA stack so a new modprobe.d
+                               value takes effect NOW, no reboot, no initramfs.
+                               Refuses if anything holds the GPU. eGPU must be off.
   xgm-egpu on                  release the internal dGPU, then activate
   xgm-egpu watch [SECS] [FILE] sample power state every 0.5s after 'on' —
                                shows exactly what changes when a link dies
@@ -1501,6 +1597,8 @@ Options:
                   resident module binds on its own and the flag is meaningless.
   --ignore-rtd3   activate even though the loaded driver has RTD3 armed. Only
                   for reproducing the 10-second link death on purpose.
+  --survival N    after the bind, watch the link for N seconds and report whether
+                  it survived (default 15; the old failure was at 10). 0 to skip.
   --link-gen N    pin the root port's target PCIe generation (1-4) before the
                   switch and again after enumeration. On this machine the link
                   cannot complete training above Gen1: '--link-gen 1' is the
@@ -1548,6 +1646,7 @@ while [[ $# -gt 0 ]]; do
         --release=*)  RELEASE_LEVEL=${1#*=} ;;
         --no-reload)  RELOAD_NVIDIA=0 ;;
         --ignore-rtd3) IGNORE_RTD3=1 ;;
+        --survival)   SURVIVAL_SECS=$2; shift ;;
         --aspm-performance) ASPM_PERF=1 ;;
         --link-gen)   LINK_GEN=$2; shift ;;
         --link-gen=*) LINK_GEN=${1#*=} ;;
@@ -1574,6 +1673,7 @@ case "$CMD" in
     status)     cmd_status ;;
     detect)     cmd_detect ;;
     preflight)  cmd_preflight ;;
+    reload-driver) cmd_reload_driver ;;
     watch)      cmd_watch "${1:-40}" "${2:-/tmp/xgm-watch.log}" ;;
     on)         cmd_on ;;
     off)        cmd_off ;;

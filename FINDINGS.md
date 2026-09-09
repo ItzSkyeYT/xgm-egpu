@@ -366,6 +366,19 @@ build time into the image. Nothing in `/etc/modprobe.d` matters until
 reports the value of the **loaded** module — the only number that matters —
 and `xgm-egpu on` refuses to activate while it is not 0.
 
+**Testing the fix without a reboot.** When nothing holds the GPU (refcount on
+`nvidia` equals the count of its dependent modules, no open fds), the stack can
+be unloaded and reloaded in place and picks up the new modprobe.d immediately,
+sidestepping the initramfs question entirely: `xgm-egpu reload-driver`. It
+refuses if anything holds the device. This is not the fatal `--release unload`
+path from §6 — nothing is switching, `egpu_enable` is 0, the bus is static.
+
+Once the driver is confirmed at 0, `xgm-egpu on` watches the link for 15
+seconds after the bind and reports `LINK SURVIVED` or the second it died, so
+the confirming run states its own result. Verified nothing can re-arm FINE
+after the regkey says NEVER: the only re-instatement (`b_fine_not_supported`,
+line 1777) can be set solely from FINE mode.
+
 ### Why the `--no-reload` test was invalid
 
 `--no-reload` skipped the tool's own `modprobe`, but the resident nvidia module
@@ -468,6 +481,8 @@ instability.
    yet been done.
 2. Whether an official dock behaves differently from a DIY one on Linux.
 3. What `egpu_enable` values `2` (`0x101`) and `3` (`0x201`) do.
-4. Whether RTD3 can be disabled per-GPU rather than globally, so the internal
-   dGPU keeps its battery saving. `NVreg_RegistryDwordsPerDevice` is the
-   candidate; untested.
+4. ~~Whether RTD3 can be disabled per-GPU so the internal dGPU keeps its battery
+   saving.~~ Moot on the reference machine: the Turing GTX 1650 reports
+   `Runtime D3 status: Not supported`, so it never used RTD3 and global
+   `DynamicPowerManagement=0` costs nothing. On a host whose internal dGPU
+   *does* support RTD3, `NVreg_RegistryDwordsPerDevice` is the candidate.

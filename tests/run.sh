@@ -20,8 +20,9 @@ load() {
     export XGM_NV_PARAMS=$T/params XGM_NV_GPUS_DIR=$T/gpus \
            XGM_MKINITCPIO_CONF=$T/mkinitcpio.conf XGM_MKINITCPIO_D=$T/mkinitcpio.conf.d \
            XGM_DISTRO_MODPROBE=$T/usrlib/nvidia.conf XGM_ETC_MODPROBE_D=$T/etc \
-           XGM_AUTOPROBE=$T/drivers_autoprobe XGM_STATE_DIR=$T/state
-    mkdir -p "$T/gpus" "$T/mkinitcpio.conf.d" "$T/usrlib" "$T/etc"
+           XGM_AUTOPROBE=$T/drivers_autoprobe XGM_STATE_DIR=$T/state \
+           XGM_SYS_MODULE=$T/module XGM_SYSFS_PCI=$T/pci
+    mkdir -p "$T/gpus" "$T/mkinitcpio.conf.d" "$T/usrlib" "$T/etc" "$T/module" "$T/pci"
     # shellcheck disable=SC1091
     XGM_LIBRARY_MODE=1 source bin/xgm-egpu
 }
@@ -119,6 +120,43 @@ out=$(LC_ALL=fr_FR.UTF-8 bash -c 'printf "%5.1f\n" 3.5' 2>&1)
 # the error text is localised (fr: "nombre non valable"), and a broken run
 # prints a comma-decimal or nothing useful — match any of those.
 assert_has "(control) float formatting DOES break under fr_FR" "$out" "invalid|valable|3,"
+
+echo "== nvidia_extra_refs (refcnt arithmetic) =="
+mkdir -p "$T/module/nvidia/holders"
+echo 3 > "$T/module/nvidia/refcnt"
+touch "$T/module/nvidia/holders/nvidia_uvm" "$T/module/nvidia/holders/nvidia_drm" "$T/module/nvidia/holders/nvidia_modeset"
+assert_eq "refcnt 3 with 3 holders -> 0 extra (safe)"    "$(nvidia_extra_refs)" "0"
+echo 19 > "$T/module/nvidia/refcnt"
+assert_eq "refcnt 19 with 3 holders -> 16 extra (fds open)" "$(nvidia_extra_refs)" "16"
+rm -rf "$T/module/nvidia"
+assert_eq "module absent -> 0"                            "$(nvidia_extra_refs)" "0"
+assert_rc "module absent -> rc 1"                         1 nvidia_extra_refs
+
+echo "== device_alive (zombie detection) =="
+mkdir -p "$T/pci/0000:01:00.0"
+echo "8.0 GT/s PCIe" > "$T/pci/0000:01:00.0/current_link_speed"
+assert_rc "present + answering -> alive"                  0 device_alive 0000:01:00.0
+: > "$T/pci/0000:01:00.0/current_link_speed"
+assert_rc "present but config reads empty -> dead (zombie)" 1 device_alive 0000:01:00.0
+rm -rf "$T/pci/0000:01:00.0"
+assert_rc "directory gone -> dead"                        1 device_alive 0000:01:00.0
+
+echo "== reload-driver refuses when unsafe (dry-run, no root needed for the guard) =="
+mkdir -p "$T/module/nvidia/holders"; echo 5 > "$T/module/nvidia/refcnt"
+touch "$T/module/nvidia/holders/a" "$T/module/nvidia/holders/b" "$T/module/nvidia/holders/c"
+# stub the root/interface/attr checks so only the refcount guard is exercised
+need_root() { :; }; check_interface() { :; }; read_attr() { echo 0; }; nv_holders() { echo "4242 fakeproc"; }
+out=$(DRY_RUN=1 cmd_reload_driver 2>&1); rc=$?
+assert_eq  "refuses with extra refs (rc 1)"               "$rc" "1"
+assert_has "names the holder"                             "$out" "4242 fakeproc"
+echo 3 > "$T/module/nvidia/refcnt"; nv_holders() { :; }
+out=$(DRY_RUN=1 cmd_reload_driver 2>&1); rc=$?
+assert_eq  "proceeds (dry-run) when refs == holders"      "$rc" "0"
+assert_has "dry-run says what it would unload"            "$out" "would unload nvidia_drm nvidia_modeset nvidia_uvm nvidia"
+read_attr() { echo 1; }
+out=$(DRY_RUN=1 cmd_reload_driver 2>&1); rc=$?
+assert_eq  "refuses while egpu_enable=1"                  "$rc" "1"
+assert_has "explains eGPU must be off"                    "$out" "eGPU OFF"
 
 echo "== library mode =="
 assert_rc "sourcing in library mode does not dispatch" 0 bash -c 'XGM_LIBRARY_MODE=1 source bin/xgm-egpu; declare -F cmd_on >/dev/null'
