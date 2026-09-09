@@ -588,6 +588,12 @@ DRM_CLASS=$T/drm
 assert_eq  "nvidia card + render node listed, amdgpu card not"  "$(nvidia_drm_nodes | tr '\n' ' ')" "/dev/dri/card2 /dev/dri/renderD129 "
 DRM_CLASS=/sys/class/drm
 
+echo "== shutdown guard =="
+out=$(shutdown_guard_unit_text /usr/local/bin/xgm-egpu)
+assert_has "unit stops before shutdown"                  "$out" "Conflicts=shutdown.target"
+assert_has "stopping it runs off with the safe flags"    "$out" "ExecStop=/usr/local/bin/xgm-egpu off --keep-desktop --force-kill --no-relaunch --no-capture"
+assert_has "arming is dry-run aware"                     "$(DRY_RUN=1 shutdown_guard_arm 2>&1)" "would arm"
+
 echo "== library mode =="
 assert_rc "sourcing in library mode does not dispatch" 0 bash -c 'XGM_LIBRARY_MODE=1 source bin/xgm-egpu; declare -F cmd_on >/dev/null'
 assert_rc "script still parses"               0 bash -n bin/xgm-egpu

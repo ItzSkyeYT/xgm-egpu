@@ -138,6 +138,7 @@ RESTART_DESKTOP=auto  # from a TTY with a display manager active: stop it before
                       # kill this very terminal mid-write). --keep-desktop / --restart-desktop.
 DM_STOPPED=           # which display manager this run stopped, for the exit hook
 RELAUNCH=1            # relaunch what --force-kill closed once the run ends (--no-relaunch)
+GUARD_UNIT=${XGM_GUARD_UNIT:-/etc/systemd/system/xgm-egpu-active.service}   # see shutdown guard
 PIN_OUTPUTS=0         # desktop pin --outputs: let kwin drive the eGPU's ports too (it then holds
                       # the eGPU while it is on, so 'off' must run from a TTY)
 GO_MODE=render        # go: render (drm nokms, sealed door) | display (drm nofbdev, KMS on) — --display
@@ -520,6 +521,47 @@ cmd_report() {
     printf '  loaded driver   RTD3=%s  drm=%s  EnablePCIeGen3=%s  GSP=%s\n' "$(nvidia_dpm_value)" "$(drm_layer_mode)" "$(nvidia_pcie_gen3_value)" "$(grep -oP 'EnableGpuFirmware: \K[0-9]+' "$NV_PARAMS" 2>/dev/null)"
     printf '  last run        %s\n' "${lastlog:-none}"
     printf '  egpu_connected  %s   egpu_enable %s\n' "$(read_attr "$ATTR_CONNECTED" 2>/dev/null)" "$(read_attr "$ATTR_ENABLE" 2>/dev/null)"
+}
+
+# ---------------------------------------------------------------- shutdown guard
+#
+# egpu_enable is persistent EC state. A power-off with the eGPU on left the
+# next boot binding the eGPU in the internal slot with no freeze, and that
+# boot hung 8 s later (2026-09-09 23:22). So while the eGPU is on, this unit
+# is active; any shutdown or reboot stops it, and stopping it runs `off`.
+shutdown_guard_unit_text() {
+    cat <<EOF
+[Unit]
+Description=XG Mobile eGPU is active: turn it off before shutdown (xgm-egpu)
+DefaultDependencies=no
+Before=shutdown.target
+Conflicts=shutdown.target reboot.target halt.target poweroff.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+ExecStop=$1 off --keep-desktop --force-kill --no-relaunch --no-capture
+TimeoutStopSec=240
+EOF
+}
+shutdown_guard_arm() {
+    [[ $DRY_RUN -eq 1 ]] && { info "  would arm the shutdown guard ($GUARD_UNIT)"; return 0; }
+    command -v systemctl >/dev/null 2>&1 || return 0
+    local self unit; self=$(readlink -f "$0" 2>/dev/null); [[ -x /usr/local/bin/xgm-egpu ]] && self=/usr/local/bin/xgm-egpu
+    unit=$(basename "$GUARD_UNIT")
+    if [[ ! -f $GUARD_UNIT ]] || ! cmp -s <(shutdown_guard_unit_text "$self") "$GUARD_UNIT"; then
+        shutdown_guard_unit_text "$self" > "$GUARD_UNIT" 2>/dev/null && systemctl daemon-reload 2>/dev/null
+    fi
+    if systemctl start "$unit" 2>/dev/null; then info "  shutdown guard armed: a reboot or power-off now runs 'off' first"
+    else warn "  could not arm the shutdown guard — run '$0 off' before shutting down, or the next boot may hang"; fi
+}
+shutdown_guard_disarm() {
+    command -v systemctl >/dev/null 2>&1 || return 0
+    local unit; unit=$(basename "$GUARD_UNIT")
+    # 'off' has already run by now: the unit's ExecStop finds egpu_enable=0 and returns at once
+    systemctl is-active --quiet "$unit" 2>/dev/null && systemctl stop --no-block "$unit" 2>/dev/null
+    return 0
 }
 
 # ---------------------------------------------------------------- persistent run logs
@@ -2981,6 +3023,7 @@ $(printf '     %s\n' "$d")"
             echo "end t=${t} alive=${alive}" >> "$crumb"; sync
             if (( alive )); then
                 ok "LINK SURVIVED ${SURVIVAL_SECS}s past driver init."
+                shutdown_guard_arm
                 save_kernel_log 150
             else
                 warn "link DIED at ~${t}s. dmesg tail:"
@@ -3049,6 +3092,7 @@ cmd_off() {
     (( wrc != 0 )) && return "$wrc"
 
     ok "egpu_enable now reads: $(read_attr "$ATTR_ENABLE")"
+    shutdown_guard_disarm
     [[ $(read_attr "$FW/pending_reboot") == 1 ]] &&
         info "pending_reboot is set (WMI result 0x02) — reboot to settle the change"
     reload_nvidia
