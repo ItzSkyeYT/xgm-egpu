@@ -483,6 +483,29 @@ assert_eq  "...and writes NOTHING"                       "$(ls "$T/home2/.config
 out=$(bash bin/xgm-egpu logs --no-such-option 2>&1)
 assert_has "unknown option is reported, not swallowed"   "$out" "ignoring unknown option --no-such-option"
 
+echo "== relaunching what --force-kill closed =="
+BUGREPORT_DIR=$T/bugreports; mkdir -p "$BUGREPORT_DIR"
+KILLED_DIR=
+remember_holder $$
+assert_eq  "remember_holder stashes the cmdline"         "$(tr '\0' ' ' < "$KILLED_DIR/$$/cmdline" | grep -c .)" "1"
+assert_eq  "...and the user"                             "$(cat "$KILLED_DIR/$$/user")" "$(id -un)"
+assert_has "...and the environment subset"               "$(cat "$KILLED_DIR/$$/env")" "^PATH="
+user_has_desktop_session() { return 0; }
+RELAUNCH=1
+out=$(DRY_RUN=1 relaunch_killed 2>&1); rc=$?
+assert_eq  "dry-run relaunch -> rc 0"                    "$rc" "0"
+assert_has "dry-run names the command"                   "$out" "would relaunch as $(id -un): "
+assert_eq  "the stash is cleaned up afterwards"          "$(ls -d "$T/bugreports"/xgm-killed.* 2>/dev/null | wc -l)" "0"
+KILLED_DIR=$(mktemp -d "$T/bugreports/xgm-killed.XXXXXX"); mkdir -p "$KILLED_DIR/999"; printf 'kwin_wayland\n' > "$KILLED_DIR/999/comm"; printf '/usr/bin/kwin_wayland\0' > "$KILLED_DIR/999/cmdline"
+out=$(DRY_RUN=1 relaunch_killed 2>&1)
+assert_has "a killed compositor -> explained, not relaunched" "$out" "session is over"
+assert_has "...and points at desktop pin"                "$out" "desktop pin"
+KILLED_DIR=$(mktemp -d "$T/bugreports/xgm-killed.XXXXXX"); mkdir -p "$KILLED_DIR/998"; printf 'brave\n' > "$KILLED_DIR/998/comm"; printf 'brave\0--flag\0' > "$KILLED_DIR/998/cmdline"; printf '%s\n' "$(id -un)" > "$KILLED_DIR/998/user"; printf '/tmp\n' > "$KILLED_DIR/998/cwd"; printf 'PATH=/usr/bin\n' > "$KILLED_DIR/998/env"
+RELAUNCH=0
+out=$(DRY_RUN=1 relaunch_killed 2>&1)
+assert_has "--no-relaunch skips it and says so"          "$out" "no-relaunch"
+RELAUNCH=1; KILLED_DIR=
+
 echo "== library mode =="
 assert_rc "sourcing in library mode does not dispatch" 0 bash -c 'XGM_LIBRARY_MODE=1 source bin/xgm-egpu; declare -F cmd_on >/dev/null'
 assert_rc "script still parses"               0 bash -n bin/xgm-egpu
