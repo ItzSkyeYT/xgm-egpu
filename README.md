@@ -22,7 +22,7 @@ meet them undocumented.**
 | Link trains at PCIe Gen3 x8 | **Works** - earlier "Gen1 cap" was an idle-state reading, see [Findings](FINDINGS.md#pcie-link-speed) |
 | Link survives **unbound** | **Works** - Gen3 x8 indefinitely, zero AER. The hardware is fine |
 | Link survives with `nvidia` core bound | **Works** - Gen3 x8, P0, `nvidia-smi` reads it |
-| Link survives with `nvidia_drm` loaded | **Open.** Dies ~10s after nvidia-drm attaches to the eGPU; display path only; the GPU stops answering (Xid 79) before Link Down. **Corrected 2026-09-09:** the `--no-fbdev`, `--no-kms` and `--modeset-safe` runs were **no-ops** — nvidia-drm attaches to a hot-added GPU by itself with the parameters it booted with, and modprobe cannot change a resident module — so they were never tested. `xgm-egpu drm <mode>` now sets them for real and `on` verifies. **`fbdev=0` tested properly at 19:30: died at 8.5 s, identical** (card flat at P0/31 W/Gen3 through 8 s, then a clean Link Down, zero AER, GSP RPCs completing normally). Next: `drm nokms` (render-only; the display engine, whose 7 channels were live at every death, is never allocated), then `gsp off`. See [Findings §8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause) |
+| Link survives with the driver stack loaded | **Open, but the trigger is found (2026-09-09 21:30).** It dies ~10s after the eGPU appears with the display engine **never initialised** (`modeset=0`, NVKMS sealed) - so it is not the display path. Every recorded death ends with `snd_hda_intel` probing the eGPU's **HDMI-audio function** (`01:00.1`) and the firmware call in flight is `DFP_SET_ELD_AUDIO_CAPS`; both survivors had no driver on that function and the internal 1650 has none. `on` now fences that function off by default (`--audio` to bind it). See [Findings §8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause) |
 
 The reference machine is the most marginal configuration that exists: a DIY dock
 with substituted connectors, on the oldest Flow model. If you have an official
@@ -122,6 +122,8 @@ Useful options:
 --mask-pciehp    stop pciehp turning a momentary Link Down into a teardown
 --no-fbdev       require the loaded nvidia_drm to have fbdev=0 (`drm nofbdev` first).
                  Tested for real 2026-09-09 19:30: died identically. Ruled out
+--audio          let snd_hda_intel bind the eGPU's HDMI-audio function. Off by default:
+                 that codec is what every recorded death has in common
 --modeset-safe   require the `drm safe` set (fbdev=0 + nvidia_modeset HDMI-FRL/VRR off)
 --no-drm-poll    disable DRM's 10s connector poll (ruled out; kept for the record)
 --timeout N      default 180s
