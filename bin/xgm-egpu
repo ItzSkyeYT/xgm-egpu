@@ -1393,7 +1393,9 @@ $(printf '     %s\n' "$d")"
 
     # The check that would have saved 2026-09-09. Refuse while the loaded driver
     # has RTD3 armed, unless explicitly reproducing the failure.
-    if ! preflight_rtd3; then
+    # Skip when --no-reload: the driver never binds, so RTD3 cannot act on the
+    # card and gating on it would block the one test that isolates the driver.
+    if [[ $RELOAD_NVIDIA -eq 1 ]] && ! preflight_rtd3; then
         [[ $IGNORE_RTD3 -eq 1 ]] && warn "--ignore-rtd3: proceeding anyway" || die "not activating with RTD3 armed"
     fi
 
@@ -1487,9 +1489,13 @@ $(printf '     %s\n' "$d")"
             warn "RTD3 is ARMED on the eGPU. Expect Link Down in ~10s. See: $0 preflight"
         fi
 
-        # THE measurement. Before 2026-09-09 the link died at exactly 10s after
-        # driver init, four times out of four. Watch it and say so either way,
-        # so the confirming run reports its own result.
+        :
+    fi
+
+    # THE measurement, and it must run in BOTH modes: with --no-reload it is the
+    # whole point (does an UNBOUND card survive?), and RTD3 was proven not to be
+    # the cause on 2026-09-09, so this is still an open failure either way.
+    if true; then
         if (( SURVIVAL_SECS > 0 )); then
             info "Watching the link for ${SURVIVAL_SECS}s (the old failure was at 10s)..."
             local t alive=1
@@ -1503,7 +1509,12 @@ $(printf '     %s\n' "$d")"
             else
                 warn "link DIED at ~${t}s. dmesg tail:"
                 dmesg 2>/dev/null | grep -iE 'Link Down|Xid|nvrm' | tail -5 | sed 's/^/    /' >&2
-                die "the eGPU fell off the bus. If preflight said 0, this is a NEW failure — report it."
+                warn ""
+                warn "RTD3 is NOT the cause: on 2026-09-09 this died at exactly 10s with"
+                warn "DynamicPowerManagement=0 confirmed on the card. Next step is to"
+                warn "isolate the driver entirely:   $0 on --no-reload --force-kill"
+                warn "which disables PCI driver autoprobe so nothing binds at all."
+                die "the eGPU fell off the bus at ~${t}s."
             fi
         fi
     fi
