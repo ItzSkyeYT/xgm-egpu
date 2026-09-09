@@ -104,6 +104,9 @@ NO_DRM_POLL=0         # --no-drm-poll: set drm_kms_helper.poll=0 before loading 
 NO_FBDEV=0            # --no-fbdev: load nvidia_drm with fbdev=0. RULED OUT 2026-09-09 (still died).
 NO_KMS=0              # --no-kms: load nvidia_drm with modeset=0 (render node only, no KMS).
                       # If this survives you have a working eGPU for compute / PRIME offload.
+MODESET_SAFE=0        # --modeset-safe: nvidia_modeset disable_hdmi_frl=1 disable_vrr_memclk_switch=1
+                      # conceal_vrr_caps=1. The RPCs in flight at every death are HDMI-audio /
+                      # VRR display setup on the 3060's physical outputs (the 1650 has none).
 MASK_PCIEHP=0         # --mask-pciehp: clear the root port's hotplug interrupt enables so a
                       # momentary Link Down is not turned into a surprise-removal teardown.
 RELOAD_NVIDIA=1       # modprobe the NVIDIA stack back after a successful switch;
@@ -636,7 +639,7 @@ cmd_bind() {
       drm)
         [[ $NO_DRM_POLL -eq 1 ]] && drm_poll_disable
         info "loading nvidia_modeset + nvidia_drm on top of the bound core"
-        [[ $DRY_RUN -eq 1 ]] || { modprobe nvidia_modeset; modprobe nvidia_drm; }
+        [[ $DRY_RUN -eq 1 ]] || { if [[ $MODESET_SAFE -eq 1 ]]; then modprobe nvidia_modeset disable_hdmi_frl=1 disable_vrr_memclk_switch=1 conceal_vrr_caps=1; else modprobe nvidia_modeset; fi; modprobe nvidia_drm; }
         ;;
       audio)
         info "binding snd_hda_intel to the HDMI audio function $aud"
@@ -1260,7 +1263,12 @@ reload_nvidia() {
     # --release minimal the module is never unloaded. The value has to be right
     # at BOOT (modprobe shadow + initramfs), which preflight_rtd3 verifies.
     modprobe nvidia || warn "modprobe nvidia failed"
-    modprobe nvidia_modeset  || true
+    if [[ $MODESET_SAFE -eq 1 ]]; then
+        info "  loading nvidia_modeset with disable_hdmi_frl=1 disable_vrr_memclk_switch=1 conceal_vrr_caps=1"
+        modprobe nvidia_modeset disable_hdmi_frl=1 disable_vrr_memclk_switch=1 conceal_vrr_caps=1 || warn "modprobe nvidia_modeset failed"
+    else
+        modprobe nvidia_modeset  || true
+    fi
     modprobe nvidia_uvm      || true
     [[ $NO_DRM_POLL -eq 1 ]] && drm_poll_disable
     if [[ $NO_KMS -eq 1 ]]; then
@@ -1799,6 +1807,12 @@ Options:
                   No KMS, no fbdev, no display engine bring-up via DRM. If the
                   link survives, the eGPU WORKS for CUDA / Vulkan / PRIME offload
                   onto the laptop screen. Applies to 'on'.
+  --modeset-safe  load nvidia_modeset with disable_hdmi_frl=1
+                  disable_vrr_memclk_switch=1 conceal_vrr_caps=1. The RPCs in
+                  flight at every death are HDMI-audio (SET_ELD_AUDIO_CAPS,
+                  SET_HDMI_AUDIO_MUTESTREAM, CTRL_HDMI) and VRR setup on the
+                  3060's physical outputs — the 1650 Mobile has no outputs and
+                  survives the same init. 'on', 'bind drm'.
   --mask-pciehp   clear the root port's hotplug interrupt enables for the watch.
                   Every death has Xid 79 raised from irq/NN-pciehp: if the link
                   drop is momentary, this stops pciehp tearing the device down
@@ -1862,6 +1876,7 @@ while [[ $# -gt 0 ]]; do
         --no-fbdev)   NO_FBDEV=1 ;;
         --no-kms)     NO_KMS=1 ;;
         --mask-pciehp) MASK_PCIEHP=1 ;;
+        --modeset-safe) MODESET_SAFE=1 ;;
         --aspm-performance) ASPM_PERF=1 ;;
         --link-gen)   LINK_GEN=$2; shift ;;
         --link-gen=*) LINK_GEN=${1#*=} ;;
