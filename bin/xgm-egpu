@@ -127,6 +127,12 @@ MODESET_SAFE=0        # --modeset-safe: nvidia_modeset disable_hdmi_frl=1 disabl
                       # REQUIRES `drm safe` applied first: resident modules ignore modprobe params.
 MASK_PCIEHP=0         # --mask-pciehp: clear the root port's hotplug interrupt enables so a
                       # momentary Link Down is not turned into a surprise-removal teardown.
+RESTART_DESKTOP=auto  # from a TTY with a display manager active: stop it before the release
+                      # and start it again when the run ends (success or not), so the desktop
+                      # never holds the GPU and the user lands on a login screen, not a dead
+                      # console. Inside a desktop session it is left alone (stopping it would
+                      # kill this very terminal mid-write). --keep-desktop / --restart-desktop.
+DM_STOPPED=           # which display manager this run stopped, for the exit hook
 FREEZE_LINK=0         # --freeze-link: after the bind, lock the GPU at its max clocks (stays in
                       # P0, so the idle-time PCIe generation downshift never fires) and set
                       # Hardware Autonomous Speed/Width Disable on both ends of the link. With
@@ -167,6 +173,106 @@ fi
 # an attempt takes the kernel down with it, 'journalctl -b -1 -t xgm-egpu' still
 # says how far we got — terminal scrollback does not survive a forced power-off.
 _log() { [[ ${XGM_LIBRARY_MODE:-0} -eq 1 ]] && return 0; command -v logger >/dev/null 2>&1 && logger -t xgm-egpu -p "user.$1" -- "$2"; }
+
+# ---------------------------------------------------------------- exit hooks
+#
+# bash has ONE EXIT trap. Two places used to set it independently, so whichever
+# ran second silently discarded the first restore. Keep a list instead.
+EXIT_HOOKS=()
+run_exit_hooks() { local h; for h in "${EXIT_HOOKS[@]}"; do "$h"; done; }
+add_exit_hook() { EXIT_HOOKS+=("$1"); trap run_exit_hooks EXIT; }
+
+# ---------------------------------------------------------------- the desktop
+#
+# The compositor is the usual holder of the internal dGPU (kwin probes every
+# DRM device with Vulkan at start and keeps the fds), and killing it is what
+# --force-kill ended up doing on 2026-09-09 21:31 — the eGPU came up, the
+# desktop was gone. Two remedies, both here:
+#   desktop pin   KWIN_DRM_DEVICES pinned to the boot_vga card, so kwin never
+#                 opens an NVIDIA device at all and the session survives 'on'
+#   TTY handoff   from a console, 'on'/'off' stop the display manager before
+#                 the release and start it again when the run ends
+active_display_manager() {
+    local dm
+    for dm in sddm gdm lightdm lxdm greetd; do
+        systemctl is-active --quiet "$dm" 2>/dev/null && { echo "$dm"; return 0; }
+    done
+    return 1
+}
+in_graphical_session() {
+    local sid t; sid=$(cat /proc/self/sessionid 2>/dev/null) || return 1
+    t=$(loginctl show-session "$sid" -p Type --value 2>/dev/null) || return 1
+    [[ $t == wayland || $t == x11 ]]
+}
+dm_restart() {
+    [[ -n $DM_STOPPED ]] || return 0
+    if systemctl start "$DM_STOPPED" 2>/dev/null; then
+        info "$DM_STOPPED started again — switch to its VT (Ctrl+Alt+F1 or F2) and log in"
+    else
+        warn "could not start $DM_STOPPED again: systemctl start $DM_STOPPED"
+    fi
+    DM_STOPPED=
+}
+dm_stop_for_run() {
+    [[ $RESTART_DESKTOP == 0 ]] && return 0
+    local dm; dm=$(active_display_manager) || return 0
+    if in_graphical_session; then
+        [[ $RESTART_DESKTOP == 1 ]] && die "--restart-desktop from inside the desktop would stop $dm and kill this terminal mid-run. Run it from a TTY (Ctrl+Alt+F3)."
+        info "Inside the desktop session: leaving $dm alone (stopping it would kill this terminal)."
+        info "  Holders of the GPU are killed individually with --force-kill; '$0 desktop pin' keeps kwin off NVIDIA so nothing needs killing."
+        return 0
+    fi
+    [[ $DRY_RUN -eq 1 ]] && { info "would stop $dm now and start it again when the run ends"; return 0; }
+    info "Stopping $dm so the desktop releases the GPU; it is started again when this run ends (--keep-desktop to skip)"
+    if systemctl stop "$dm" 2>/dev/null; then
+        DM_STOPPED=$dm; add_exit_hook dm_restart; sleep 2
+    else
+        warn "could not stop $dm; continuing"
+    fi
+}
+boot_vga_bdf() {
+    local d
+    for d in "$SYSFS_PCI"/*/; do
+        [[ $(cat "$d/boot_vga" 2>/dev/null) == 1 ]] && { basename "$d"; return 0; }
+    done
+    return 1
+}
+cmd_desktop() {
+    local sub=${1:-status} user home f bdf devpath pid
+    user=${SUDO_USER:-$(id -un)}
+    home=${XGM_DESKTOP_HOME:-$(getent passwd "$user" | cut -d: -f6)}
+    f="$home/.config/plasma-workspace/env/xgm-egpu-kwin.sh"
+    bdf=$(boot_vga_bdf || true)
+    devpath="/dev/dri/by-path/pci-${bdf:-unknown}-card"
+    case $sub in
+      status)
+        printf '  boot_vga card:      %s  (%s)\n' "${bdf:-not found}" "$devpath"
+        printf '  pin file:           %s\n' "$([[ -f $f ]] && echo "$f: $(cat "$f")" || echo "none — kwin may open the NVIDIA GPU and hold it")"
+        pid=$(pgrep -x kwin_wayland | head -1)
+        if [[ -n $pid ]]; then
+            printf '  running kwin:       pid %s, KWIN_DRM_DEVICES=%s\n' "$pid" "$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep -oP '^KWIN_DRM_DEVICES=\K.*' || echo '(unset — pin takes effect at next login)')"
+            printf '  kwin holds NVIDIA:  %s fds\n' "$(for x in /proc/$pid/fd/*; do readlink "$x" 2>/dev/null; done | grep -cE '^/dev/nvidia')"
+        else
+            printf '  running kwin:       none\n'
+        fi
+        printf '  display manager:    %s\n' "$(active_display_manager || echo none)"
+        ;;
+      pin)
+        [[ -n $bdf ]] || die "no boot_vga device found under $SYSFS_PCI"
+        [[ $DRY_RUN -eq 1 ]] && { info "would write 'export KWIN_DRM_DEVICES=$devpath' to $f"; return 0; }
+        mkdir -p "$(dirname "$f")" && printf 'export KWIN_DRM_DEVICES=%s\n' "$devpath" > "$f" || die "cannot write $f"
+        [[ $EUID -eq 0 && -n $SUDO_USER ]] && chown -R "$SUDO_USER" "$home/.config/plasma-workspace/env" 2>/dev/null
+        ok "wrote $f"
+        info "kwin will use only the $bdf card from the NEXT login (log out and back in)."
+        info "Confirm after that with:  $0 desktop status   -> KWIN_DRM_DEVICES set, kwin holds NVIDIA: 0 fds"
+        ;;
+      unpin)
+        [[ $DRY_RUN -eq 1 ]] && { info "would remove $f"; return 0; }
+        rm -f "$f" && ok "removed $f — kwin returns to opening every GPU at the next login"
+        ;;
+      *) die "usage: $0 desktop [status|pin|unpin]" ;;
+    esac
+}
 
 # ---------------------------------------------------------------- persistent run logs
 #
@@ -941,7 +1047,7 @@ cmd_bind() {
     [[ $DRY_RUN -eq 1 ]] && { ok "dry run — nothing bound"; return 0; }
 
     printf '  driver on %s: %s\n' "$bdf" "$(basename "$(readlink -f "/sys/bus/pci/devices/$bdf/driver" 2>/dev/null)" 2>/dev/null || echo none)"
-    [[ $MASK_PCIEHP -eq 1 ]] && { pciehp_mask && trap pciehp_restore EXIT; }
+    [[ $MASK_PCIEHP -eq 1 ]] && { pciehp_mask && add_exit_hook pciehp_restore; }
     # Every activation is a potential hang, and every hang so far that was not
     # armed left nothing on disk. So arm the capture here, unconditionally,
     # instead of relying on a separate command being remembered (2026-09-09).
@@ -2273,6 +2379,7 @@ cmd_link() {
 
 cmd_on() {
     need_root; check_interface
+    trap '' HUP   # a dying terminal must not interrupt this between the EC write and the reload
 
     [[ $(read_attr "$ATTR_CONNECTED") == 1 ]] || die "egpu_connected is not 1 — the EC does not see the board. Not writing."
     if [[ $(read_attr "$ATTR_ENABLE") == 1 ]]; then
@@ -2376,16 +2483,17 @@ $(printf '     %s\n' "$d")"
         sleep 8
     fi
 
+    dm_stop_for_run
     release_internal_gpu
 
     # --no-reload must mean "the driver does not touch the card". Skipping our
     # own modprobe is not enough: the resident module auto-binds on enumeration.
     if [[ $RELOAD_NVIDIA -eq 0 ]]; then
         info "Disabling PCI driver autoprobe so the eGPU enumerates UNBOUND"
-        autoprobe_disable && trap autoprobe_restore EXIT
+        autoprobe_disable && add_exit_hook autoprobe_restore
     elif [[ $NO_AUDIO -eq 1 ]]; then
         info "Disabling PCI driver autoprobe so snd_hda_intel cannot grab the audio function (--audio to allow)"
-        autoprobe_disable && trap autoprobe_restore EXIT
+        autoprobe_disable && add_exit_hook autoprobe_restore
     fi
 
     # Every activation is a potential hang, and every hang so far that was not
@@ -2500,7 +2608,7 @@ $(printf '     %s\n' "$d")"
     # the cause on 2026-09-09, so this is still an open failure either way.
     if true; then
         if (( SURVIVAL_SECS > 0 )); then
-            [[ $MASK_PCIEHP -eq 1 ]] && { pciehp_mask && trap 'pciehp_restore; autoprobe_restore' EXIT; }
+            [[ $MASK_PCIEHP -eq 1 ]] && { pciehp_mask && add_exit_hook pciehp_restore; }
             info "Watching the link for ${SURVIVAL_SECS}s (the old failure was at 10s)..."
             # Breadcrumb: the machine has hard-hung at the death with NO journal
             # record (2026-09-09 14:48, boot hard-cut, F2FS recovery on next
@@ -2557,6 +2665,7 @@ $(printf '     %s\n' "$d")"
 
 cmd_off() {
     need_root; check_interface
+    trap '' HUP
     unseal_nvkms_door
 
     # Short-circuit when already off. Without this the AML is asked to disable
@@ -2569,6 +2678,7 @@ cmd_off() {
         return 0
     fi
 
+    dm_stop_for_run
     release_internal_gpu
     info "Writing 0 to egpu_enable (timeout ${TIMEOUT}s)"
     [[ $DRY_RUN -eq 1 ]] && { ok "dry run — stopping before the write"; return 0; }
@@ -2625,6 +2735,12 @@ xgm-egpu — XG Mobile eGPU control for the ROG Flow X13 (GV301QH)
                                this link does not survive a retrain at Gen3.
                                Either this (full Gen3 x8) or 'on --link-gen 2'
                                (Gen2 x8, no equalization, safest).
+  xgm-egpu desktop [status|pin|unpin]
+                               pin kwin to the laptop's own GPU (KWIN_DRM_DEVICES in
+                               ~/.config/plasma-workspace/env). kwin otherwise probes
+                               every GPU with Vulkan and keeps it open, so 'on' had to
+                               kill it — 2026-09-09 21:31: eGPU up, desktop gone. Pinned,
+                               the session survives 'on'. Takes effect at next login.
   xgm-egpu logs [N|show|dir]   the persistent per-run logs: every on/off/bind/
                                reload-driver writes its full output to
                                /var/log/xgm-egpu/<time>-<cmd>.log, and the watch
@@ -2682,6 +2798,11 @@ Options:
   --force-kill    kill processes holding /dev/nvidia* instead of refusing
   --no-capture    do not arm the hang capture (pstore, panic-on-hang, netconsole)
                   before activating. It is armed by default on every 'on'/'bind'.
+  --keep-desktop  from a TTY, 'on'/'off' stop the display manager before the release
+                  and start it again when the run ends, so you land on a login
+                  screen either way. This flag skips that. --restart-desktop
+                  insists on it (refused from inside a desktop session, where it
+                  would kill the terminal running this).
   --freeze-link   after the bind: lock the GPU at its max clocks (it never leaves
                   P0, so the idle-time PCIe generation downshift never fires) and
                   set Hardware Autonomous Speed/Width Disable on both ends of the
@@ -2795,7 +2916,7 @@ CMD=${1:-status}; shift || true
 if [[ $CMD == --* ]]; then
     die "'$CMD' is an option, not a command. Options go AFTER the command:
      $0 on $CMD ${*:-}
-     (commands: status detect preflight gsp drm pcie logs reload-driver on off bind watch link link-speed ec install-rules)"
+     (commands: status detect preflight gsp drm pcie desktop logs reload-driver on off bind watch link link-speed ec install-rules)"
 fi
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -2812,6 +2933,8 @@ while [[ $# -gt 0 ]]; do
         --no-seal)    SEAL_NVKMS=0 ;;
         --audio)      NO_AUDIO=0 ;;
         --freeze-link) FREEZE_LINK=1 ;;
+        --keep-desktop) RESTART_DESKTOP=0 ;;
+        --restart-desktop) RESTART_DESKTOP=1 ;;
         --no-audio)   NO_AUDIO=1 ;;
         --mask-pciehp) MASK_PCIEHP=1 ;;
         --modeset-safe) MODESET_SAFE=1 ;;
@@ -2850,6 +2973,7 @@ case "$CMD" in
     drm)        cmd_drm "${1:-status}" ;;
     pcie)       cmd_pcie "${1:-status}" ;;
     logs)       cmd_logs "${1:-list}" ;;
+    desktop)    cmd_desktop "${1:-status}" ;;
     capture)    cmd_capture "${1:-arm}" ;;
     bind)       cmd_bind "${1:-core}" ;;
     reload-driver) cmd_reload_driver ;;
