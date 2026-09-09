@@ -18,8 +18,17 @@ fi
 
 [[ -f $SRC ]] || { echo "Cannot find $SRC" >&2; exit 1; }
 
-install -Dm755 "$SRC" "$BIN_DIR/xgm-egpu"
-echo "installed $BIN_DIR/xgm-egpu"
+# --link installs a symlink to the repo instead of a copy, so edits are live.
+# Without it, every `git pull` or local edit leaves an older copy in $BIN_DIR
+# that sudo runs in preference to the one you just changed — which cost a wasted
+# activation attempt on 2026-09-09.
+if [[ ${1:-} == --link ]]; then
+    ln -sfn "$SRC" "$BIN_DIR/xgm-egpu"
+    echo "linked  $BIN_DIR/xgm-egpu -> $SRC"
+else
+    install -Dm755 "$SRC" "$BIN_DIR/xgm-egpu"
+    echo "installed $BIN_DIR/xgm-egpu   (re-run after every change, or use --link)"
+fi
 
 # A stale copy earlier on the user's PATH silently shadows this one for
 # unprivileged calls, while `sudo xgm-egpu` (secure_path) runs the new one —
