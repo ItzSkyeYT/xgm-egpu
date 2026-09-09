@@ -63,6 +63,8 @@ AUTOPROBE=${XGM_AUTOPROBE:-/sys/bus/pci/drivers_autoprobe}
 SYS_MODULE=${XGM_SYS_MODULE:-/sys/module}
 SYSFS_PCI=${XGM_SYSFS_PCI:-/sys/bus/pci/devices}
 DRM_POLL=${XGM_DRM_POLL:-/sys/module/drm_kms_helper/parameters/poll}
+PSTORE=${XGM_PSTORE:-/sys/fs/pstore}
+NETCONSOLE_TARGET=${XGM_NETCONSOLE_TARGET:-192.168.1.7}   # the Pi
 
 # The write legitimately takes a long time: it drives a full ACPI eject and PCI
 # rescan cycle synchronously. Observed 2026-07-31 — an 'off' that "timed out" at
@@ -750,6 +752,88 @@ cap_gpu_power() {
         nvidia-smi -i "$bdf" -pl "$minpl" >/dev/null 2>&1 && info "  set power limit to ${minpl} W (floor)"
     fi
     info "  now: $(smi_line)"
+}
+
+# ---------------------------------------------------------------- hang capture
+#
+# 2026-09-09 14:48: the --cap-power run reached 7s with the card flat at 23 W,
+# then the WHOLE MACHINE hard-hung. The journal for that boot is hard-cut with no
+# shutdown lines and the next boot ran F2FS recovery. Nothing about the death
+# reached disk, and nothing ever has: pstore is not mounted, there is no ramoops,
+# and kernel.nmi_watchdog=0 so an IRQs-off lockup is undetectable by design.
+#
+# `capture` arms the kernel so the next hang becomes a PANIC WITH A BACKTRACE
+# written to EFI-backed pstore (survives the reboot), and optionally streams
+# kernel messages live to the Pi over netconsole. All runtime; no reboot to arm.
+CAPTURE_SYSCTLS=(
+    kernel.nmi_watchdog=1          # hard-lockup detector (perf NMI) — catches IRQs-off hangs
+    kernel.hardlockup_panic=1
+    kernel.softlockup_panic=1
+    kernel.hung_task_panic=1       # D-state > hung_task_timeout -> panic (cf. the eject wedges)
+    kernel.panic_on_oops=1
+    kernel.panic_on_rcu_stall=1
+    kernel.panic=30                # come back on its own 30s after the panic
+)
+capture_arm() {
+    need_root
+    local kv k v rc=0
+    for kv in "${CAPTURE_SYSCTLS[@]}"; do
+        k=${kv%%=*}; v=${kv#*=}
+        if [[ $DRY_RUN -eq 1 ]]; then info "  would set $k=$v"; continue; fi
+        if sysctl -qw "$k=$v" 2>/dev/null; then
+            info "  $k=$(sysctl -n "$k" 2>/dev/null)"
+        else
+            warn "  could not set $k"; rc=1
+        fi
+    done
+    if ! mountpoint -q "$PSTORE" 2>/dev/null; then
+        if [[ $DRY_RUN -eq 1 ]]; then info "  would mount pstore at $PSTORE"
+        elif mount -t pstore pstore "$PSTORE" 2>/dev/null; then info "  pstore mounted at $PSTORE (backend: $(cat /sys/module/pstore/parameters/backend 2>/dev/null))"
+        else warn "  could not mount pstore at $PSTORE"; rc=1; fi
+    else
+        info "  pstore already mounted at $PSTORE"
+    fi
+    return $rc
+}
+capture_netconsole() {
+    local src dev
+    src=$(ip -4 route get "$NETCONSOLE_TARGET" 2>/dev/null | grep -oE 'src \S+' | awk '{print $2}')
+    dev=$(ip -4 route get "$NETCONSOLE_TARGET" 2>/dev/null | grep -oE 'dev \S+'  | awk '{print $2}')
+    [[ -n $src && -n $dev ]] || { warn "  no route to $NETCONSOLE_TARGET; skipping netconsole"; return 1; }
+    [[ $DRY_RUN -eq 1 ]] && { info "  would: modprobe netconsole netconsole=6666@$src/$dev,6666@$NETCONSOLE_TARGET/"; return 0; }
+    if modprobe netconsole "netconsole=6666@$src/$dev,6666@$NETCONSOLE_TARGET/" 2>/dev/null; then
+        info "  netconsole -> $NETCONSOLE_TARGET:6666 via $dev (wifi netpoll is best-effort)"
+        info "  on the Pi, run:   nc -ul 6666 | tee -a ~/xgm-netconsole.log"
+    else
+        warn "  netconsole refused on $dev (driver may lack netpoll); pstore still armed"
+        return 1
+    fi
+}
+cmd_capture() {
+    case ${1:-arm} in
+      arm)
+        info "Arming hang capture (hang -> panic -> backtrace in EFI pstore)"
+        capture_arm || warn "capture partially armed — see above"
+        capture_netconsole || true
+        echo
+        ok "armed. Now run the activation. If the machine hangs it will panic and"
+        ok "reboot itself in ~30s; afterwards:   $0 capture read"
+        ;;
+      read)
+        if ! ls "$PSTORE"/* >/dev/null 2>&1; then
+            [[ -d $PSTORE ]] || { info "$PSTORE does not exist"; return 1; }
+            info "no records in $PSTORE (no panic since arming, or pstore not mounted at boot)"
+            info "try:  mount -t pstore pstore $PSTORE   then re-run"
+            return 1
+        fi
+        local f
+        for f in "$PSTORE"/*; do
+            echo "=== $f ==="; cat "$f" 2>/dev/null; echo
+        done
+        ok "records above. Copy them somewhere before they are cleared:  cp $PSTORE/* ~/"
+        ;;
+      *) die "usage: $0 capture [arm|read]" ;;
+    esac
 }
 
 # ---------------------------------------------------------------- preconditions
@@ -1709,17 +1793,25 @@ $(printf '     %s\n' "$d")"
         if (( SURVIVAL_SECS > 0 )); then
             [[ $MASK_PCIEHP -eq 1 ]] && { pciehp_mask && trap 'pciehp_restore; autoprobe_restore' EXIT; }
             info "Watching the link for ${SURVIVAL_SECS}s (the old failure was at 10s)..."
+            # Breadcrumb: the machine has hard-hung at the death with NO journal
+            # record (2026-09-09 14:48, boot hard-cut, F2FS recovery on next
+            # boot). Write+fsync last-known-state every second so a silent hang
+            # still leaves the final samples on disk.
+            local crumb=/var/tmp/xgm-last-run.txt
+            { echo "run $(date -Is) bdf=$bdf opts: cap=$CAP_POWER kms=$((1-NO_KMS)) fbdev=$((1-NO_FBDEV)) maskhp=$MASK_PCIEHP msafe=$MODESET_SAFE"; } > "$crumb"; sync
             local t alive=1 prev='' cur
             for ((t=1; t<=SURVIVAL_SECS; t++)); do
                 sleep 1
                 device_alive "$bdf" || { alive=0; break; }
                 cur=$(smi_line)
+                printf '%ss %s link=%s\n' "$t" "${cur:-<no smi>}" "$(cat "$SYSFS_PCI/$bdf/current_link_speed" 2>/dev/null | tr -d ' ')" >> "$crumb"; sync
                 if [[ -n $cur && $cur != "$prev" ]]; then
                     info "  ${t}s: pstate,sm,mem,W,gen,C = $cur"; prev=$cur
                 elif (( t % 5 == 0 )); then
                     info "  ${t}s: still up"
                 fi
             done
+            echo "end t=${t} alive=${alive}" >> "$crumb"; sync
             if (( alive )); then
                 ok "LINK SURVIVED ${SURVIVAL_SECS}s past driver init."
             else
@@ -1793,6 +1885,11 @@ xgm-egpu — XG Mobile eGPU control for the ROG Flow X13 (GV301QH)
                                paste it into an issue if anything looks wrong
   xgm-egpu preflight           is NVIDIA RTD3 disarmed in the LOADED driver?
                                run after every driver/initramfs change
+  xgm-egpu capture [arm|read]  ARM before an activation: turns the next hard
+                               hang into a panic with a backtrace in EFI pstore
+                               (and netconsole to the Pi, best-effort). READ after
+                               the reboot to see what the kernel was doing when
+                               it died. Every hang so far left no record.
   xgm-egpu reload-driver       unload+reload the NVIDIA stack so a new modprobe.d
                                value takes effect NOW, no reboot, no initramfs.
                                Refuses if anything holds the GPU. eGPU must be off.
@@ -1951,6 +2048,7 @@ case "$CMD" in
     status)     cmd_status ;;
     detect)     cmd_detect ;;
     preflight)  cmd_preflight ;;
+    capture)    cmd_capture "${1:-arm}" ;;
     bind)       cmd_bind "${1:-core}" ;;
     reload-driver) cmd_reload_driver ;;
     watch)      cmd_watch "${1:-40}" "${2:-/tmp/xgm-watch.log}" ;;

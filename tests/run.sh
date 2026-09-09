@@ -23,7 +23,7 @@ load() {
            XGM_MKINITCPIO_CONF=$T/mkinitcpio.conf XGM_MKINITCPIO_D=$T/mkinitcpio.conf.d \
            XGM_DISTRO_MODPROBE=$T/usrlib/nvidia.conf XGM_ETC_MODPROBE_D=$T/etc \
            XGM_AUTOPROBE=$T/drivers_autoprobe XGM_STATE_DIR=$T/state \
-           XGM_SYS_MODULE=$T/module XGM_SYSFS_PCI=$T/pci XGM_DRM_POLL=$T/drm_poll
+           XGM_SYS_MODULE=$T/module XGM_SYSFS_PCI=$T/pci XGM_DRM_POLL=$T/drm_poll XGM_PSTORE=$T/pstore
     mkdir -p "$T/gpus" "$T/mkinitcpio.conf.d" "$T/usrlib" "$T/etc" "$T/module" "$T/pci"
     # shellcheck disable=SC1091
     XGM_LIBRARY_MODE=1 source bin/xgm-egpu
@@ -208,6 +208,29 @@ assert_eq  "rc 1"                                 "$rc" "1"
 assert_has "names the mistake"                    "$out" "is an option, not a command"
 assert_has "shows the corrected command"          "$out" "on --cap-power --force-kill"
 assert_not "does NOT dump the full usage"         "$out" "Options:"
+
+echo "== capture =="
+assert_eq  "sysctl list is well-formed key=value"  "$(printf '%s\n' "${CAPTURE_SYSCTLS[@]}" | grep -cvE '^[a-z_.]+=[0-9]+$')" "0"
+assert_has "arms the hard-lockup detector"         "${CAPTURE_SYSCTLS[*]}" "kernel.nmi_watchdog=1"
+assert_has "hung_task -> panic (the D-state case)" "${CAPTURE_SYSCTLS[*]}" "kernel.hung_task_panic=1"
+need_root() { :; }
+out=$(DRY_RUN=1 sub cmd_capture arm 2>&1); rc=$?
+assert_eq  "dry-run arm rc 0"                      "$rc" "0"
+assert_has "dry-run lists the sysctls"             "$out" "would set kernel.nmi_watchdog=1"
+assert_has "dry-run mentions pstore mount"         "$out" "would mount pstore"
+rm -rf "$T/pstore"
+out=$(sub cmd_capture read 2>&1); rc=$?
+assert_eq  "read with no pstore dir -> rc 1"       "$rc" "1"
+mkdir -p "$T/pstore"
+out=$(sub cmd_capture read 2>&1); rc=$?
+assert_eq  "read with empty pstore -> rc 1"        "$rc" "1"
+assert_has "read explains no records"              "$out" "no records"
+printf 'Panic#1 Part1\n[  123.4] BUG: kernel NULL\n' > "$T/pstore/dmesg-efi-1"
+out=$(sub cmd_capture read 2>&1); rc=$?
+assert_eq  "read with a record -> rc 0"            "$rc" "0"
+assert_has "read prints the record"                "$out" "kernel NULL"
+out=$(sub cmd_capture bogus 2>&1); rc=$?
+assert_eq  "unknown subcommand -> rc 1"            "$rc" "1"
 
 echo "== library mode =="
 assert_rc "sourcing in library mode does not dispatch" 0 bash -c 'XGM_LIBRARY_MODE=1 source bin/xgm-egpu; declare -F cmd_on >/dev/null'
