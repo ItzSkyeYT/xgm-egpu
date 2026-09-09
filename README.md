@@ -88,7 +88,8 @@ xgm-egpu gsp [status|off|on] disable NVIDIA GSP firmware (proprietary driver onl
 xgm-egpu drm [status|nofbdev|nokms|safe|default]
                              set what the LOADED nvidia_drm does to the eGPU when it
                              appears (persisted via modprobe.d + initramfs; `on` verifies)
-xgm-egpu capture [arm|read]  arm the kernel so a hard hang leaves a backtrace in pstore
+xgm-egpu capture [arm|read]  armed automatically by `on`/`bind`; `read` after a
+                             hang+reboot shows the kernel's last words from pstore
 xgm-egpu bind <core|modeset|drm-nokms|drm-nofbdev|drm|audio|all>
                              bind one driver layer to an enumerated eGPU and
                              watch whether the link dies (bisection)
