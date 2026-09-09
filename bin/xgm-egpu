@@ -65,6 +65,8 @@ SYSFS_PCI=${XGM_SYSFS_PCI:-/sys/bus/pci/devices}
 DRM_POLL=${XGM_DRM_POLL:-/sys/module/drm_kms_helper/parameters/poll}
 PSTORE=${XGM_PSTORE:-/sys/fs/pstore}
 EFI_PSTORE_DISABLE=${XGM_EFI_PSTORE_DISABLE:-/sys/module/efi_pstore/parameters/pstore_disable}
+NV_VERSION=${XGM_NV_VERSION:-/proc/driver/nvidia/version}
+GSP_CONF=${XGM_GSP_CONF:-$ETC_MODPROBE_D/nvidia-xgm-nogsp.conf}
 NETCONSOLE_TARGET=${XGM_NETCONSOLE_TARGET:-192.168.1.7}   # the Pi
 BUGREPORT_DIR=${XGM_BUGREPORT_DIR:-/var/tmp}
 
@@ -920,6 +922,75 @@ death_recovery_hint() {
     warn "    2. sudo xgm-egpu off"
     warn "If that does not bring the desktop back, rebooting is fine — the crash"
     warn "dump above is already on disk and survives it."
+}
+
+# ---------------------------------------------------------------- GSP firmware
+#
+# Strongest lead as of 2026-09-09. Every death dump shows GSP RPCs in flight
+# (GSP_RM_CONTROL, GSP_RUN_CPU_SEQUENCER, UCODE_LIBOS_PRINT), and with pciehp
+# masked the driver saw the GPU stop answering (Xid 79) BEFORE Link Down — a
+# GPU that goes unresponsive while sitting in a stable P-state, mid-GSP-RPC, is
+# a GSP firmware hang, not a link or power event. GSP failure on Ampere laptop
+# GPUs is a documented class (open-gpu-kernel-modules issues #1058, #543).
+#
+# NVreg_EnableGpuFirmware=0 forces the driver off GSP onto the legacy CPU-side
+# RM, which runs display init through an entirely different path. It works ONLY
+# on the proprietary module — the open kernel modules require GSP and ignore the
+# parameter (README/gsp.html). This machine is proprietary, so it is available.
+#
+# The differential fits: core-only survives (basic GSP RPCs are fine), the
+# display path dies (a display GSP RPC falls over ~8s in). GSP-off changes that
+# path wholesale.
+
+nv_is_open() {
+    # Open kernel module reports "Open Kernel Module" in its version string, and
+    # a Dual MIT/GPL license. Proprietary reports neither.
+    grep -qi 'open kernel module' "$NV_VERSION" 2>/dev/null && return 0
+    [[ $(modinfo -F license nvidia 2>/dev/null) == *MIT* ]] && return 0
+    return 1
+}
+
+cmd_gsp() {
+    local sub=${1:-status}
+    case $sub in
+      status)
+        printf '  driver: %s\n' "$(nv_is_open && echo 'OPEN kernel module (GSP is MANDATORY — cannot disable)' || echo 'proprietary (GSP can be disabled)')"
+        printf '  EnableGpuFirmware (loaded): %s  ' "$(grep -oP 'EnableGpuFirmware: \K[0-9]+' "$NV_PARAMS" 2>/dev/null)"
+        printf '(0=off, 0x12=18=default-on)\n'
+        local g
+        for g in "$NV_GPUS_DIR"/*/information; do
+            [[ -r $g ]] && printf '  %s\n' "$(grep -i 'GPU Firmware' "$g" 2>/dev/null | sed 's/\s\+/ /g')"
+        done
+        printf '  shadow file: %s\n' "$([[ -f $GSP_CONF ]] && echo "$GSP_CONF (GSP forced OFF at next load)" || echo 'none (GSP at driver default)')"
+        ;;
+      off)
+        need_root
+        if nv_is_open; then
+            die "this is the OPEN kernel module, which REQUIRES GSP — the parameter is ignored.
+     To try GSP-off you must switch to the proprietary package first:
+         pacman -S nvidia-580xx-dkms   (you appear to already have it; ensure -open is not installed)
+     then reboot and re-run '$0 gsp off'."
+        fi
+        [[ $DRY_RUN -eq 1 ]] && { info "would write 'options nvidia NVreg_EnableGpuFirmware=0' to $GSP_CONF"; return 0; }
+        printf 'options nvidia NVreg_EnableGpuFirmware=0\n' > "$GSP_CONF"
+        ok "wrote $GSP_CONF — GSP will be OFF at the next nvidia load"
+        if initramfs_has_nvidia; then
+            warn "nvidia is in the initramfs; rebuilding so this takes effect at boot"
+            command -v mkinitcpio >/dev/null 2>&1 && { [[ $DRY_RUN -eq 1 ]] || mkinitcpio -P >/dev/null 2>&1 && ok "initramfs rebuilt"; }
+        fi
+        info "Apply now (eGPU off, nothing holding the GPU):   $0 reload-driver"
+        info "or just reboot. Confirm with:                    $0 gsp status   -> EnableGpuFirmware 0"
+        info "Then activate:                                   $0 on --no-fbdev --force-kill"
+        ;;
+      on)
+        need_root
+        [[ $DRY_RUN -eq 1 ]] && { info "would remove $GSP_CONF"; return 0; }
+        rm -f "$GSP_CONF" && ok "removed $GSP_CONF — GSP returns to default at next load"
+        initramfs_has_nvidia && command -v mkinitcpio >/dev/null 2>&1 && { mkinitcpio -P >/dev/null 2>&1 && ok "initramfs rebuilt"; }
+        info "Apply now:  $0 reload-driver   (or reboot)"
+        ;;
+      *) die "usage: $0 gsp [status|off|on]" ;;
+    esac
 }
 
 # ---------------------------------------------------------------- preconditions
@@ -1973,6 +2044,12 @@ xgm-egpu — XG Mobile eGPU control for the ROG Flow X13 (GV301QH)
                                paste it into an issue if anything looks wrong
   xgm-egpu preflight           is NVIDIA RTD3 disarmed in the LOADED driver?
                                run after every driver/initramfs change
+  xgm-egpu gsp [status|off|on] disable or re-enable NVIDIA GSP firmware. STRONGEST
+                               current lead: every death has GSP RPCs in flight,
+                               and GSP-off swaps the whole display-init path onto
+                               the legacy CPU-side RM. Proprietary driver only
+                               (this machine qualifies). 'off' then reload-driver
+                               or reboot, then 'on --no-fbdev'.
   xgm-egpu capture [arm|read]  ARM before an activation: turns the next hard
                                hang into a panic with a backtrace in EFI pstore
                                (and netconsole to the Pi, best-effort). READ after
@@ -2136,6 +2213,7 @@ case "$CMD" in
     status)     cmd_status ;;
     detect)     cmd_detect ;;
     preflight)  cmd_preflight ;;
+    gsp)        cmd_gsp "${1:-status}" ;;
     capture)    cmd_capture "${1:-arm}" ;;
     bind)       cmd_bind "${1:-core}" ;;
     reload-driver) cmd_reload_driver ;;

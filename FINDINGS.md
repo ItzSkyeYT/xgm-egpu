@@ -468,6 +468,44 @@ never took effect (§8 explains why), so that claim was never actually tested.
 > the instant the watch detects death, before any teardown, and save it to
 > `/var/tmp/xgm-bugreport-<timestamp>.log.gz`. That file is the next thing
 > to read.
+
+> ### The strongest lead: GSP firmware (2026-09-09)
+>
+> Pulling the threads together: the death is a **GSP firmware hang**, not a
+> link or power event.
+>
+> - With `--mask-pciehp`, `Xid 79` ("GPU has fallen off the bus" — the driver
+>   read `0xffffffff` back from the GPU) was logged **before** Link Down. The
+>   GPU stopped answering MMIO *first*; pciehp only noticed afterwards.
+> - Every crash dump shows GSP mid-operation: `GSP_RM_CONTROL` in flight with
+>   `actively_polling y`, and `GSP_RUN_CPU_SEQUENCER` / `UCODE_LIBOS_PRINT` in
+>   the event history.
+> - The card is in a rock-stable P-state at death (clocks and power flat, mem
+>   pinned at 7501), so it is not a clock or power transition.
+> - GSP failure on **Ampere laptop GPUs specifically** is a documented class
+>   (open-gpu-kernel-modules issues #1058 "RTX 3080 laptop… Cannot initialize
+>   GSP firmware", #543).
+>
+> The differential clinches it: `nvidia` core alone survives indefinitely
+> (basic GSP RPCs are fine), and the death only appears once the **display**
+> path is loaded — i.e. a *display* GSP RPC path falls over about eight seconds
+> in, on a GPU that has physical display connectors (the internal 1650 Mobile
+> has none and never dies).
+>
+> `NVreg_EnableGpuFirmware=0` forces the driver off GSP onto the legacy
+> CPU-side RM, which performs display init through a completely different code
+> path — no display GSP RPCs at all. It works **only on the proprietary
+> module** (the open modules require GSP and ignore the parameter); this
+> machine runs the proprietary `nvidia-580xx-dkms`, so it is available.
+> `xgm-egpu gsp off` writes the modprobe shadow and rebuilds the initramfs;
+> after `reload-driver` or a reboot, `gsp status` must show
+> `EnableGpuFirmware 0`, then `on --no-fbdev`.
+>
+> This is the best-supported hypothesis of the investigation — it is the first
+> that explains the Xid-79-before-Link-Down ordering and the GSP-in-flight
+> dumps rather than merely tolerating them. If GSP-off still dies, the cause is
+> below the firmware (the display engine touching the physical link/PHY), and
+> `--no-kms` (a working render-only eGPU) becomes the endpoint.
 >
 > **`xgm-egpu capture`** arms the machine at runtime (no reboot): NMI watchdog
 > on, hard/soft-lockup and hung-task and oops → panic, `panic=30` so it comes

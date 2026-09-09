@@ -22,7 +22,7 @@ meet them undocumented.**
 | Link trains at PCIe Gen3 x8 | **Works** - earlier "Gen1 cap" was an idle-state reading, see [Findings](FINDINGS.md#pcie-link-speed) |
 | Link survives **unbound** | **Works** - Gen3 x8 indefinitely, zero AER. The hardware is fine |
 | Link survives with `nvidia` core bound | **Works** - Gen3 x8, P0, `nvidia-smi` reads it |
-| Link survives with `nvidia_drm` loaded | **Open.** Dies at ~7-10s. Not a kernel hang: the compositor and fbcon freeze, the kernel keeps running. RTD3, fbdev, DRM poll, power transient, pciehp, stray DMA all ruled out. The tool now saves `nvidia-bug-report.sh` at the moment of death. See [Findings §8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause) |
+| Link survives with `nvidia_drm` loaded | **Open — leading hypothesis is a GSP firmware hang.** Dies ~8s, display path only, GPU stops answering (Xid 79) before Link Down, GSP RPCs in flight. Test: `gsp off` (proprietary driver, available here) then `on --no-fbdev`. Not a kernel hang. See [Findings §8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause) |
 
 The reference machine is the most marginal configuration that exists: a DIY dock
 with substituted connectors, on the oldest Flow model. If you have an official
@@ -84,6 +84,7 @@ mean the write was rejected; the EC has usually already committed by then. See
 xgm-egpu status              attributes, bus state, modules, blockers
 xgm-egpu detect              autodetected topology, and how it was derived
 xgm-egpu preflight           is NVIDIA RTD3 disarmed in the LOADED driver? run this first
+xgm-egpu gsp [status|off|on] disable NVIDIA GSP firmware (proprietary driver only) - strongest lead
 xgm-egpu capture [arm|read]  arm the kernel so a hard hang leaves a backtrace in pstore
 xgm-egpu bind <core|modeset|drm-nokms|drm-nofbdev|drm|audio|all>
                              bind one driver layer to an enumerated eGPU and
