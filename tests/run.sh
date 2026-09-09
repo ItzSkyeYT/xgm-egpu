@@ -429,6 +429,28 @@ assert_has "show appends its kernel log"                 "$out" "kernel stuff"
 assert_eq  "dir prints the directory"                    "$(sub cmd_logs dir)" "$T/log"
 assert_rc  "run_log_start is a no-op without root"       0 run_log_start on "on --no-kms"
 
+echo "== desktop pin =="
+mkdir -p "$T/pci/0000:08:00.0" "$T/pci/0000:01:00.0"; printf '1\n' > "$T/pci/0000:08:00.0/boot_vga"; printf '0\n' > "$T/pci/0000:01:00.0/boot_vga"
+assert_eq  "boot_vga device found"                       "$(boot_vga_bdf)" "0000:08:00.0"
+export XGM_DESKTOP_HOME=$T/home
+out=$(DRY_RUN=0 sub cmd_desktop pin 2>&1); rc=$?
+assert_eq  "desktop pin -> rc 0"                         "$rc" "0"
+assert_eq  "pin file content"                            "$(cat "$T/home/.config/plasma-workspace/env/xgm-egpu-kwin.sh")" "export KWIN_DRM_DEVICES=/dev/dri/by-path/pci-0000:08:00.0-card"
+out=$(sub cmd_desktop status 2>&1)
+assert_has "status shows the pin file"                   "$out" "xgm-egpu-kwin.sh"
+out=$(DRY_RUN=0 sub cmd_desktop unpin 2>&1)
+assert_eq  "unpin removes the file"                      "$(ls "$T/home/.config/plasma-workspace/env/" 2>/dev/null | wc -l)" "0"
+out=$(sub cmd_desktop bogus 2>&1); rc=$?
+assert_eq  "desktop bogus -> rc 1"                       "$rc" "1"
+unset XGM_DESKTOP_HOME
+echo "== exit hooks accumulate =="
+H1=0; H2=0; h1() { H1=1; }; h2() { H2=1; }
+out=$(add_exit_hook h1; add_exit_hook h2; run_exit_hooks; echo "$H1$H2")
+assert_eq  "both hooks run"                              "$out" "11"
+RESTART_DESKTOP=0
+assert_rc  "dm_stop_for_run is a no-op with --keep-desktop" 0 dm_stop_for_run
+RESTART_DESKTOP=auto
+
 echo "== library mode =="
 assert_rc "sourcing in library mode does not dispatch" 0 bash -c 'XGM_LIBRARY_MODE=1 source bin/xgm-egpu; declare -F cmd_on >/dev/null'
 assert_rc "script still parses"               0 bash -n bin/xgm-egpu

@@ -91,6 +91,9 @@ xgm-egpu drm [status|nofbdev|nokms|safe|default]
 xgm-egpu pcie [status|gen3|default]
                              tell the driver PCIe Gen3 is allowed so it never retrains
                              the link down (NVreg_EnablePCIeGen3=1); or use `on --link-gen 2`
+xgm-egpu desktop [status|pin|unpin]
+                             pin kwin to the laptop's own GPU so the desktop survives
+                             `on` (it otherwise holds the internal dGPU and has to be killed)
 xgm-egpu logs [N|show|dir]   persistent per-run logs in /var/log/xgm-egpu (full
                              output of every on/off/bind/reload-driver, plus the
                              kernel log saved by the watch); survives reboots
@@ -147,6 +150,25 @@ module already is `fbdev=0` and refuses otherwise. Set the layer once with
 `sudo xgm-egpu reload-driver --force-kill` or a reboot, confirm with
 `xgm-egpu drm status`, then activate. Three earlier "ruled out" results in the
 findings were this trap - [Findings §8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause).
+
+## Using it from the desktop
+
+`on` has to release the internal dGPU, and the compositor is what holds it:
+kwin probes every DRM device with Vulkan at start and keeps the file
+descriptors. `--force-kill` therefore killed kwin on the reference machine,
+and the eGPU came up on a dead desktop. Two fixes, use both:
+
+```sh
+xgm-egpu desktop pin      # KWIN_DRM_DEVICES -> the laptop's own card; log out and in once
+```
+
+After that, kwin never opens an NVIDIA device, and `on` from a desktop
+terminal only has to close whatever else holds the GPU (a browser with GPU
+acceleration, typically) - the session survives. And when `on` or `off` is
+run from a **TTY** with a display manager active, the tool stops the display
+manager before the release and starts it again when the run ends, success or
+not, so you land on a login screen rather than a dead console.
+(`--keep-desktop` skips that.)
 
 ## Render-only mode (no monitor on the eGPU)
 
