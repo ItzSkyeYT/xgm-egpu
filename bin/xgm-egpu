@@ -250,7 +250,7 @@ cmd_desktop() {
         printf '  pin file:           %s\n' "$([[ -f $f ]] && echo "$f: $(cat "$f")" || echo "none — kwin may open the NVIDIA GPU and hold it")"
         pid=$(pgrep -x kwin_wayland | head -1)
         if [[ -n $pid ]]; then
-            printf '  running kwin:       pid %s, KWIN_DRM_DEVICES=%s\n' "$pid" "$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep -oP '^KWIN_DRM_DEVICES=\K.*' || echo '(unset — pin takes effect at next login)')"
+            printf '  running kwin:       pid %s, KWIN_DRM_DEVICES=%s\n' "$pid" "$( { tr '\0' '\n' < "/proc/$pid/environ"; } 2>/dev/null | grep -oP '^KWIN_DRM_DEVICES=\K.*' || echo "(unreadable or unset — as root: xgm-egpu desktop status; the pin takes effect at next login)")"
             printf '  kwin holds NVIDIA:  %s fds\n' "$(for x in /proc/$pid/fd/*; do readlink "$x" 2>/dev/null; done | grep -cE '^/dev/nvidia')"
         else
             printf '  running kwin:       none\n'
