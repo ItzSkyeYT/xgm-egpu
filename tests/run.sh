@@ -23,7 +23,7 @@ load() {
            XGM_MKINITCPIO_CONF=$T/mkinitcpio.conf XGM_MKINITCPIO_D=$T/mkinitcpio.conf.d \
            XGM_DISTRO_MODPROBE=$T/usrlib/nvidia.conf XGM_ETC_MODPROBE_D=$T/etc \
            XGM_AUTOPROBE=$T/drivers_autoprobe XGM_STATE_DIR=$T/state \
-           XGM_SYS_MODULE=$T/module XGM_SYSFS_PCI=$T/pci XGM_DRM_POLL=$T/drm_poll XGM_PSTORE=$T/pstore XGM_EFI_PSTORE_DISABLE=$T/efi_pstore_disable XGM_BUGREPORT_DIR=$T/bugreports
+           XGM_SYS_MODULE=$T/module XGM_SYSFS_PCI=$T/pci XGM_DRM_POLL=$T/drm_poll XGM_PSTORE=$T/pstore XGM_EFI_PSTORE_DISABLE=$T/efi_pstore_disable XGM_BUGREPORT_DIR=$T/bugreports XGM_NV_VERSION=$T/nvver XGM_GSP_CONF=$T/etc/nvidia-xgm-nogsp.conf
     mkdir -p "$T/gpus" "$T/mkinitcpio.conf.d" "$T/usrlib" "$T/etc" "$T/module" "$T/pci"
     # shellcheck disable=SC1091
     XGM_LIBRARY_MODE=1 source bin/xgm-egpu
@@ -270,6 +270,29 @@ out=$(PATH="$T/fakebin:$PATH" DRY_RUN=0 sub collect_gpu_crash_dump 2>&1); rc=$?
 assert_eq  "reporter that writes nothing -> rc 1"       "$rc" "1"
 assert_has "says it produced no file and where stderr went" "$out" "produced no file"
 assert_eq  "stderr sidecar is kept on failure"          "$(ls "$T/bugreports"/*.stderr 2>/dev/null | wc -l)" "1"
+
+echo "== gsp: open vs proprietary detection =="
+printf 'NVRM version: NVIDIA UNIX x86_64 Kernel Module  580.178.04\n' > "$T/nvver"
+assert_rc  "proprietary version string -> not open"    1 nv_is_open
+printf 'NVRM version: NVIDIA UNIX Open Kernel Module  580.178.04\n' > "$T/nvver"
+assert_rc  "open version string -> open"               0 nv_is_open
+echo "== gsp off refuses on the open module =="
+need_root() { :; }
+printf 'NVRM version: NVIDIA UNIX Open Kernel Module  580.178.04\n' > "$T/nvver"
+out=$(DRY_RUN=0 sub cmd_gsp off 2>&1); rc=$?
+assert_eq  "gsp off on open -> rc 1"                   "$rc" "1"
+assert_has "explains open requires GSP"                "$out" "REQUIRES GSP"
+assert_eq  "no shadow written on open"                 "$(ls "$T/etc"/nvidia-xgm-nogsp.conf 2>/dev/null | wc -l)" "0"
+echo "== gsp off writes the shadow on proprietary =="
+printf 'NVRM version: NVIDIA UNIX x86_64 Kernel Module  580.178.04\n' > "$T/nvver"
+initramfs_has_nvidia() { return 1; }   # skip the mkinitcpio branch in the test
+out=$(DRY_RUN=0 sub cmd_gsp off 2>&1); rc=$?
+assert_eq  "gsp off on proprietary -> rc 0"            "$rc" "0"
+assert_has "shadow contains EnableGpuFirmware=0"       "$(cat "$T/etc/nvidia-xgm-nogsp.conf" 2>/dev/null)" "NVreg_EnableGpuFirmware=0"
+out=$(DRY_RUN=0 sub cmd_gsp on 2>&1)
+assert_eq  "gsp on removes the shadow"                 "$(ls "$T/etc"/nvidia-xgm-nogsp.conf 2>/dev/null | wc -l)" "0"
+out=$(sub cmd_gsp bogus 2>&1); rc=$?
+assert_eq  "gsp bogus -> rc 1"                         "$rc" "1"
 
 echo "== library mode =="
 assert_rc "sourcing in library mode does not dispatch" 0 bash -c 'XGM_LIBRARY_MODE=1 source bin/xgm-egpu; declare -F cmd_on >/dev/null'
