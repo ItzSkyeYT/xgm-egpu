@@ -88,6 +88,15 @@ one command per boot.
 
 Cost: about 40 W idle on the dock, because the GPU never leaves P0.
 
+**Render-only vs display mode, measured** (Watch Dogs 2, High, 1536×960
+internal, Flow X13 + RTX 3060): render-only presents through a system-memory
+path with no GPU fences, so CPU and GPU serialise: 27 fps, 49 ms frames, the
+GPU at 58 W reading "96 % busy" while spin-waiting. Display mode restores
+the fences: 41 fps (61 average), 25 ms frames, the GPU at 70 W and 60-70 %
+busy, PCIe at ~1.3 GB/s of 6.5. Beyond that the laptop's CPU is the limit
+(76-85 % at 94 °C). Use `go --display` for games if you can live with `off`
+from a TTY; `go` (render-only) is the simpler mode for compute.
+
 ## Using it from the desktop
 
 `on` must release the internal dGPU, and the compositor is what usually holds
@@ -137,10 +146,8 @@ for an issue. "It died at stage 3" is as useful as "it works". See
 
 ## Open questions
 
-- Performance in display mode vs render-only: render-only presents through
-  a system-memory path with no GPU fences and serialises CPU and GPU (about
-  half the frame rate on the reference machine); display mode should restore
-  the fences. Not yet measured.
+- Whether the idle PCIe downshift can be prevented without locking the
+  clocks (a registry key rather than P0 forever, which costs ~40 W idle).
 - Whether the idle downshift can be prevented without locking clocks (a
   registry key rather than P0 forever).
 - Official docks: the reference machine is the most marginal build that
