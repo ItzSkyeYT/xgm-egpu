@@ -252,10 +252,11 @@ printf '#!/bin/sh\nexit 0\n' > "$T/fakebin/nvidia-bug-report.sh"; chmod +x "$T/f
 out=$(PATH="$T/fakebin:$PATH" DRY_RUN=1 sub collect_gpu_crash_dump 2>&1); rc=$?
 assert_eq  "dry-run -> rc 0"                            "$rc" "0"
 assert_has "dry-run shows the output path in BUGREPORT_DIR" "$out" "$T/bugreports/xgm-bugreport-"
+assert_not "dry-run does NOT pass a .gz name (script appends .gz itself)" "$out" "output-file [^ ]*\.gz "
 # a fake reporter that honours --output-file and writes a non-empty gz
 cat > "$T/fakebin/nvidia-bug-report.sh" <<'FAKE'
 #!/bin/sh
-while [ $# -gt 0 ]; do case "$1" in --output-file) shift; printf 'fake' | gzip > "$1";; esac; shift; done
+while [ $# -gt 0 ]; do case "$1" in --output-file) shift; printf 'fake' | gzip > "$1.gz";; esac; shift; done
 FAKE
 chmod +x "$T/fakebin/nvidia-bug-report.sh"
 out=$(PATH="$T/fakebin:$PATH" DRY_RUN=0 sub collect_gpu_crash_dump 2>&1); rc=$?
@@ -267,7 +268,8 @@ printf '#!/bin/sh\nexit 0\n' > "$T/fakebin/nvidia-bug-report.sh"
 rm -f "$T/bugreports"/*
 out=$(PATH="$T/fakebin:$PATH" DRY_RUN=0 sub collect_gpu_crash_dump 2>&1); rc=$?
 assert_eq  "reporter that writes nothing -> rc 1"       "$rc" "1"
-assert_has "says it produced nothing"                   "$out" "produced nothing"
+assert_has "says it produced no file and where stderr went" "$out" "produced no file"
+assert_eq  "stderr sidecar is kept on failure"          "$(ls "$T/bugreports"/*.stderr 2>/dev/null | wc -l)" "1"
 
 echo "== library mode =="
 assert_rc "sourcing in library mode does not dispatch" 0 bash -c 'XGM_LIBRARY_MODE=1 source bin/xgm-egpu; declare -F cmd_on >/dev/null'
