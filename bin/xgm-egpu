@@ -308,7 +308,8 @@ cmd_desktop() {
         if [[ -n $pid ]]; then
             printf '  running kwin:       pid %s, KWIN_DRM_DEVICES=%s\n' "$pid" "$( { tr '\0' '\n' < "/proc/$pid/environ"; } 2>/dev/null | grep -oP '^KWIN_DRM_DEVICES=\K.*' || echo "(unreadable or unset — as root: xgm-egpu desktop status; the pin takes effect at next login)")"
             if [[ -r /proc/$pid/fd/0 ]] 2>/dev/null && ls "/proc/$pid/fd" >/dev/null 2>&1; then
-                printf '  kwin holds NVIDIA:  %s fds\n' "$(for x in /proc/$pid/fd/*; do readlink "$x" 2>/dev/null; done | grep -cE '^/dev/(nvidia|dri/renderD)')"
+                local nodes; nodes=$(nvidia_drm_nodes | tr '\n' '|'); nodes=${nodes%|}
+                printf '  kwin holds NVIDIA:  %s fds\n' "$(for x in /proc/$pid/fd/*; do readlink "$x" 2>/dev/null; done | grep -cE "^/dev/nvidia|^(${nodes:-none})\$")"
             else
                 printf '  kwin holds NVIDIA:  (kwin is non-dumpable; run this as root to see its fds)\n'
             fi
@@ -387,10 +388,11 @@ go_missing_settings() {
 }
 # Compositor processes with /dev/nvidia* open: killing them ends the session.
 compositor_holders() {
-    local pid f
+    local pid f t nodes; nodes=$(nvidia_drm_nodes | tr '\n' '|'); nodes=${nodes%|}
     for pid in $(pgrep -x kwin_wayland; pgrep -x kwin_x11; pgrep -x Xorg; pgrep -x gnome-shell); do
         for f in /proc/"$pid"/fd/*; do
-            [[ $(readlink "$f" 2>/dev/null) == /dev/nvidia* ]] && { printf '%s(%s) ' "$pid" "$(cat "/proc/$pid/comm" 2>/dev/null)"; break; }
+            t=$(readlink "$f" 2>/dev/null) || continue
+            [[ $t == /dev/nvidia* || ( -n $nodes && $t =~ ^($nodes)$ ) ]] && { printf '%s(%s) ' "$pid" "$(cat "/proc/$pid/comm" 2>/dev/null)"; break; }
         done
     done
 }
