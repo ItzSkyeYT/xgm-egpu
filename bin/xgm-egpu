@@ -277,7 +277,15 @@ desktop_pin_check() {
     [[ $name =~ ^card[0-9]+$ && -e $v ]] || { echo "value '$v' is not an existing /dev/dri/cardN"; return 1; }
     drv=$(basename "$(readlink -f "$DRM_CLASS/$name/device/driver" 2>/dev/null)" 2>/dev/null)
     [[ $drv == nvidia ]] && { echo "value '$v' is the NVIDIA card — that is the one to keep kwin OFF"; return 1; }
-    echo "$v (${drv:-driver unknown})"
+    local r rn rdrv
+    r=$(/bin/sh -c 'unset KWIN_RENDER_NODES; . "$1" >/dev/null 2>&1; printf %s "$KWIN_RENDER_NODES"' _ "$file" 2>/dev/null)
+    if [[ -n $r ]]; then
+        [[ $r == *:* ]] && { echo "KWIN_RENDER_NODES '$r' contains ':'"; return 1; }
+        rn=$(basename "$r"); [[ $rn =~ ^renderD[0-9]+$ && -e $r ]] || { echo "KWIN_RENDER_NODES '$r' is not an existing render node"; return 1; }
+        rdrv=$(basename "$(readlink -f "$DRM_CLASS/$rn/device/driver" 2>/dev/null)" 2>/dev/null)
+        [[ $rdrv == nvidia ]] && { echo "KWIN_RENDER_NODES '$r' is the NVIDIA render node"; return 1; }
+    fi
+    echo "$v (${drv:-driver unknown})${r:+, render node $r}"
 }
 
 cmd_desktop() {
@@ -322,11 +330,18 @@ cmd_desktop() {
 # KWIN_DISABLE_VULKAN: kwin's Vulkan device probe at startup opens the NVIDIA driver
 # (and keeps /dev/nvidia0 open) regardless of KWIN_DRM_DEVICES — 2026-09-09 23:00.
 # If the session ever fails to start: from a TTY,  xgm-egpu desktop unpin  (or rm this file).
+# KWIN_RENDER_NODES: kwin otherwise creates a render device on EVERY render node it
+# finds (GpuManager::scanForRenderDevices) and holds the NVIDIA one open, which pins
+# nvidia_drm and makes kwin a holder of the eGPU. Colon-separated like the other.
 xgm_card=\$(readlink -f "$bypath" 2>/dev/null)
 case "\$xgm_card" in
     */card[0-9]*) export KWIN_DRM_DEVICES="\$xgm_card" ;;
 esac
-unset xgm_card
+xgm_render=\$(readlink -f "${bypath%-card}-render" 2>/dev/null)
+case "\$xgm_render" in
+    */renderD[0-9]*) export KWIN_RENDER_NODES="\$xgm_render" ;;
+esac
+unset xgm_card xgm_render
 export KWIN_DISABLE_VULKAN=1
 EOS
         [[ $EUID -eq 0 && -n $SUDO_USER ]] && chown "$SUDO_USER:$(id -gn "$SUDO_USER")" "$f" "$(dirname "$f")" 2>/dev/null

@@ -441,6 +441,7 @@ assert_eq  "boot_vga device found"                       "$(boot_vga_bdf)" "0000
 mkdir -p "$T/dri/by-path" "$T/drm/card1/device" "$T/drm/card2/device" "$T/drivers/amdgpu" "$T/drivers/nvidia"
 : > "$T/dri/card1"; : > "$T/dri/card2"
 ln -sfn ../card1 "$T/dri/by-path/pci-0000:08:00.0-card"; ln -sfn ../card2 "$T/dri/by-path/pci-0000:01:00.0-card"
+: > "$T/dri/renderD128"; ln -sfn ../renderD128 "$T/dri/by-path/pci-0000:08:00.0-render"; mkdir -p "$T/drm/renderD128/device"; ln -sfn "$T/drivers/amdgpu" "$T/drm/renderD128/device/driver"
 ln -sfn "$T/drivers/amdgpu" "$T/drm/card1/device/driver"; ln -sfn "$T/drivers/nvidia" "$T/drm/card2/device/driver"
 export XGM_DESKTOP_HOME=$T/home XGM_DRI_BY_PATH=$T/dri/by-path XGM_DRM_CLASS=$T/drm
 DRI_BY_PATH=$T/dri/by-path; DRM_CLASS=$T/drm
@@ -450,6 +451,8 @@ PIN=$T/home/.config/plasma-workspace/env/xgm-egpu-kwin.sh
 assert_not "pin file never exports a by-path name (colons!)" "$(cat "$PIN")" "KWIN_DRM_DEVICES=.*by-path"
 assert_eq  "sourced by /bin/sh like Plasma does, it yields the resolved card" "$(/bin/sh -c '. "$1"; printf %s "$KWIN_DRM_DEVICES"' _ "$PIN")" "$T/dri/card1"
 assert_eq  "...and disables kwin's Vulkan probe (what opens /dev/nvidia* despite the pin)" "$(/bin/sh -c '. "$1"; printf %s "$KWIN_DISABLE_VULKAN"' _ "$PIN")" "1"
+assert_eq  "...and restricts kwin's render devices to the laptop's render node" "$(/bin/sh -c '. "$1"; printf %s "$KWIN_RENDER_NODES"' _ "$PIN")" "$T/dri/renderD128"
+assert_has "pin reports the render node too"             "$out" "render node $T/dri/renderD128"
 assert_has "pin reports the checked value"               "$out" "kwin uses $T/dri/card1 \(amdgpu\)"
 assert_has "pin tells the rollback"                      "$out" "desktop unpin"
 out=$(sub cmd_desktop status 2>&1)
