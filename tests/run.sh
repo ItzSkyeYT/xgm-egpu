@@ -546,9 +546,10 @@ out=$(env -i PATH="$PATH" WAYLAND_DISPLAY=wayland-0 bash -c 'XGM_LIBRARY_MODE=1 
 assert_eq  "WAYLAND_DISPLAY in a grandparent -> graphical" "$out" "yes"
 echo "== kill_nv_holders refuses a compositor inside a session =="
 in_graphical_session() { return 0; }
-mkdir -p "$T/fakeproc"
-out=$(sub kill_nv_holders "$$ bash" 2>&1); rc=$?   # our own pid: comm is bash, not a compositor -> proceeds (dry-run kills nothing)
+sleep 30 & victim=$!
+out=$(DRY_RUN=1 sub kill_nv_holders "$victim sleep" 2>&1); rc=$?   # a throwaway process: not a compositor -> allowed (dry-run: nothing is signalled)
 assert_eq  "a non-compositor holder is allowed"          "$rc" "0"
+kill "$victim" 2>/dev/null; wait "$victim" 2>/dev/null
 kp=$(pgrep -x kwin_wayland | head -1)
 if [[ -n $kp ]]; then
     out=$(DRY_RUN=1 sub kill_nv_holders "$kp kwin_wayland" 2>&1); rc=$?
