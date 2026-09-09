@@ -702,7 +702,50 @@ never took effect (§8 explains why), so that claim was never actually tested.
 > later on purpose). A udev rule cannot do this: the kernel binds during the
 > rescan, before udev sees the device.
 >
-> **8. RM does not consider this an external GPU.** `RmCheckForExternalGpu`
+> **8. Withdrawn: the audio codec was a correlation, and the real trigger is a
+> PCIe speed change (21:05).** With the audio function fenced off (no driver
+> on 01:00.1 — the "ALREADY bound" line in that run was a bug in the check;
+> the kernel log shows no bind), `modeset=0`, NVKMS sealed, RTD3 off: died at
+> 14 s. This time the per-second samples caught it:
+>
+> ```
+> 10s P0, 1792, 7501, 31.41, 3, 29 link=8.0GT/sPCIe
+> 11s <no smi>                     link=5.0GT/sPCIe     <- the link CHANGED SPEED
+> 12s <no smi>                     link=5.0GT/sPCIe
+> 21:05:26  pciehp: Slot(0): Card present / Link Up   <- data link went down and retrained
+> 21:05:26  NVRM: Xid 79, GPU has fallen off the bus
+> 21:05:28  pciehp: Slot(0): Link Down
+> ```
+>
+> and at enumeration, before any driver touched it:
+> `pciehp: Slot(0): Cannot train link: status 0x3883` — LnkSta with the LT
+> (Link Training) bit set a full second after Link Up: the Gen3 training was
+> still struggling. A speed change at or through 8 GT/s re-runs equalization;
+> on these connectors it fell through to Detect, which resets the card, and the
+> driver found its GPU gone. That is why the audio codec's ELD reads and the
+> `DFP_SET_ELD_AUDIO_CAPS` RPC were always "in flight": they were simply what
+> the driver happened to be doing when the bus vanished under it.
+>
+> Why the driver: the RM's `RMPcieLinkSpeed` registry key (`nvrm_registry.h`)
+> holds per-generation ALLOW bits, and `osinit.c` sets ALLOW_GEN3 only when the
+> module parameter `NVreg_EnablePCIeGen3=1` is given. On a platform it does not
+> recognise the RM's allowed speed is below what the hardware trained, and
+> ~10 s after init it brings the link down to what it allows — 8.0 → 5.0 GT/s,
+> exactly the sample. An unbound card is never asked to change speed and holds
+> Gen3 x8 indefinitely; the internal 1650's link is a real laptop link that
+> survives a retrain. Every earlier "10-second" death was this retrain.
+>
+> Two ways to remove the mismatch, both now in the tool:
+> - `on --link-gen 2`: pin the root port to Gen2 before the switch and re-pin
+>   (without retraining if already there) before anything binds. The link
+>   trains at 5 GT/s, needs no equalization, matches the RM's allowed speed —
+>   nothing ever retrains. Gen2 x8 is 4 GB/s, Thunderbolt-eGPU bandwidth.
+> - `pcie gen3` (`NVreg_EnablePCIeGen3=1`): tell the RM Gen3 is allowed so it
+>   never pulls the link down. Full Gen3 x8 if the link's own training holds.
+>
+> The watch now prints a loud line the second the sampled link speed changes.
+>
+> **9. RM does not consider this an external GPU.** `RmCheckForExternalGpu`
 > (`osinit.c`) sets `PDB_PROP_GPU_IS_EXTERNAL_GPU` only for an Intel
 > Thunderbolt 3 bridge *and* a surprise-hotplug-capable slot; the XGM root
 > port is AMD. The only consequence found is skipping the platform request
