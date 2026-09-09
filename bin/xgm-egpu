@@ -67,6 +67,7 @@ PSTORE=${XGM_PSTORE:-/sys/fs/pstore}
 EFI_PSTORE_DISABLE=${XGM_EFI_PSTORE_DISABLE:-/sys/module/efi_pstore/parameters/pstore_disable}
 NV_VERSION=${XGM_NV_VERSION:-/proc/driver/nvidia/version}
 GSP_CONF=${XGM_GSP_CONF:-$ETC_MODPROBE_D/nvidia-xgm-nogsp.conf}
+DRM_CONF=${XGM_DRM_CONF:-$ETC_MODPROBE_D/nvidia-xgm-drm.conf}
 NETCONSOLE_TARGET=${XGM_NETCONSOLE_TARGET:-192.168.1.7}   # the Pi
 BUGREPORT_DIR=${XGM_BUGREPORT_DIR:-/var/tmp}
 
@@ -107,9 +108,11 @@ RELEASE_LEVEL=minimal
 IGNORE_RTD3=0         # --ignore-rtd3: activate even with RTD3 armed (to reproduce the failure)
 SURVIVAL_SECS=15      # after the bind, watch the link this long. It used to die at 10s.
 NO_DRM_POLL=0         # --no-drm-poll: set drm_kms_helper.poll=0 before loading nvidia_drm
-NO_FBDEV=0            # --no-fbdev: load nvidia_drm with fbdev=0. RULED OUT 2026-09-09 (still died).
-NO_KMS=0              # --no-kms: load nvidia_drm with modeset=0 (render node only, no KMS).
-                      # If this survives you have a working eGPU for compute / PRIME offload.
+NO_FBDEV=0            # --no-fbdev: REQUIRE the loaded nvidia_drm to have fbdev=0 (`drm nofbdev`).
+                      # The 2026-09-09 "ruled out" run was a no-op — the module was resident and
+                      # modprobe ignored the parameter; see the DRM-layer section. Untested.
+NO_KMS=0              # --no-kms: REQUIRE the loaded nvidia_drm to have modeset=0 (`drm nokms`):
+                      # render node only, no display-engine bring-up. PRIME offload still works.
 CAP_POWER=0           # --cap-power: after the core binds, lock the GPU to minimum clocks and
                       # the lowest power limit BEFORE the display engine comes up. Tests the
                       # power hypothesis: a display-init current step trips the board's OCP
@@ -117,6 +120,7 @@ CAP_POWER=0           # --cap-power: after the core binds, lock the GPU to minim
 MODESET_SAFE=0        # --modeset-safe: nvidia_modeset disable_hdmi_frl=1 disable_vrr_memclk_switch=1
                       # conceal_vrr_caps=1. The RPCs in flight at every death are HDMI-audio /
                       # VRR display setup on the 3060's physical outputs (the 1650 has none).
+                      # REQUIRES `drm safe` applied first: resident modules ignore modprobe params.
 MASK_PCIEHP=0         # --mask-pciehp: clear the root port's hotplug interrupt enables so a
                       # momentary Link Down is not turned into a surprise-removal teardown.
 RELOAD_NVIDIA=1       # modprobe the NVIDIA stack back after a successful switch;
@@ -363,6 +367,104 @@ nvidia_gpu_power_status() {
 
 # Refuse to activate while the loaded driver still has RTD3 armed. Returns 0 if
 # safe, 1 if not (and explains). This single check would have saved a day.
+# ---------------------------------------------------------------- DRM layer
+#
+# nvidia_drm attaches to a hot-added GPU BY ITSELF. Journal, 2026-09-09 15:16
+# (an `on --no-fbdev` run, modules resident, no modprobe in between):
+#
+#   248.766  nvidia 0000:01:00.0: enabling device          <- 3060 probed by the core
+#   248.810  [nvidia-drm] [GPU ID 0x100] Loading driver   <- 44 ms later
+#   250.942  Initialized nvidia-drm ... on minor 0
+#   251.025  fb1: nvidia-drmdrmfb frame buffer device     <- fbdev=1: the flag did nothing
+#   261.518  pciehp: Link Down
+#
+# nvidia-drm registers {probe, remove} callbacks with nvidia-modeset's KAPI
+# (struct NvKmsKapiCallbacks, nvkms-kapi.h) and the core calls them at PCI
+# probe/remove. So the display path comes up on the eGPU with whatever
+# parameters nvidia_drm was LOADED with, and `modprobe nvidia_drm modeset=0`
+# against a resident module is a no-op — exactly the RTD3 lesson again. Every
+# `--no-fbdev` / `--no-kms` / `--modeset-safe` run before this discovery ran at
+# the defaults. Those options now VERIFY the loaded values; `drm <mode>` sets
+# them (modprobe.d + initramfs), reload-driver or a reboot applies them.
+
+# Value of a loaded module parameter as the kernel reports it (Y/N for bools).
+# Fails if the module is not loaded or the file is unreadable (they are 0400).
+module_param() {
+    local v; v=$(cat "$SYS_MODULE/$1/parameters/$2" 2>/dev/null) || return 1
+    printf '%s\n' "$v"
+}
+
+# What the LOADED nvidia_drm will do to a GPU that appears on the bus.
+#   full        modeset=1 fbdev=1  driver default: the configuration that died every run
+#   nofbdev     modeset=1 fbdev=0  KMS, no framebuffer console
+#   nokms       modeset=0          render node only, no display-engine bring-up
+#   not-loaded  / unreadable       (parameters are root-only)
+drm_layer_mode() {
+    local m f
+    [[ -d $SYS_MODULE/nvidia_drm ]] || { echo not-loaded; return 0; }
+    m=$(module_param nvidia_drm modeset) || { echo unreadable; return 0; }
+    f=$(module_param nvidia_drm fbdev)
+    case "$m/$f" in
+        N/*) echo nokms ;;
+        Y/N) echo nofbdev ;;
+        Y/Y) echo full ;;
+        *)   echo "unknown($m/$f)" ;;
+    esac
+}
+
+# Are nvidia_modeset's HDMI-FRL / VRR parameters all set (the `drm safe` set)?
+modeset_safe_loaded() {
+    local p
+    for p in disable_hdmi_frl disable_vrr_memclk_switch conceal_vrr_caps; do
+        [[ $(module_param nvidia_modeset "$p") == Y ]] || return 1
+    done
+    return 0
+}
+
+# The option flags say what the DRM layer must be; refuse unless the loaded
+# modules already are that. Nothing this script does at activation time can
+# change it.
+preflight_drm_layer() {
+    local want='' have; have=$(drm_layer_mode)
+    if [[ $NO_KMS -eq 1 ]]; then want=nokms
+    elif [[ $NO_FBDEV -eq 1 || $MODESET_SAFE -eq 1 ]]; then want=nofbdev
+    fi
+    if [[ $have == not-loaded ]]; then
+        info "nvidia_drm not loaded; it will take its parameters from modprobe.d when it loads"
+        return 0
+    fi
+    if [[ $have == unreadable ]]; then
+        warn "cannot read nvidia_drm's parameters (root only) — run this as root"
+        return 1
+    fi
+    if [[ -n $want && $have != "$want" ]]; then
+        local mode=$want; [[ $MODESET_SAFE -eq 1 ]] && mode=safe
+        warn "nvidia_drm is loaded as '$have' but this run asks for '$want'."
+        warn "A resident module ignores modprobe parameters, and nvidia_drm attaches"
+        warn "to the eGPU by itself the moment it enumerates — so this run would"
+        warn "silently test '$have'. (Every earlier --no-fbdev/--no-kms run did.)"
+        warn ""
+        warn "Set it, apply it, then retry:"
+        warn "    $0 drm $mode"
+        warn "    $0 reload-driver        (eGPU off; or reboot)"
+        warn "    $0 drm status           -> must say '$want'"
+        return 1
+    fi
+    if [[ $MODESET_SAFE -eq 1 ]] && ! modeset_safe_loaded; then
+        warn "--modeset-safe asked, but nvidia_modeset is loaded without disable_hdmi_frl /"
+        warn "disable_vrr_memclk_switch / conceal_vrr_caps. '$0 drm safe', then reload-driver."
+        return 1
+    fi
+    case $have in
+        nokms)   ok "nvidia_drm loaded with modeset=0: the eGPU gets a render node only, no display engine" ;;
+        nofbdev) ok "nvidia_drm loaded with fbdev=0: KMS, but no framebuffer console on the eGPU" ;;
+        full)    warn "nvidia_drm loaded at the defaults (modeset=1 fbdev=1): the configuration that has"
+                 warn "died every run. Expected only if you are testing 'gsp off'. Otherwise try"
+                 warn "    $0 drm nofbdev     or     $0 drm nokms      (then reload-driver)" ;;
+    esac
+    return 0
+}
+
 preflight_rtd3() {
     local v; v=$(nvidia_dpm_value)
     if [[ -z $v ]]; then
@@ -504,6 +606,15 @@ cmd_preflight() {
         [[ -d $g ]] && printf '  %-28s %s\n' "$(basename "$g") runtime D3" "$(nvidia_gpu_power_status "$(basename "$g")")"
     done
     echo
+    echo "DRM layer (what nvidia_drm does to the eGPU when it appears — see 'drm status'):"
+    local m; m=$(module_param nvidia_drm modeset 2>/dev/null || true)
+    if [[ -z $m ]]; then
+        printf '  %-28s %s\n' "loaded nvidia_drm" "$([[ $(drm_layer_mode) == not-loaded ]] && echo 'not loaded' || echo 'parameters unreadable — run as root')"
+    else
+        printf '  %-28s %s\n' "loaded nvidia_drm" "modeset=$m fbdev=$(module_param nvidia_drm fbdev 2>/dev/null || true) -> $(drm_layer_mode)"
+    fi
+    printf '  %-28s %s\n' "config file" "$([[ -f $DRM_CONF ]] && tr '\n' ';' < "$DRM_CONF" || echo 'none (driver defaults: modeset=1 fbdev=1)')"
+    echo
     preflight_rtd3
 }
 
@@ -566,14 +677,23 @@ cmd_reload_driver() {
     need_root; check_interface
     [[ $(read_attr "$ATTR_ENABLE") == 0 ]] || die "egpu_enable is 1 — reload the driver only with the eGPU OFF"
 
+    # A browser with GPU acceleration is enough to block the unload. --force-kill
+    # applies here too, or nothing that follows `drm <mode>` can be applied
+    # without a reboot.
+    local h; h=$(nv_holders)
+    if [[ -n $h && $FORCE_KILL -eq 1 ]]; then
+        warn "--force-kill: killing what holds /dev/nvidia*:"
+        printf '    %s\n' "$h" >&2
+        kill_nv_holders "$h"
+    fi
     local extra; extra=$(nvidia_extra_refs)
     if (( extra > 0 )); then
         warn "nvidia has $extra reference(s) beyond its dependent modules — something holds /dev/nvidia*:"
         nv_holders | sed 's/^/    /' >&2
-        die "close those first (or: systemctl stop sddm), then retry"
+        die "close those first (or: systemctl stop sddm), or re-run with --force-kill"
     fi
-    local h; h=$(nv_holders)
-    [[ -z $h ]] || die "processes hold /dev/nvidia*:\n$h"
+    h=$(nv_holders)
+    [[ -z $h ]] || die "processes hold /dev/nvidia* (close them, or --force-kill):\n$h"
 
     local before; before=$(nvidia_dpm_value)
     info "loaded DynamicPowerManagement=${before:-<not loaded>}; would-load: $(modprobe --show-depends nvidia 2>/dev/null | tr ' ' '\n' | grep -oP 'NVreg_DynamicPowerManagement=\K\S+' | tail -1)"
@@ -597,6 +717,7 @@ cmd_reload_driver() {
 
     local after; after=$(nvidia_dpm_value)
     info "loaded DynamicPowerManagement is now: ${after:-?}"
+    info "DRM layer now: $(drm_layer_mode)  (nvidia_drm modeset=$(module_param nvidia_drm modeset 2>/dev/null || echo '?') fbdev=$(module_param nvidia_drm fbdev 2>/dev/null || echo '?'); nvidia_modeset safe set: $(modeset_safe_loaded && echo yes || echo no))"
     if [[ $after == 0 ]]; then
         ok "RTD3 disarmed in the running driver. No reboot needed for the test."
         ok "(For persistence across reboots you still need install-rules + the initramfs rebuild.)"
@@ -623,6 +744,17 @@ cmd_bind() {
     local bdf; bdf=$(egpu_bdf) || die "no eGPU on the bus — run '$0 on --no-reload' first"
     local aud=${bdf%.*}.1
     device_alive "$bdf" || die "$bdf is already off the bus"
+
+    # These rungs only mean something on a FRESH load: a resident nvidia_drm
+    # keeps the parameters it booted with and has already attached to the eGPU.
+    case $what in
+      drm|drm-nokms|drm-nofbdev)
+        if [[ -d $SYS_MODULE/nvidia_drm ]]; then
+            die "nvidia_drm is already loaded ($(drm_layer_mode)) — this rung would silently test that,
+     not '$what'. Run '$0 bind core' first (it unloads the display path), or set the
+     layer persistently with '$0 drm <mode>' + reload-driver and use '$0 on'."
+        fi ;;
+    esac
 
     case $what in
       core)
@@ -980,7 +1112,7 @@ cmd_gsp() {
         fi
         info "Apply now (eGPU off, nothing holding the GPU):   $0 reload-driver"
         info "or just reboot. Confirm with:                    $0 gsp status   -> EnableGpuFirmware 0"
-        info "Then activate:                                   $0 on --no-fbdev --force-kill"
+        info "Then activate:                                   $0 on --force-kill   (add --no-fbdev if 'drm nofbdev' is applied)"
         ;;
       on)
         need_root
@@ -990,6 +1122,72 @@ cmd_gsp() {
         info "Apply now:  $0 reload-driver   (or reboot)"
         ;;
       *) die "usage: $0 gsp [status|off|on]" ;;
+    esac
+}
+
+# Persist what nvidia_drm / nvidia_modeset load with. One file, one module
+# each; nothing else on this machine sets these options (checked modprobe.d and
+# the kernel cmdline 2026-09-09), so ordering does not matter here.
+drm_rebuild_initramfs() {
+    initramfs_has_nvidia || return 0
+    warn "nvidia is in the initramfs; rebuilding so this takes effect at boot"
+    command -v mkinitcpio >/dev/null 2>&1 || { warn "mkinitcpio not found — rebuild your initramfs by hand"; return 0; }
+    [[ $DRY_RUN -eq 1 ]] && return 0
+    if mkinitcpio -P >/dev/null 2>&1; then ok "initramfs rebuilt"; else warn "mkinitcpio -P failed — run it by hand and read its output"; fi
+}
+
+cmd_drm() {
+    local sub=${1:-status} m f
+    case $sub in
+      status)
+        m=$(module_param nvidia_drm modeset 2>/dev/null || true)
+        if [[ -z $m ]]; then
+            printf '  loaded nvidia_drm:   %s\n' "$([[ $(drm_layer_mode) == not-loaded ]] && echo 'not loaded' || echo 'parameters unreadable — run as root')"
+        else
+            f=$(module_param nvidia_drm fbdev 2>/dev/null || true)
+            printf '  loaded nvidia_drm:   modeset=%s fbdev=%s  -> %s\n' "$m" "$f" "$(drm_layer_mode)"
+        fi
+        if module_param nvidia_modeset disable_hdmi_frl >/dev/null 2>&1; then
+            printf '  loaded nvidia_modeset: %s\n' "$(modeset_safe_loaded && echo 'HDMI-FRL / VRR disabled (safe set)' || echo 'defaults')"
+        fi
+        printf '  config file:         %s\n' "$([[ -f $DRM_CONF ]] && { printf '%s: ' "$DRM_CONF"; tr '\n' ';' < "$DRM_CONF"; } || echo 'none (driver defaults: modeset=1 fbdev=1)')"
+        printf '  would-load:          %s\n' "$(modprobe -c 2>/dev/null | grep -E '^options nvidia_(drm|modeset) ' | tr '\n' ';')"
+        printf '  nvidia in initramfs: %s\n' "$(initramfs_has_nvidia && echo 'yes (drm <mode> rebuilds it)' || echo no)"
+        cat <<'EOM'
+  modes:
+    nofbdev  modeset=1 fbdev=0   KMS without the framebuffer console. Untested (the
+                                 earlier "ruled out" run was a no-op) — first to try
+    nokms    modeset=0           render node only; the display engine is never touched.
+                                 PRIME offload still works via a system-memory path
+    safe     nofbdev + nvidia_modeset disable_hdmi_frl=1 disable_vrr_memclk_switch=1
+                                 conceal_vrr_caps=1
+    default  remove the file: modeset=1 fbdev=1, the configuration that died every run
+EOM
+        ;;
+      nofbdev|nokms|safe)
+        need_root
+        local body flag
+        case $sub in
+          nofbdev) body='options nvidia_drm modeset=1 fbdev=0'; flag=--no-fbdev ;;
+          nokms)   body='options nvidia_drm modeset=0'; flag=--no-kms ;;
+          safe)    body=$'options nvidia_drm modeset=1 fbdev=0\noptions nvidia_modeset disable_hdmi_frl=1 disable_vrr_memclk_switch=1 conceal_vrr_caps=1'; flag=--modeset-safe ;;
+        esac
+        [[ $DRY_RUN -eq 1 ]] && { info "would write to $DRM_CONF:"; printf '    %s\n' "$body"; return 0; }
+        printf '%s\n' "$body" > "$DRM_CONF"
+        ok "wrote $DRM_CONF"
+        drm_rebuild_initramfs
+        info "Apply now (eGPU off, nothing holding the GPU):  $0 reload-driver"
+        info "or reboot. Confirm with:                        $0 drm status   -> '$([[ $sub == safe ]] && echo nofbdev || echo "$sub")'"
+        info "Then activate:                                  $0 on $flag --force-kill"
+        ;;
+      default)
+        need_root
+        [[ $DRY_RUN -eq 1 ]] && { info "would remove $DRM_CONF"; return 0; }
+        rm -f "$DRM_CONF" && ok "removed $DRM_CONF — nvidia_drm returns to driver defaults at next load"
+        drm_rebuild_initramfs
+        info "Apply now:  $0 reload-driver   (or reboot)"
+        ;;
+      *) die "usage: $0 drm [status|nofbdev|nokms|safe|default]" ;;
     esac
 }
 
@@ -1383,6 +1581,26 @@ pci_remove_internal() {
     return 0
 }
 
+# SIGTERM every process in the holders list ($1, nv_holders format), wait,
+# SIGKILL whatever still holds /dev/nvidia*. Used by `on --force-kill` and
+# `reload-driver --force-kill`.
+kill_nv_holders() {
+    local h=$1 pid
+    while read -r pid _; do
+        [[ -n $pid ]] || continue
+        info "  SIGTERM $pid"
+        [[ $DRY_RUN -eq 1 ]] || kill -TERM "$pid" 2>/dev/null
+    done <<<"$h"
+    sleep 3
+    while read -r pid _; do
+        [[ -n $pid ]] || continue
+        kill -0 "$pid" 2>/dev/null || continue
+        warn "  SIGKILL $pid"
+        [[ $DRY_RUN -eq 1 ]] || kill -KILL "$pid" 2>/dev/null
+    done <<<"$(nv_holders)"
+    sleep 2
+}
+
 release_internal_gpu() {
     info "Releasing the internal dGPU before the ACPI eject"
 
@@ -1399,20 +1617,7 @@ release_internal_gpu() {
         warn "still holding /dev/nvidia*:"
         printf '    %s\n' "$h" >&2
         if [[ $FORCE_KILL -eq 1 ]]; then
-            local pid
-            while read -r pid _; do
-                [[ -n $pid ]] || continue
-                info "  SIGTERM $pid"
-                [[ $DRY_RUN -eq 1 ]] || kill -TERM "$pid" 2>/dev/null
-            done <<<"$h"
-            sleep 3
-            while read -r pid _; do
-                [[ -n $pid ]] || continue
-                kill -0 "$pid" 2>/dev/null || continue
-                warn "  SIGKILL $pid"
-                [[ $DRY_RUN -eq 1 ]] || kill -KILL "$pid" 2>/dev/null
-            done <<<"$(nv_holders)"
-            sleep 2
+            kill_nv_holders "$h"
         else
             die "refusing to proceed — close these first, or re-run with --force-kill.
      Writing egpu_enable now would park this shell in D state."
@@ -1538,23 +1743,16 @@ reload_nvidia() {
         local cb; cb=$(egpu_bdf || echo "")
         [[ -n $cb ]] && cap_gpu_power "$cb"
     fi
-    if [[ $MODESET_SAFE -eq 1 ]]; then
-        info "  loading nvidia_modeset with disable_hdmi_frl=1 disable_vrr_memclk_switch=1 conceal_vrr_caps=1"
-        modprobe nvidia_modeset disable_hdmi_frl=1 disable_vrr_memclk_switch=1 conceal_vrr_caps=1 || warn "modprobe nvidia_modeset failed"
-    else
-        modprobe nvidia_modeset  || true
-    fi
+    # No parameters are passed here any more. With --release minimal these
+    # modules are resident, modprobe against a resident module is a no-op, and
+    # nvidia_drm attaches to the eGPU by itself (KAPI probe callback) with the
+    # values it was loaded with. `drm <mode>` sets them; preflight_drm_layer
+    # verified them before the write. See the DRM-layer section.
+    modprobe nvidia_modeset  || true
     modprobe nvidia_uvm      || true
     [[ $NO_DRM_POLL -eq 1 ]] && drm_poll_disable
-    if [[ $NO_KMS -eq 1 ]]; then
-        info "  loading nvidia_drm with modeset=0 (render node only — no KMS at all)"
-        modprobe nvidia_drm modeset=0 || warn "modprobe nvidia_drm failed"
-    elif [[ $NO_FBDEV -eq 1 ]]; then
-        info "  loading nvidia_drm with fbdev=0 (no framebuffer console)"
-        modprobe nvidia_drm modeset=1 fbdev=0 || warn "modprobe nvidia_drm failed"
-    else
-        modprobe nvidia_drm  || true
-    fi
+    modprobe nvidia_drm      || true
+    info "  DRM layer in effect on the eGPU: $(drm_layer_mode)"
     # Deliberately NOT restarting nvidia-powerd. It manages Dynamic Boost on the
     # internal dGPU, which is switched off in eGPU mode, and it is the daemon
     # whose 15 open fds stalled the very first activation for 856 seconds.
@@ -1850,6 +2048,12 @@ $(printf '     %s\n' "$d")"
         [[ $IGNORE_RTD3 -eq 1 ]] && warn "--ignore-rtd3: proceeding anyway" || die "not activating with RTD3 armed"
     fi
 
+    # The DRM layer is decided by what is LOADED, not by this run's options:
+    # nvidia_drm attaches to the eGPU itself, with the parameters it booted with.
+    if [[ $RELOAD_NVIDIA -eq 1 ]] && ! preflight_drm_layer; then
+        die "not activating with the wrong DRM layer loaded (see above)"
+    fi
+
     release_internal_gpu
 
     # --no-reload must mean "the driver does not touch the card". Skipping our
@@ -1955,7 +2159,7 @@ $(printf '     %s\n' "$d")"
             # boot). Write+fsync last-known-state every second so a silent hang
             # still leaves the final samples on disk.
             local crumb=/var/tmp/xgm-last-run.txt
-            { echo "run $(date -Is) bdf=$bdf opts: cap=$CAP_POWER kms=$((1-NO_KMS)) fbdev=$((1-NO_FBDEV)) maskhp=$MASK_PCIEHP msafe=$MODESET_SAFE"; } > "$crumb"; sync
+            { echo "run $(date -Is) bdf=$bdf opts: cap=$CAP_POWER drm=$(drm_layer_mode) maskhp=$MASK_PCIEHP msafe=$MODESET_SAFE"; } > "$crumb"; sync
             local t alive=1 prev='' cur
             for ((t=1; t<=SURVIVAL_SECS; t++)); do
                 sleep 1
@@ -2049,7 +2253,20 @@ xgm-egpu — XG Mobile eGPU control for the ROG Flow X13 (GV301QH)
                                and GSP-off swaps the whole display-init path onto
                                the legacy CPU-side RM. Proprietary driver only
                                (this machine qualifies). 'off' then reload-driver
-                               or reboot, then 'on --no-fbdev'.
+                               or reboot, then 'on'.
+  xgm-egpu drm [status|nofbdev|nokms|safe|default]
+                               set what the LOADED nvidia_drm does to the eGPU when
+                               it appears. It attaches by itself, with the parameters
+                               it booted with — modprobe cannot change a resident
+                               module, which is why every earlier --no-fbdev /
+                               --no-kms / --modeset-safe run silently ran the default.
+                                 nofbdev  modeset=1 fbdev=0  KMS, no fbcon. UNTESTED;
+                                                             first thing to try
+                                 nokms    modeset=0          render node only; PRIME
+                                                             offload still works
+                                 safe     nofbdev + nvidia_modeset HDMI-FRL/VRR off
+                               Writes /etc/modprobe.d/nvidia-xgm-drm.conf and rebuilds
+                               the initramfs; reload-driver or reboot applies it.
   xgm-egpu capture [arm|read]  ARM before an activation: turns the next hard
                                hang into a panic with a backtrace in EFI pstore
                                (and netconsole to the Pi, best-effort). READ after
@@ -2099,10 +2316,11 @@ Options:
                   for reproducing the 10-second link death on purpose.
   --survival N    after the bind, watch the link for N seconds and report whether
                   it survived (default 15; the old failure was at 10). 0 to skip.
-  --no-kms        load nvidia_drm with modeset=0: a render node and nothing else.
-                  No KMS, no fbdev, no display engine bring-up via DRM. If the
-                  link survives, the eGPU WORKS for CUDA / Vulkan / PRIME offload
-                  onto the laptop screen. Applies to 'on'.
+  --no-kms        require the LOADED nvidia_drm to have modeset=0 ('drm nokms' +
+                  reload-driver; 'on' refuses otherwise). A render node and nothing
+                  else: no KMS, no fbdev, no display-engine bring-up. PRIME offload
+                  keeps working through a system-memory path (ioctl-traced
+                  2026-09-09). Applies to 'on'.
   --cap-power     after the core binds and before the display engine loads, lock
                   the GPU to its minimum clocks and lowest power limit. Tests the
                   leading hypothesis: the display-init current step trips the
@@ -2114,13 +2332,16 @@ Options:
                   flight at every death are HDMI-audio (SET_ELD_AUDIO_CAPS,
                   SET_HDMI_AUDIO_MUTESTREAM, CTRL_HDMI) and VRR setup on the
                   3060's physical outputs — the 1650 Mobile has no outputs and
-                  survives the same init. 'on', 'bind drm'.
+                  survives the same init. Requires 'drm safe' applied first;
+                  'on' verifies the loaded values. 'on', 'bind drm'.
   --mask-pciehp   clear the root port's hotplug interrupt enables for the watch.
                   Every death has Xid 79 raised from irq/NN-pciehp: if the link
                   drop is momentary, this stops pciehp tearing the device down
                   and the eGPU survives it. Restored on exit. 'on' and 'bind'.
-  --no-fbdev      load nvidia_drm with fbdev=0. RULED OUT 2026-09-09: died at
-                  ~9s regardless. Kept for the record.
+  --no-fbdev      require the LOADED nvidia_drm to have fbdev=0 ('drm nofbdev' +
+                  reload-driver). NOT ruled out: the 2026-09-09 run that "died
+                  regardless" was a no-op — the journal shows fb1 still being
+                  created on the eGPU. Untested, and the likeliest single fix.
   --no-drm-poll   set drm_kms_helper.poll=0 before nvidia_drm loads. RULED OUT
                   2026-09-09 by source: nvidia-drm calls drm_kms_helper_poll_disable
                   itself right after init, and marks every non-VGA connector
@@ -2171,7 +2392,7 @@ CMD=${1:-status}; shift || true
 if [[ $CMD == --* ]]; then
     die "'$CMD' is an option, not a command. Options go AFTER the command:
      $0 on $CMD ${*:-}
-     (commands: status detect preflight reload-driver on off bind watch link link-speed ec install-rules)"
+     (commands: status detect preflight gsp drm reload-driver on off bind watch link link-speed ec install-rules)"
 fi
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -2214,6 +2435,7 @@ case "$CMD" in
     detect)     cmd_detect ;;
     preflight)  cmd_preflight ;;
     gsp)        cmd_gsp "${1:-status}" ;;
+    drm)        cmd_drm "${1:-status}" ;;
     capture)    cmd_capture "${1:-arm}" ;;
     bind)       cmd_bind "${1:-core}" ;;
     reload-driver) cmd_reload_driver ;;
