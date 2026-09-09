@@ -20,7 +20,7 @@ meet them undocumented.**
 | NVIDIA driver binds, DRM nodes appear | **Works** |
 | Link stays up under runtime power management | **Works**, with the shipped udev + modprobe rules |
 | Link trains at PCIe Gen3 x8 | **Works** - earlier "Gen1 cap" was an idle-state reading, see [Findings](FINDINGS.md#pcie-link-speed) |
-| Link survives past 10 seconds | **Root cause found, fix pending verification** - NVIDIA RTD3, see [Findings §8](FINDINGS.md#8-the-ten-second-link-death-nvidia-rtd3) |
+| Link survives past 10 seconds | **Open.** Dies at exactly 10s after driver init, 5/5 runs. NVIDIA RTD3 was ruled out by measurement, see [Findings §8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause) |
 
 The reference machine is the most marginal configuration that exists: a DIY dock
 with substituted connectors, on the oldest Flow model. If you have an official
@@ -115,7 +115,7 @@ repo - [Findings §6](FINDINGS.md#6-less-teardown-not-more).
 
 | Host | Dock | Result |
 |---|---|---|
-| ROG Flow X13 GV301QH | DIY osy Lite v0.6.1, RTX 3060, ALC04-S40EIA-00 connectors | Enumerates, binds, Gen3 x8, 0 AER; dies at 10s from NVIDIA RTD3 (fix identified, [§8](FINDINGS.md#8-the-ten-second-link-death-nvidia-rtd3)) |
+| ROG Flow X13 GV301QH | DIY osy Lite v0.6.1, RTX 3060, ALC04-S40EIA-00 connectors | Enumerates, binds, Gen3 x8, 0 AER, drives a display; link dies at exactly 10s. Cause unknown ([§8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause)) |
 | ROG Ally + CachyOS | DIY osy, RTX 3080 | Testing in progress |
 
 If you run this on anything, please [open an

@@ -273,7 +273,33 @@ never took effect (§8 explains why), so that claim was never actually tested.
 
 ---
 
-## 8. The ten-second link death: NVIDIA RTD3
+## 8. The ten-second link death — RTD3 was NOT the cause
+
+> **Corrected 2026-09-09, later the same day.** RTD3 is a real bug on this
+> hardware and the fix below is worth keeping — but it does **not** cause the
+> ten-second death. With `DynamicPowerManagement=0` confirmed loaded and
+> `Runtime D3 status: Disabled` reported on the eGPU itself, the link still
+> dropped at exactly ten seconds after `nvidia-drm` init, identically to every
+> run before it. Five for five.
+>
+> ```
+> 12:41:49  nvidia-drm initialized, fb1 framebuffer created
+> 12:41:59  pciehp: Slot(0): Link Down        <- unchanged
+> ```
+>
+> The GSP RPC dump that appears in the newer logs (`GSP_RM_CONTROL` with
+> `ts_end 0`, `actively_polling: y`, `UCODE_LIBOS_PRINT`,
+> `GSP_RUN_CPU_SEQUENCER`) is a **consequence**: the driver prints its RPC
+> history when it notices the GPU has gone, and the in-flight RPC is the one
+> that was outstanding at that moment. `Link Down` precedes all of it.
+>
+> **Still open.** The next test is `xgm-egpu on --no-reload`, which now
+> disables `/sys/bus/pci/drivers_autoprobe` so neither `nvidia` nor
+> `snd_hda_intel` binds. If an entirely unbound card still dies at ten
+> seconds, no driver is involved and the cause is the dock, the EC, or the
+> platform. That test has never been run correctly.
+
+### The RTD3 finding itself (real, worth keeping, not the cause)
 
 **Root cause of the `Link Down` → `Xid 79` → `Xid 154` sequence. Found
 2026-09-09, from the driver source.**
