@@ -636,7 +636,29 @@ never took effect (§8 explains why), so that claim was never actually tested.
 > Making the node root-only is not a mitigation: with `open()` refused the
 > client segfaults (shim-tested, exit 139).
 >
-> **6. RM does not consider this an external GPU.** `RmCheckForExternalGpu`
+> **6. The door userspace has into the display engine, and how it is sealed
+> (21:00).** Rehearsal on the internal 1650 with `modeset=0` actually loaded
+> (nvidia-drm initialised in 83 µs — no `allocateDevice`): 1.5 s after the
+> reload the kernel printed "Correcting number of heads" anyway. The journal
+> names the client: `kwin_wayland` created a Vulkan instance on the new device
+> (`pci id for fd: 10de:1f9d`), the NVIDIA driver's probe allocated the display
+> engine, then kwin rejected the device ("misses VK_EXT_external_memory_dma_buf").
+> A `vkcube --wsi xcb` run added another allocation. So with `modeset=0` the
+> eGPU's display engine would still come up — from userspace, within seconds
+> of enumeration — and that bring-up is what dies.
+>
+> Making the node unopenable is not an option: with `open("/dev/nvidia-modeset")`
+> failing (EACCES or ENOENT alike) GL is fine but the Vulkan driver **segfaults**,
+> even `vulkaninfo`. What works is a **bind mount of `/dev/null` over the node**:
+> clients open it, every NVKMS ioctl fails, and they carry on — `vkcube`,
+> `vulkaninfo` and `glxgears` all ran normally with the allocation count flat
+> (LD_PRELOAD-emulated, then the redirect variant). The driver source confirms
+> nothing else can reach the engine: with `modeset=0` nvidia-drm never
+> installs `master_set`, so opening the card node cannot call
+> `grabOwnership(NULL)`. `on --no-kms` now seals the node before the write and
+> `off` / `reload-driver` unseal it; `--no-seal` reproduces the client death.
+>
+> **7. RM does not consider this an external GPU.** `RmCheckForExternalGpu`
 > (`osinit.c`) sets `PDB_PROP_GPU_IS_EXTERNAL_GPU` only for an Intel
 > Thunderbolt 3 bridge *and* a surprise-hotplug-capable slot; the XGM root
 > port is AMD. The only consequence found is skipping the platform request

@@ -68,6 +68,7 @@ EFI_PSTORE_DISABLE=${XGM_EFI_PSTORE_DISABLE:-/sys/module/efi_pstore/parameters/p
 NV_VERSION=${XGM_NV_VERSION:-/proc/driver/nvidia/version}
 GSP_CONF=${XGM_GSP_CONF:-$ETC_MODPROBE_D/nvidia-xgm-nogsp.conf}
 DRM_CONF=${XGM_DRM_CONF:-$ETC_MODPROBE_D/nvidia-xgm-drm.conf}
+NVKMS_NODE=${XGM_NVKMS_NODE:-/dev/nvidia-modeset}
 NETCONSOLE_TARGET=${XGM_NETCONSOLE_TARGET:-192.168.1.7}   # the Pi
 BUGREPORT_DIR=${XGM_BUGREPORT_DIR:-/var/tmp}
 
@@ -123,6 +124,9 @@ MODESET_SAFE=0        # --modeset-safe: nvidia_modeset disable_hdmi_frl=1 disabl
                       # REQUIRES `drm safe` applied first: resident modules ignore modprobe params.
 MASK_PCIEHP=0         # --mask-pciehp: clear the root port's hotplug interrupt enables so a
                       # momentary Link Down is not turned into a surprise-removal teardown.
+SEAL_NVKMS=1          # with --no-kms: bind-mount /dev/null over /dev/nvidia-modeset before the
+                      # write, so no userspace client can allocate the eGPU's display engine.
+                      # --no-seal skips it (deliberately reproducing the client-triggered death).
 AUTO_CAPTURE=1        # arm the hang capture (pstore + panic-on-hang + netconsole) inside
                       # 'on' and 'bind' before the risky step; --no-capture skips it
 RELOAD_NVIDIA=1       # modprobe the NVIDIA stack back after a successful switch;
@@ -423,6 +427,49 @@ modeset_safe_loaded() {
     return 0
 }
 
+# ---------------------------------------------------------------- the NVKMS door
+#
+# With nvidia_drm modeset=0 nothing in the KERNEL allocates the eGPU's display
+# engine — but userspace still can, through /dev/nvidia-modeset:
+# NVKMS_IOCTL_ALLOC_DEVICE has no privilege check (nvkms.c, AllocDevice), and
+# measured on 2026-09-09 21:00 on the internal 1650 with modeset=0 loaded:
+#   - kwin_wayland allocates it 1.5 s after a GPU appears (its Vulkan probe of
+#     the new device — it then rejects the device, but the engine is up);
+#   - every PRIME client (vkcube, glxgears) allocates it once at start.
+# On the eGPU that is the same display-engine bring-up that has died every
+# time, just triggered from userspace. So the door is sealed: /dev/null is
+# bind-mounted over the node. Clients still open it, every ioctl fails, and
+# they carry on — vkcube, vulkaninfo and glxgears all ran normally with the
+# allocation count flat (LD_PRELOAD-tested). What does NOT work is making the
+# node unopenable (chmod 000 / absent): the Vulkan driver segfaults on that.
+nvkms_door_sealed() { findmnt -n "$NVKMS_NODE" >/dev/null 2>&1; }
+nvkms_node_holders() {
+    local p f
+    for p in /proc/[0-9]*; do
+        for f in "$p"/fd/*; do
+            [[ $(readlink "$f" 2>/dev/null) == "$NVKMS_NODE" ]] || continue
+            printf '%s(%s) ' "${p#/proc/}" "$(cat "$p/comm" 2>/dev/null)"; break
+        done
+    done
+}
+seal_nvkms_door() {
+    [[ -e $NVKMS_NODE ]] || { info "  $NVKMS_NODE absent (nvidia_modeset not loaded) — nothing to seal"; return 0; }
+    if nvkms_door_sealed; then info "  $NVKMS_NODE already sealed"; return 0; fi
+    local h; h=$(nvkms_node_holders)
+    [[ -n $h ]] && warn "  already holding the REAL node open (a bind mount cannot take that away): $h"
+    [[ $DRY_RUN -eq 1 ]] && { info "  would: mount --bind /dev/null $NVKMS_NODE"; return 0; }
+    if mount --bind /dev/null "$NVKMS_NODE"; then
+        ok "  sealed: $NVKMS_NODE is /dev/null until 'off' — no client can allocate the display engine"
+    else
+        warn "  mount --bind /dev/null $NVKMS_NODE failed"; return 1
+    fi
+}
+unseal_nvkms_door() {
+    nvkms_door_sealed || return 0
+    [[ $DRY_RUN -eq 1 ]] && { info "  would: umount $NVKMS_NODE"; return 0; }
+    if umount "$NVKMS_NODE" 2>/dev/null; then info "  unsealed $NVKMS_NODE"; else warn "  could not umount $NVKMS_NODE"; return 1; fi
+}
+
 # The option flags say what the DRM layer must be; refuse unless the loaded
 # modules already are that. Nothing this script does at activation time can
 # change it.
@@ -458,7 +505,8 @@ preflight_drm_layer() {
         return 1
     fi
     case $have in
-        nokms)   ok "nvidia_drm loaded with modeset=0: the eGPU gets a render node only, no display engine" ;;
+        nokms)   ok "nvidia_drm loaded with modeset=0: the eGPU gets a render node only, no display engine"
+                 [[ $SEAL_NVKMS -eq 1 ]] || warn "--no-seal: a client (kwin does it in 1.5 s) can still bring the display engine up" ;;
         nofbdev) ok "nvidia_drm loaded with fbdev=0: KMS, but no framebuffer console on the eGPU" ;;
         full)    warn "nvidia_drm loaded at the defaults (modeset=1 fbdev=1): the configuration that has"
                  warn "died every run. Expected only if you are testing 'gsp off'. Otherwise:"
@@ -690,6 +738,7 @@ device_alive() {
 cmd_reload_driver() {
     need_root; check_interface
     [[ $(read_attr "$ATTR_ENABLE") == 0 ]] || die "egpu_enable is 1 — reload the driver only with the eGPU OFF"
+    unseal_nvkms_door
 
     # A browser with GPU acceleration is enough to block the unload. --force-kill
     # applies here too, or nothing that follows `drm <mode>` can be applied
@@ -1174,6 +1223,7 @@ cmd_drm() {
             printf '  loaded nvidia_modeset: %s\n' "$(modeset_safe_loaded && echo 'HDMI-FRL / VRR disabled (safe set)' || echo 'defaults')"
         fi
         printf '  config file:         %s\n' "$([[ -f $DRM_CONF ]] && { printf '%s: ' "$DRM_CONF"; tr '\n' ';' < "$DRM_CONF"; } || echo 'none (driver defaults: modeset=1 fbdev=1)')"
+        printf '  NVKMS door:          %s\n' "$(nvkms_door_sealed && echo "SEALED (/dev/null over $NVKMS_NODE; 'off' unseals)" || echo "open (sealed by 'on --no-kms' for the run)")"
         printf '  would-load:          %s\n' "$(modprobe -c 2>/dev/null | grep -E '^options nvidia_(drm|modeset) ' | tr '\n' ';')"
         printf '  nvidia in initramfs: %s\n' "$(initramfs_has_nvidia && echo 'yes (drm <mode> rebuilds it)' || echo no)"
         cat <<'EOM'
@@ -2109,6 +2159,11 @@ $(printf '     %s\n' "$d")"
         capture_netconsole || true
     fi
 
+    if [[ $NO_KMS -eq 1 && $SEAL_NVKMS -eq 1 && $RELOAD_NVIDIA -eq 1 ]]; then
+        info "Sealing the NVKMS door before the eGPU appears (--no-seal to skip)"
+        seal_nvkms_door || die "could not seal $NVKMS_NODE — a client could bring the display engine up. --no-seal to proceed anyway."
+    fi
+
     info "Writing 1 to egpu_enable (timeout ${TIMEOUT}s)"
     [[ $DRY_RUN -eq 1 ]] && { ok "dry run — stopping before the write"; return 0; }
 
@@ -2241,6 +2296,7 @@ $(printf '     %s\n' "$d")"
 
 cmd_off() {
     need_root; check_interface
+    unseal_nvkms_door
 
     # Short-circuit when already off. Without this the AML is asked to disable
     # something that is not enabled, returns result 0x0 ("Error"), and the driver
@@ -2306,10 +2362,13 @@ xgm-egpu — XG Mobile eGPU control for the ROG Flow X13 (GV301QH)
                                it booted with — modprobe cannot change a resident
                                module, which is why every earlier --no-fbdev /
                                --no-kms / --modeset-safe run silently ran the default.
-                                 nokms    modeset=0          render node only; the
-                                                             display engine never
-                                                             comes up. PRIME offload
-                                                             still works. TRY THIS
+                                 nokms    modeset=0          render node only, and
+                                                             'on --no-kms' seals
+                                                             /dev/nvidia-modeset so
+                                                             no client can bring the
+                                                             display engine up.
+                                                             PRIME offload works.
+                                                             TRY THIS
                                  nofbdev  modeset=1 fbdev=0  died 2026-09-09 19:30,
                                                              identical. Ruled out
                                  safe     nofbdev + nvidia_modeset HDMI-FRL/VRR off
@@ -2350,6 +2409,11 @@ Options:
   --force-kill    kill processes holding /dev/nvidia* instead of refusing
   --no-capture    do not arm the hang capture (pstore, panic-on-hang, netconsole)
                   before activating. It is armed by default on every 'on'/'bind'.
+  --no-seal       with --no-kms, do NOT bind-mount /dev/null over /dev/nvidia-modeset.
+                  Sealed by default: kwin allocates the display engine 1.5 s after a
+                  GPU appears and every PRIME client does at start (measured), and
+                  that bring-up is what dies. Sealed, every NVKMS ioctl fails and
+                  clients carry on (tested); 'off' unseals.
   --release LEVEL how much to tear down first (default: minimal)
                     minimal  stop nvidia-powerd/persistenced only; the driver
                              stays bound so the ACPI eject is a real one, which
@@ -2456,6 +2520,7 @@ while [[ $# -gt 0 ]]; do
         --no-fbdev)   NO_FBDEV=1 ;;
         --no-kms)     NO_KMS=1 ;;
         --no-capture) AUTO_CAPTURE=0 ;;
+        --no-seal)    SEAL_NVKMS=0 ;;
         --mask-pciehp) MASK_PCIEHP=1 ;;
         --modeset-safe) MODESET_SAFE=1 ;;
         --cap-power)  CAP_POWER=1 ;;
