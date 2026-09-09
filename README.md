@@ -11,14 +11,27 @@ explaining why the obvious approach hard-hangs your machine.
 
 **2026-09-09, 21:31 and 21:58:** the RTX 3060 on a DIY osy Lite dock runs at
 PCIe Gen3 x8 on a ROG Flow X13 GV301QH under CachyOS, driver bound, zero AER,
-`nvidia-smi` and PRIME render offload working, activated from the desktop
-with the session intact. The one-line version of the cause: **the NVIDIA
+`nvidia-smi` and PRIME render offload working, activated from a TTY with the
+tool handing the display manager back afterwards. The one-line version of the cause: **the NVIDIA
 driver retrains the PCIe link about ten seconds after init, when the GPU
 leaves P0, and this link does not survive a retrain at Gen3.** An unbound
 card holds Gen3 x8 forever because nothing retrains it. The fix removes every
 reason to retrain. Details in [Findings §8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause).
 
-The working configuration, persisted once, then one command per boot:
+One command, from a TTY or the desktop:
+
+```sh
+sudo xgm-egpu go
+```
+
+It checks that the three persisted settings are in the loaded driver (RTD3
+off, `nvidia_drm modeset=0`, `NVreg_EnablePCIeGen3=1`), writes and reloads
+whatever is missing on the first run, refuses if your compositor is holding
+the internal GPU (see "Using it from the desktop"), activates with
+`--no-kms --freeze-link --force-kill`, then proves the result: `nvidia-smi`
+at Gen3 x8 and `glxinfo` run as you inside your session naming the eGPU.
+Games: Steam launch options `prime-run %command%`. `sudo xgm-egpu off` when
+done. The pieces, if you want them separately:
 
 ```sh
 sudo xgm-egpu install-rules      # RTD3 off, runtime PM pinned (modprobe.d + udev + initramfs)
@@ -26,9 +39,7 @@ sudo xgm-egpu drm nokms          # nvidia_drm modeset=0: render node only
 sudo xgm-egpu pcie gen3          # NVreg_EnablePCIeGen3=1: the driver may keep Gen3
 sudo xgm-egpu reload-driver --force-kill   # or reboot
 xgm-egpu desktop pin             # kwin off the NVIDIA GPU; log out and in once
-# every boot:
 sudo xgm-egpu on --no-kms --freeze-link --force-kill
-prime-run glxinfo -B             # must name the eGPU; games: prime-run %command%
 ```
 
 `--freeze-link` locks the GPU at its maximum clocks so it never leaves P0 and
@@ -50,7 +61,7 @@ undocumented.**
 | Link trains at PCIe Gen3 x8 | **Works** - earlier "Gen1 cap" was an idle-state reading, see [Findings](FINDINGS.md#pcie-link-speed) |
 | Link survives **unbound** | **Works** - Gen3 x8 indefinitely, zero AER. The hardware is fine |
 | Link survives with `nvidia` core bound | **Works** - Gen3 x8, P0, `nvidia-smi` reads it |
-| Link survives with the driver stack bound, render-only | **Works** - `drm nokms` + `pcie gen3` + `on --no-kms --freeze-link`: Gen3 x8 held, P0, zero AER, PRIME offload, desktop intact (2026-09-09 21:58) |
+| Link survives with the driver stack bound, render-only | **Works** - `drm nokms` + `pcie gen3` + `on --no-kms --freeze-link`: Gen3 x8 held, P0, zero AER, PRIME offload; run from a TTY with the display manager handed back (2026-09-09 21:58) |
 | Monitor on the eGPU's own ports (`modeset=1`) | **Open** - every earlier death was the retrain, not the display engine; `drm default` + `pcie gen3` + `--freeze-link` is the untested next experiment |
 
 The reference machine is the most marginal configuration that exists: a DIY dock

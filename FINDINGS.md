@@ -760,8 +760,9 @@ never took effect (§8 explains why), so that claim was never actually tested.
 > other way). An unbound card, or the core module alone, never asks for a
 > retrain, which is why both held Gen3 x8 indefinitely.
 >
-> The fix removes every reason to retrain, and two runs (21:31 from a TTY,
-> 21:58 from the desktop) held Gen3 x8, P0, 40 W, zero AER, with
+> The fix removes every reason to retrain, and two runs (21:31 and 21:58, both
+> from a TTY, the tool restarting the display manager afterwards) held Gen3
+> x8, P0, 40 W, zero AER, with
 > `nvidia-smi` and PRIME render offload working:
 >
 > 1. `pcie gen3` — `NVreg_EnablePCIeGen3=1`, so the RM does not treat Gen3 as
