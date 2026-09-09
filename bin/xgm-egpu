@@ -1135,7 +1135,10 @@ device_alive() {
 cmd_reload_driver() {
     need_root; check_interface
     [[ $(read_attr "$ATTR_ENABLE") == 0 ]] || die "egpu_enable is 1 — reload the driver only with the eGPU OFF"
+    trap '' HUP
     unseal_nvkms_door
+    # From a TTY the desktop is what holds the DRM node: hand it off like on/off do.
+    dm_stop_for_run
 
     # A browser with GPU acceleration is enough to block the unload. --force-kill
     # applies here too, or nothing that follows `drm <mode>` can be applied
@@ -1836,11 +1839,25 @@ wedged_tasks() {
 # Fallback holder scan, needing no packages at all. Walks /proc for file
 # descriptors pointing at an nvidia device node. As root this is authoritative —
 # it is the same information lsof reports, read from the same place.
+# The DRM nodes of NVIDIA-driven cards. An open handle on one of these pins
+# nvidia_drm's refcount just as /dev/nvidia* pins the core, and it is what
+# made `reload-driver` fail with "could not unload nvidia_drm (refcnt 1)"
+# while the /dev/nvidia* scan saw nothing (2026-09-09 22:52).
+nvidia_drm_nodes() {
+    local c n r
+    for c in "$DRM_CLASS"/card*; do
+        [[ $(basename "$(readlink -f "$c/device/driver" 2>/dev/null)" 2>/dev/null) == nvidia ]] || continue
+        n=$(basename "$c"); [[ $n =~ ^card[0-9]+$ ]] || continue
+        printf '/dev/dri/%s\n' "$n"
+        for r in "$c"/device/drm/renderD*; do [[ -e $r ]] && printf '/dev/dri/%s\n' "$(basename "$r")"; done
+    done
+}
 proc_nv_holders() {
-    local fd target pid comm
+    local fd target pid comm nodes
+    nodes=$(nvidia_drm_nodes | tr '\n' '|'); nodes=${nodes%|}
     for fd in /proc/[0-9]*/fd/*; do
         target=$(readlink -- "$fd" 2>/dev/null) || continue
-        [[ $target == /dev/nvidia* ]] || continue
+        [[ $target == /dev/nvidia* || ( -n $nodes && $target =~ ^($nodes)$ ) ]] || continue
         pid=${fd#/proc/}; pid=${pid%%/*}
         comm=$(cat "/proc/$pid/comm" 2>/dev/null) || continue
         printf '%s %s\n' "$pid" "$comm"
@@ -1859,7 +1876,8 @@ nv_holders() {
     # because it is trusted. Hence the fallback rather than a hard dependency.
     local out
     if command -v lsof >/dev/null 2>&1; then
-        out=$(lsof -Fpc -- /dev/nvidia* 2>/dev/null | awk '
+        # shellcheck disable=SC2046
+        out=$(lsof -Fpc -- /dev/nvidia* $(nvidia_drm_nodes) 2>/dev/null | awk '
             /^p/ { pid = substr($0,2) }
             /^c/ { print pid, substr($0,2) }' | sort -u)
     else

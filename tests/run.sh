@@ -563,6 +563,12 @@ if [[ -n $kp ]]; then
 fi
 unset -f in_graphical_session
 
+echo "== holders: the NVIDIA DRM nodes count too =="
+mkdir -p "$T/drm/card2/device/drm/renderD129"
+DRM_CLASS=$T/drm
+assert_eq  "nvidia card + render node listed, amdgpu card not"  "$(nvidia_drm_nodes | tr '\n' ' ')" "/dev/dri/card2 /dev/dri/renderD129 "
+DRM_CLASS=/sys/class/drm
+
 echo "== library mode =="
 assert_rc "sourcing in library mode does not dispatch" 0 bash -c 'XGM_LIBRARY_MODE=1 source bin/xgm-egpu; declare -F cmd_on >/dev/null'
 assert_rc "script still parses"               0 bash -n bin/xgm-egpu
