@@ -358,12 +358,13 @@ never took effect (§8 explains why), so that claim was never actually tested.
 > | `bind drm-nofbdev` | + nvidia_drm `modeset=1 fbdev=0` | **survives if fbdev is the cause** |
 > | `bind drm` | + nvidia_drm (fbdev on) | DIES (established) |
 >
-> **fbdev tested and ruled out, 2026-09-09.** `xgm-egpu on --no-fbdev` (nvidia_drm
-> `modeset=1 fbdev=0`, RTD3 confirmed off on the card) **died at ~9s**, Xid 79
-> from `irq/33-pciehp`, identical to every other run. The `fb1` line and the
-> flip timeout were symptoms of the display path being up, not the trigger.
+> ~~**fbdev tested and ruled out, 2026-09-09.** `xgm-egpu on --no-fbdev` died at ~9s, identical to every other run.~~
+> **Withdrawn the same evening:** that run was a no-op — the resident
+> `nvidia_drm` kept `fbdev=1` and the journal shows `fb1` being created on the
+> eGPU. See the correction below. fbdev is untested and back to being the
+> leading single cause.
 >
-> **Three mechanisms now ruled out by hardware** (RTD3, fbdev) **or source**
+> **Two mechanisms ruled out by hardware** (RTD3; the fbdev result is withdrawn above) **or source**
 > (DRM poll, the heads message). The layer result stands: nvidia core alone
 > survives indefinitely; nvidia_modeset + nvidia_drm dies at ~10s, with or
 > without a monitor, with or without fbdev.
@@ -519,6 +520,98 @@ never took effect (§8 explains why), so that claim was never actually tested.
 > teardown — which may be both what makes the drop fatal *and* what hangs the
 > box) and `--no-kms` (never powers the display engine; a working render-only
 > eGPU). The next run should be `--mask-pciehp` with capture armed.
+
+> ### Correction, 2026-09-09 evening: the display-layer options never applied
+>
+> Reading the journals of the three dying boots side by side with the driver
+> source withdrew two "results" above and moved the investigation.
+>
+> **1. nvidia-drm attaches to the eGPU by itself.** The `on --no-fbdev
+> --force-kill` run of 15:16, modules resident throughout, no modprobe between
+> these lines:
+>
+> ```
+> 244.327  xgm-egpu: Writing 1 to egpu_enable
+> 244.354  [drm] [nvidia-drm] [GPU ID 0x00000100] Removing device     <- the 1650 ejected
+> 248.766  nvidia 0000:01:00.0: enabling device (0000 -> 0003)      <- the 3060 probed
+> 248.810  [drm] [nvidia-drm] [GPU ID 0x00000100] Loading driver      <- 44 ms later
+> 250.942  [drm] Initialized nvidia-drm 0.0.0 for 0000:01:00.0 on minor 0
+> 251.025  nvidia 0000:01:00.0: [drm] fb1: nvidia-drmdrmfb frame buffer device
+> 261.518  pcieport 0000:00:01.1: pciehp: Slot(0): Link Down
+> ```
+>
+> nvidia-drm registers `probe` and `remove` callbacks with nvidia-modeset's
+> KAPI (`struct NvKmsKapiCallbacks { suspendResume, remove, probe }`,
+> `nvkms-kapi.h`); the core module calls them from PCI probe/remove. The DRM
+> device for the eGPU is created with whatever parameters `nvidia_drm` was
+> **loaded** with — at boot, from the initramfs.
+>
+> **2. Therefore every `on --no-fbdev`, `--no-kms` and `--modeset-safe` run
+> was a no-op.** With `--release minimal` the modules stay resident,
+> `modprobe nvidia_drm fbdev=0` against a resident module is silently ignored
+> (the same trap RTD3 set, documented in this very file), and the journal
+> proves it: `fb1: nvidia-drmdrmfb frame buffer device` is created on the
+> eGPU in the `--no-fbdev` run. *"fbdev tested and ruled out"* above is
+> **withdrawn**. `fbdev=0`, `modeset=0` and the nvidia_modeset HDMI-FRL/VRR
+> switches are all genuinely untested. The tool now persists them
+> (`xgm-egpu drm nofbdev|nokms|safe` → modprobe.d + initramfs rebuild),
+> `reload-driver --force-kill` or a reboot applies them, and `on` refuses to
+> activate unless the **loaded** parameters match its flags. `bind drm*`
+> refuses while nvidia_drm is resident for the same reason.
+>
+> **3. Why fbdev is the likeliest single cause.** Death is 10.5 s after
+> "Initialized nvidia-drm", right after `fb1` is created, and is logged as
+> `Flip event timeout on head 0` — an atomic commit on the fbcon framebuffer.
+> With `fbdev=1` nvidia-drm grabs NVKMS modeset ownership at load and installs
+> the fbdev client (`nvidia-drm-drv.c` :770). RM then spends seconds probing
+> the 3060's four physical connectors; the resulting dpy-changed events reach
+> nvidia-drm's deferred hotplug work (`nv_drm_handle_hotplug_event`) →
+> `drm_kms_helper_hotplug_event` → the fb helper re-probes and **commits a
+> mode on head 0 with nothing attached**. The internal 1650 prints its second
+> "Correcting number of heads" at +10.7 s too and lives — it has no connector
+> to commit to. `fbdev=0` removes the only DRM client that commits anything.
+> It also keeps `modeset=1`, i.e. full PRIME (video-memory import, semaphore
+> fences). **Test order: `drm nofbdev` first, `drm nokms` second, `gsp off`
+> third.**
+>
+> **4. What `modeset=0` costs — measured, no root needed.** An `LD_PRELOAD`
+> ioctl tracer on `vkcube` (xcb and native Wayland WSI) and `glxgears` under
+> `prime-run`, on the internal 1650 (0 connectors, same shape as a render-only
+> eGPU). What a PRIME client actually does on the NVIDIA render node:
+> `GET_DEV_INFO`, `GEM_IMPORT_NVKMS_MEMORY` ×1 per swapchain image,
+> `PRIME_HANDLE_TO_FD` (dma-buf export, exporter "drm"), and the `SEMSURF_*`
+> fence ioctls. In the source, `GEM_IMPORT/EXPORT/ALLOC_NVKMS_MEMORY`,
+> `GEM_EXPORT_DMABUF_MEMORY`, the dpy-id/permission ioctls return
+> `-EOPNOTSUPP` without `DRIVER_MODESET`, every fence ioctl returns
+> `-EOPNOTSUPP` with `pDevice == NULL`, `FENCE_SUPPORTED`/`DMABUF_SUPPORTED`
+> return `-EINVAL`, and `GET_DEV_INFO` reports `supports_alloc = 0`. Emulating
+> exactly that set from the shim: **vkcube (xcb) presents 300 frames, exit 0;
+> glxgears renders at 120 FPS** — the userspace falls back to
+> `GEM_IMPORT_USERSPACE_MEMORY` (system-memory buffers, not gated) and drops
+> explicit fences; native-Wayland vkcube also presents, through a copy path
+> that never touches the NVIDIA GEM. So render-only is a real endpoint for
+> games via Xwayland/Proton, not only for CUDA.
+>
+> **5. The residual risk of `modeset=0`.** Every one of those clients also
+> opens `/dev/nvidia-modeset` and issues `NVKMS_IOCTL_ALLOC_DEVICE` once, then
+> `FREE_DEVICE` (a capability probe — driver and userspace are both
+> 580.178.04, so it is not a version mismatch). It fails today because
+> nvidia-drm's KAPI already owns the device. With `modeset=0` nothing owns it,
+> and `AllocDevice` in `nvkms.c` has no privilege check
+> (`nvAllocPerOpenDev(..., FALSE /* isPrivileged */)` after a successful
+> `nvAllocDevEvo`), so a game could bring the display engine up from
+> userspace — the same init, minus fbdev. Rehearse on the internal 1650
+> (never dies): `drm nokms`, `reload-driver`, `prime-run vkcube --c 300`,
+> and compare `dmesg | grep -c 'Correcting number of heads'` before and after.
+> Making the node root-only is not a mitigation: with `open()` refused the
+> client segfaults (shim-tested, exit 139).
+>
+> **6. RM does not consider this an external GPU.** `RmCheckForExternalGpu`
+> (`osinit.c`) sets `PDB_PROP_GPU_IS_EXTERNAL_GPU` only for an Intel
+> Thunderbolt 3 bridge *and* a surprise-hotplug-capable slot; the XGM root
+> port is AMD. The only consequence found is skipping the platform request
+> handler load (`kern_perf.c`), so nothing here changes the diagnosis; noted
+> so nobody chases it.
 
 ### The RTD3 finding itself (real, worth keeping, not the cause)
 

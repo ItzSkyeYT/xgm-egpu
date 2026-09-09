@@ -22,7 +22,7 @@ meet them undocumented.**
 | Link trains at PCIe Gen3 x8 | **Works** - earlier "Gen1 cap" was an idle-state reading, see [Findings](FINDINGS.md#pcie-link-speed) |
 | Link survives **unbound** | **Works** - Gen3 x8 indefinitely, zero AER. The hardware is fine |
 | Link survives with `nvidia` core bound | **Works** - Gen3 x8, P0, `nvidia-smi` reads it |
-| Link survives with `nvidia_drm` loaded | **Open — leading hypothesis is a GSP firmware hang.** Dies ~8s, display path only, GPU stops answering (Xid 79) before Link Down, GSP RPCs in flight. Test: `gsp off` (proprietary driver, available here) then `on --no-fbdev`. Not a kernel hang. See [Findings §8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause) |
+| Link survives with `nvidia_drm` loaded | **Open.** Dies ~10s after nvidia-drm attaches to the eGPU; display path only; the GPU stops answering (Xid 79) before Link Down. **Corrected 2026-09-09:** the `--no-fbdev`, `--no-kms` and `--modeset-safe` runs were **no-ops** — nvidia-drm attaches to a hot-added GPU by itself with the parameters it booted with, and modprobe cannot change a resident module — so `fbdev=0` and `modeset=0` are genuinely **untested**, and `fbdev=0` is the likeliest single fix. `xgm-egpu drm nofbdev` / `drm nokms` now set them for real and `on` verifies. `gsp off` is the other lead. See [Findings §8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause) |
 
 The reference machine is the most marginal configuration that exists: a DIY dock
 with substituted connectors, on the oldest Flow model. If you have an official
@@ -84,7 +84,10 @@ mean the write was rejected; the EC has usually already committed by then. See
 xgm-egpu status              attributes, bus state, modules, blockers
 xgm-egpu detect              autodetected topology, and how it was derived
 xgm-egpu preflight           is NVIDIA RTD3 disarmed in the LOADED driver? run this first
-xgm-egpu gsp [status|off|on] disable NVIDIA GSP firmware (proprietary driver only) - strongest lead
+xgm-egpu gsp [status|off|on] disable NVIDIA GSP firmware (proprietary driver only)
+xgm-egpu drm [status|nofbdev|nokms|safe|default]
+                             set what the LOADED nvidia_drm does to the eGPU when it
+                             appears (persisted via modprobe.d + initramfs; `on` verifies)
 xgm-egpu capture [arm|read]  arm the kernel so a hard hang leaves a backtrace in pstore
 xgm-egpu bind <core|modeset|drm-nokms|drm-nofbdev|drm|audio|all>
                              bind one driver layer to an enumerated eGPU and
@@ -109,16 +112,65 @@ Useful options:
                  faults from driver faults
 --cap-power      lock clocks + min power limit before the display engine loads
                  (ruled out: card sat flat at 23 W and died anyway; kept for the record)
---no-kms         load nvidia_drm with modeset=0: render node only. If the link
-                 survives, the eGPU works for compute / PRIME offload today
+--no-kms         require the loaded nvidia_drm to have modeset=0 (`drm nokms` first):
+                 render node only, the display engine is never touched. PRIME
+                 render offload keeps working - see "Render-only mode" below
 --mask-pciehp    stop pciehp turning a momentary Link Down into a teardown
---no-fbdev       load nvidia_drm with fbdev=0 (ruled out; kept for the record)
+--no-fbdev       require the loaded nvidia_drm to have fbdev=0 (`drm nofbdev` first).
+                 NOT ruled out - the earlier run was a no-op. Untested, first to try
+--modeset-safe   require the `drm safe` set (fbdev=0 + nvidia_modeset HDMI-FRL/VRR off)
 --no-drm-poll    disable DRM's 10s connector poll (ruled out; kept for the record)
 --timeout N      default 180s
 --root-port BDF  override the autodetected PCIe root port
 --internal-dgpu BDF
                  override the autodetected internal dGPU
 ```
+
+**The display-layer flags only verify.** `nvidia_drm` attaches to a GPU the
+moment it appears on the bus, with the parameters it was *loaded* with, and
+`modprobe` silently ignores parameters for a module that is already resident.
+So `on --no-fbdev` cannot load anything differently; it checks that the loaded
+module already is `fbdev=0` and refuses otherwise. Set the layer once with
+`sudo xgm-egpu drm nofbdev` (or `nokms`, `safe`), apply it with
+`sudo xgm-egpu reload-driver --force-kill` or a reboot, confirm with
+`xgm-egpu drm status`, then activate. Three earlier "ruled out" results in the
+findings were this trap - [Findings §8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause).
+
+## Render-only mode (no monitor on the eGPU)
+
+If you do not need to drive a monitor from the eGPU's own ports - you just
+want its compute and render power for games and apps on the laptop screen -
+`drm nokms` (`nvidia_drm modeset=0`) is the safest configuration: the eGPU
+gets a DRM **render node only**, and the display-engine bring-up that every
+death so far happened inside is never run.
+
+What still works with `modeset=0`, checked on this driver (580) by tracing the
+ioctls a PRIME client makes and emulating the kernel's `modeset=0` behaviour
+for it (the exact set of gated ioctls, `GET_DEV_INFO` reporting no NVKMS
+allocation): CUDA / OpenCL / headless Vulkan, and **PRIME render offload** -
+the NVIDIA userspace falls back from `GEM_IMPORT_NVKMS_MEMORY` (modeset-gated)
+to `GEM_IMPORT_USERSPACE_MEMORY` (not gated) for the buffers it shares with the
+iGPU. Xwayland/X11 clients (which is what Proton games are) render and present
+normally; native-Wayland clients present through a slower copy path.
+
+```sh
+prime-run vkcube            # or: __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia <app>
+prime-run glxinfo -B        # must name the eGPU
+# Steam launch options:      prime-run %command%
+```
+
+On a Flow the internal dGPU is ejected when the XG Mobile is active, so the
+eGPU is the only NVIDIA GPU and `prime-run` needs no device selection.
+
+One residual risk, worth rehearsing on the **internal** dGPU first (it never
+dies): every PRIME client also opens `/dev/nvidia-modeset` and tries
+`NVKMS_IOCTL_ALLOC_DEVICE` once as a capability probe. Today that fails because
+nvidia-drm already owns the device; with `modeset=0` nothing does, and NVKMS
+has no privilege check on it, so a game could bring the display engine up
+itself. Rehearsal: `drm nokms`, `reload-driver`, `prime-run vkcube --c 300`,
+then `dmesg | grep -c 'Correcting number of heads'` before and after - a new
+line means the client allocated the NVKMS device. Blocking the device node is
+not an option: a client whose `open()` of it fails segfaults (tested).
 
 `--release minimal` is the default **and on the reference machine it is the only
 level that has ever survived.** More teardown makes it fail harder and faster.

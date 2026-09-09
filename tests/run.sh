@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034  # the tool's globals (NO_KMS, DRY_RUN, ...) are set directly by tests
 # xgm-egpu test-suite. No root, no hardware, no network: every check runs the
 # tool's functions in library mode against fixture files in a temp dir.
 #
@@ -23,7 +24,7 @@ load() {
            XGM_MKINITCPIO_CONF=$T/mkinitcpio.conf XGM_MKINITCPIO_D=$T/mkinitcpio.conf.d \
            XGM_DISTRO_MODPROBE=$T/usrlib/nvidia.conf XGM_ETC_MODPROBE_D=$T/etc \
            XGM_AUTOPROBE=$T/drivers_autoprobe XGM_STATE_DIR=$T/state \
-           XGM_SYS_MODULE=$T/module XGM_SYSFS_PCI=$T/pci XGM_DRM_POLL=$T/drm_poll XGM_PSTORE=$T/pstore XGM_EFI_PSTORE_DISABLE=$T/efi_pstore_disable XGM_BUGREPORT_DIR=$T/bugreports XGM_NV_VERSION=$T/nvver XGM_GSP_CONF=$T/etc/nvidia-xgm-nogsp.conf
+           XGM_SYS_MODULE=$T/module XGM_SYSFS_PCI=$T/pci XGM_DRM_POLL=$T/drm_poll XGM_PSTORE=$T/pstore XGM_EFI_PSTORE_DISABLE=$T/efi_pstore_disable XGM_BUGREPORT_DIR=$T/bugreports XGM_NV_VERSION=$T/nvver XGM_GSP_CONF=$T/etc/nvidia-xgm-nogsp.conf XGM_DRM_CONF=$T/etc/nvidia-xgm-drm.conf
     mkdir -p "$T/gpus" "$T/mkinitcpio.conf.d" "$T/usrlib" "$T/etc" "$T/module" "$T/pci"
     # shellcheck disable=SC1091
     XGM_LIBRARY_MODE=1 source bin/xgm-egpu
@@ -293,6 +294,75 @@ out=$(DRY_RUN=0 sub cmd_gsp on 2>&1)
 assert_eq  "gsp on removes the shadow"                 "$(ls "$T/etc"/nvidia-xgm-nogsp.conf 2>/dev/null | wc -l)" "0"
 out=$(sub cmd_gsp bogus 2>&1); rc=$?
 assert_eq  "gsp bogus -> rc 1"                         "$rc" "1"
+
+echo "== drm layer: drm_layer_mode reads the LOADED nvidia_drm parameters =="
+assert_eq  "not loaded"                                "$(drm_layer_mode)" "not-loaded"
+P=$T/module/nvidia_drm/parameters; M=$T/module/nvidia_modeset/parameters
+mkdir -p "$P" "$M"
+printf 'Y\n' > "$P/modeset"; printf 'Y\n' > "$P/fbdev"
+assert_eq  "modeset=Y fbdev=Y -> full"                 "$(drm_layer_mode)" "full"
+printf 'N\n' > "$P/fbdev"
+assert_eq  "modeset=Y fbdev=N -> nofbdev"              "$(drm_layer_mode)" "nofbdev"
+printf 'N\n' > "$P/modeset"
+assert_eq  "modeset=N -> nokms"                        "$(drm_layer_mode)" "nokms"
+if [[ $EUID -ne 0 ]]; then
+    chmod 000 "$P/modeset"
+    assert_eq  "0400 root-only file -> unreadable"     "$(drm_layer_mode)" "unreadable"
+    chmod 644 "$P/modeset"
+fi
+
+echo "== preflight_drm_layer: the flags must match what is LOADED =="
+NO_KMS=1; NO_FBDEV=0; MODESET_SAFE=0
+printf 'Y\n' > "$P/modeset"; printf 'Y\n' > "$P/fbdev"
+assert_rc  "--no-kms with modeset=1 loaded -> refuse"  1 preflight_drm_layer
+out=$(preflight_drm_layer 2>&1)
+assert_has "refusal names 'drm nokms'"                 "$out" "drm nokms"
+assert_has "refusal names reload-driver"               "$out" "reload-driver"
+assert_has "refusal explains the resident-module trap" "$out" "resident module"
+printf 'N\n' > "$P/modeset"
+assert_rc  "--no-kms with modeset=0 loaded -> ok"      0 preflight_drm_layer
+NO_KMS=0; NO_FBDEV=1
+printf 'Y\n' > "$P/modeset"; printf 'Y\n' > "$P/fbdev"
+assert_rc  "--no-fbdev with fbdev=1 loaded -> refuse"  1 preflight_drm_layer
+out=$(preflight_drm_layer 2>&1)
+assert_has "refusal names 'drm nofbdev'"               "$out" "drm nofbdev"
+printf 'N\n' > "$P/fbdev"
+assert_rc  "--no-fbdev with fbdev=0 loaded -> ok"      0 preflight_drm_layer
+NO_FBDEV=0; MODESET_SAFE=1
+assert_rc  "--modeset-safe without nvidia_modeset params -> refuse" 1 preflight_drm_layer
+out=$(preflight_drm_layer 2>&1)
+assert_has "refusal names 'drm safe'"                  "$out" "drm safe"
+for p in disable_hdmi_frl disable_vrr_memclk_switch conceal_vrr_caps; do printf 'Y\n' > "$M/$p"; done
+assert_rc  "--modeset-safe with all three params -> ok" 0 preflight_drm_layer
+printf 'Y\n' > "$P/fbdev"
+assert_rc  "--modeset-safe implies fbdev=0 -> refuse when fbdev=1" 1 preflight_drm_layer
+MODESET_SAFE=0
+out=$(preflight_drm_layer 2>&1); rc=$?
+assert_eq  "no flags at the defaults -> proceeds"      "$rc" "0"
+assert_has "...but warns it is the configuration that died" "$out" "died every run"
+rm -rf "$T/module/nvidia_drm"
+assert_rc  "not loaded -> proceeds (modprobe.d applies at load)" 0 preflight_drm_layer
+
+echo "== drm <mode> writes the modprobe.d file =="
+out=$(DRY_RUN=0 sub cmd_drm nofbdev 2>&1); rc=$?
+assert_eq  "drm nofbdev -> rc 0"                       "$rc" "0"
+assert_eq  "nofbdev file content"                      "$(cat "$T/etc/nvidia-xgm-drm.conf")" "options nvidia_drm modeset=1 fbdev=0"
+assert_has "says how to apply"                         "$out" "reload-driver"
+assert_has "says which 'on' flag"                      "$out" "on --no-fbdev"
+out=$(DRY_RUN=0 sub cmd_drm nokms 2>&1)
+assert_eq  "nokms file content"                        "$(cat "$T/etc/nvidia-xgm-drm.conf")" "options nvidia_drm modeset=0"
+out=$(DRY_RUN=0 sub cmd_drm safe 2>&1)
+assert_has "safe sets nvidia_drm fbdev=0"              "$(cat "$T/etc/nvidia-xgm-drm.conf")" "^options nvidia_drm modeset=1 fbdev=0$"
+assert_has "safe sets the nvidia_modeset params"       "$(cat "$T/etc/nvidia-xgm-drm.conf")" "^options nvidia_modeset disable_hdmi_frl=1 disable_vrr_memclk_switch=1 conceal_vrr_caps=1$"
+out=$(DRY_RUN=0 sub cmd_drm default 2>&1)
+assert_eq  "default removes the file"                  "$(ls "$T/etc"/nvidia-xgm-drm.conf 2>/dev/null | wc -l)" "0"
+out=$(DRY_RUN=1 sub cmd_drm nokms 2>&1)
+assert_eq  "dry-run writes nothing"                    "$(ls "$T/etc"/nvidia-xgm-drm.conf 2>/dev/null | wc -l)" "0"
+out=$(sub cmd_drm bogus 2>&1); rc=$?
+assert_eq  "drm bogus -> rc 1"                         "$rc" "1"
+out=$(sub cmd_drm status 2>&1); rc=$?
+assert_eq  "drm status runs unprivileged"              "$rc" "0"
+assert_has "status lists the modes"                    "$out" "nofbdev"
 
 echo "== library mode =="
 assert_rc "sourcing in library mode does not dispatch" 0 bash -c 'XGM_LIBRARY_MODE=1 source bin/xgm-egpu; declare -F cmd_on >/dev/null'
