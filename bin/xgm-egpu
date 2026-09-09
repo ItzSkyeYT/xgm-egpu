@@ -1868,8 +1868,16 @@ fence_audio_function() {
     else
         warn "  could not set driver_override on $aud"; return 1
     fi
-    local drv; drv=$(basename "$(readlink -f "$SYSFS_PCI/$aud/driver" 2>/dev/null)" 2>/dev/null)
-    [[ -n $drv && $drv != "." ]] && warn "  $aud is ALREADY bound to $drv — autoprobe was not off in time"
+    # readlink -f canonicalises a MISSING symlink to its own path, so a bare
+    # basename of it reads "driver" and looked like a bound driver on the
+    # 21:05 run (false alarm: the kernel log shows no bind). Test existence.
+    if [[ -e $SYSFS_PCI/$aud/driver ]]; then
+        local drv; drv=$(basename "$(readlink -f "$SYSFS_PCI/$aud/driver")")
+        warn "  $aud is ALREADY bound to $drv — unbinding it"
+        [[ $DRY_RUN -eq 1 ]] || echo "$aud" > "/sys/bus/pci/drivers/$drv/unbind" 2>/dev/null && ok "  $drv unbound from $aud" || warn "  could not unbind $drv from $aud"
+    else
+        info "  $aud has no driver (autoprobe was off in time)"
+    fi
     return 0
 }
 bind_gpu_by_hand() {
@@ -2063,6 +2071,15 @@ set_target_link_speed() {
     fi
 
     (( retrain )) || return 0
+    # A retrain is the operation this link fails at (2026-09-09 21:05: the
+    # speed changed 8.0 -> 5.0 GT/s under the driver and the card fell off the
+    # bus). Never retrain a link that is already running at the target speed.
+    local live; live=$(cat "$SYSFS_PCI/$ROOT_PORT/current_link_speed" 2>/dev/null | grep -oE '^[0-9.]+')
+    local want; case $gen in 1) want=2.5 ;; 2) want=5.0 ;; 3) want=8.0 ;; 4) want=16.0 ;; *) want= ;; esac
+    if (( cur == gen )) && [[ -n $live && $live == "$want" ]]; then
+        info "  link already running at ${live} GT/s — not retraining"
+        return 0
+    fi
     local lnkctl
     lnkctl=$(setpci -s "$ROOT_PORT" CAP_EXP+10.w 2>/dev/null) || return 0
     setpci -s "$ROOT_PORT" CAP_EXP+10.w="$(printf '%04x' $(( 0x$lnkctl | 0x20 )))" ||
@@ -2344,6 +2361,12 @@ $(printf '     %s\n' "$d")"
     fi
     ok "eGPU enumerated at $bdf"
 
+    # Re-pin the speed BEFORE anything binds: the AML reconfigures the bridge
+    # at its step 6 (M018()), which can undo the pre-switch pin, and a retrain
+    # on an unbound card is survivable where one under the driver is not.
+    [[ -n $LINK_GEN ]] && set_target_link_speed "$LINK_GEN"
+    info "  link now: $(cat "$SYSFS_PCI/$bdf/current_link_speed" 2>/dev/null) x$(cat "$SYSFS_PCI/$bdf/current_link_width" 2>/dev/null)"
+
     if [[ $NO_AUDIO -eq 1 && $RELOAD_NVIDIA -eq 1 ]]; then
         fence_audio_function "$bdf"
         bind_gpu_by_hand "$bdf"
@@ -2354,10 +2377,6 @@ $(printf '     %s\n' "$d")"
     # so nothing can suspend the link once the GPU goes idle.
     # shellcheck disable=SC2046
     pm_pin_on $(egpu_functions "$bdf") "$ROOT_PORT"
-
-    # Re-pin the speed after enumeration: the AML reconfigures the bridge at its
-    # step 6 (M018()), which can undo what we set before the switch.
-    [[ -n $LINK_GEN ]] && set_target_link_speed "$LINK_GEN"
 
     reload_nvidia
     sleep 2
@@ -2387,12 +2406,18 @@ $(printf '     %s\n' "$d")"
             # still leaves the final samples on disk.
             local crumb=/var/tmp/xgm-last-run.txt
             { echo "run $(date -Is) bdf=$bdf opts: cap=$CAP_POWER drm=$(drm_layer_mode) audio=$((1-NO_AUDIO)) maskhp=$MASK_PCIEHP msafe=$MODESET_SAFE"; } > "$crumb"; sync
-            local t alive=1 prev='' cur
+            local t alive=1 prev='' cur lnk prev_lnk='' speed_changed=0
             for ((t=1; t<=SURVIVAL_SECS; t++)); do
                 sleep 1
                 device_alive "$bdf" || { alive=0; break; }
                 cur=$(smi_line)
-                printf '%ss %s link=%s\n' "$t" "${cur:-<no smi>}" "$(cat "$SYSFS_PCI/$bdf/current_link_speed" 2>/dev/null | tr -d ' ')" >> "$crumb"; sync
+                lnk=$(cat "$SYSFS_PCI/$bdf/current_link_speed" 2>/dev/null | tr -d ' ')
+                printf '%ss %s link=%s\n' "$t" "${cur:-<no smi>}" "$lnk" >> "$crumb"; sync
+                if [[ -n $prev_lnk && $lnk != "$prev_lnk" ]]; then
+                    warn "  ${t}s: LINK SPEED CHANGED $prev_lnk -> $lnk under the driver — a retrain. This is the killer (see --link-gen)."
+                    speed_changed=1
+                fi
+                prev_lnk=$lnk
                 if [[ -n $cur && $cur != "$prev" ]]; then
                     info "  ${t}s: pstate,sm,mem,W,gen,C = $cur"; prev=$cur
                 elif (( t % 5 == 0 )); then
@@ -2410,10 +2435,14 @@ $(printf '     %s\n' "$d")"
                 collect_gpu_crash_dump || true
                 death_recovery_hint
                 warn ""
-                warn "RTD3 is NOT the cause: on 2026-09-09 this died at exactly 10s with"
-                warn "DynamicPowerManagement=0 confirmed on the card. Next step is to"
-                warn "isolate the driver entirely:   $0 on --no-reload --force-kill"
-                warn "which disables PCI driver autoprobe so nothing binds at all."
+                warn "What every death has in common (2026-09-09 21:05, link sampled each second):"
+                warn "the link CHANGED SPEED under the driver — 8.0 -> 5.0 GT/s — and the card fell"
+                warn "off the bus in the retrain. Unbound it holds Gen3 x8 forever; the NVIDIA"
+                warn "driver's dynamic PCIe generation switching asks for the retrain ~10 s in,"
+                warn "and this link cannot survive one at/through Gen3 (8 GT/s needs equalization)."
+                [[ $speed_changed -eq 1 ]] && warn "This run's watch saw that speed change happen."
+                warn "Next: cap the link at Gen2 (no equalization; 4 GB/s = Thunderbolt-eGPU class):"
+                warn "    $0 on --no-kms --link-gen 2 --force-kill"
                 die "the eGPU fell off the bus at ~${t}s."
             fi
         fi
