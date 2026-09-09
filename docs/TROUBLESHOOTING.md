@@ -11,6 +11,19 @@ xgm-egpu status
 
 ---
 
+## The card enumerates, binds, then dies about 10 s later (Xid 79, link 8.0 → 5.0 GT/s)
+
+This is the one. The NVIDIA driver retrains the PCIe link when the GPU leaves
+P0 after init, and a marginal link does not survive a retrain at Gen3. Zero
+AER errors, flat power, a clean Link Down. `go` applies the fix: `pcie gen3`
+so the driver may keep Gen3, and `--freeze-link` so the GPU stays in P0 with
+the autonomous-speed bits disabled on both ends. If it still dies **with** a
+`LINK SPEED CHANGED` line in the watch, the firmware ignored the freeze; cap
+the link instead: `sudo xgm-egpu on --no-kms --link-gen 2 --force-kill` (no
+equalization at Gen2, 4 GB/s). [FINDINGS §8](../FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause).
+
+---
+
 ## `egpu_connected = 0`
 
 **The EC does not see your dock.** Nothing else in this repo will help until
@@ -115,7 +128,9 @@ They exist only to reproduce the failing approaches for comparison.
 
 ## GPU appears, then `Xid 79 — GPU has fallen off the bus`
 
-Runtime power management. See [Findings §7](../FINDINGS.md#7-runtime-power-management-drops-the-link).
+If it happens ~10 s after the driver binds, see the first section: it is the
+link retrain, not power management. If it happens at idle with `install-rules`
+not applied, it is runtime power management. See [Findings §7](../FINDINGS.md#7-runtime-power-management-drops-the-link).
 
 ```sh
 sudo xgm-egpu install-rules
@@ -153,8 +168,8 @@ If either works, please open an issue.
 
 ## Link is stuck at Gen1, or dies at higher speeds
 
-See [Findings § PCIe link speed](../FINDINGS.md#pcie-link-speed). This is
-unresolved and the evidence is contradictory.
+Resolved: the link is fine at any steady speed and dies when *retrained* at
+Gen3. See the first section. What follows is the earlier, superseded advice.
 
 ```sh
 xgm-egpu link                    # current speed, width, error counters

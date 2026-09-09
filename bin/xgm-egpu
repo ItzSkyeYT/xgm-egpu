@@ -72,6 +72,8 @@ PCIE_CONF=${XGM_PCIE_CONF:-$ETC_MODPROBE_D/nvidia-xgm-pcie.conf}
 NVKMS_NODE=${XGM_NVKMS_NODE:-/dev/nvidia-modeset}
 LOG_DIR=${XGM_LOG_DIR:-/var/log/xgm-egpu}        # persistent per-run logs (root fs, survives reboots)
 DRI_BY_PATH=${XGM_DRI_BY_PATH:-/dev/dri/by-path}
+DMI=${XGM_DMI:-/sys/class/dmi/id}
+OS_RELEASE=${XGM_OS_RELEASE:-/etc/os-release}
 DRM_CLASS=${XGM_DRM_CLASS:-/sys/class/drm}
 RUN_LOG=                                          # set by run_log_start for state-changing commands
 NETCONSOLE_TARGET=${XGM_NETCONSOLE_TARGET:-192.168.1.7}   # the Pi
@@ -426,6 +428,45 @@ cmd_go() {
     fi
     ok "READY. Games: Steam launch options  prime-run %command%   (native Wayland games: SDL_VIDEODRIVER=x11)"
     ok "Done for the day:  $0 off"
+}
+
+# ---------------------------------------------------------------- hardware report
+#
+# One row for HARDWARE.md plus the details an issue needs, from the facts the
+# machine can state about itself. DOCK= in the config file fills the column
+# nobody can autodetect.
+cmd_report() {
+    local host board bios distro kernel drv gpu dock result link mode date lastlog bdf
+    host=$(sed 's/_.*//' "$DMI/product_name" 2>/dev/null); board=$(cat "$DMI/board_name" 2>/dev/null); bios=$(cat "$DMI/bios_version" 2>/dev/null)
+    distro=$(grep -oP '^PRETTY_NAME="\K[^"]+' "$OS_RELEASE" 2>/dev/null); kernel=$(uname -r)
+    drv=$(grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' "$NV_VERSION" 2>/dev/null | head -1)
+    dock=${DOCK:-"(fill in: official XG Mobile <model> / DIY osy <variant> <rev>, connectors)"}
+    bdf=$(egpu_bdf || true)
+    if [[ -n $bdf ]] && device_alive "$bdf"; then
+        gpu=$(nvidia-smi -i "$bdf" --query-gpu=name --format=csv,noheader 2>/dev/null)
+        [[ -n $gpu ]] || gpu=$(lspci -nn -s "$bdf" 2>/dev/null | sed 's/.*: //')
+        link="$(cat "$SYSFS_PCI/$bdf/current_link_speed" 2>/dev/null) x$(cat "$SYSFS_PCI/$bdf/current_link_width" 2>/dev/null)"
+    else
+        gpu="(run this while the eGPU is on to fill in the GPU and the link)"; link="-"
+    fi
+    case $(drm_layer_mode) in nokms) mode=render ;; full|nofbdev) mode=display ;; *) mode="?" ;; esac
+    lastlog=$(ls "$LOG_DIR"/*-on.log "$LOG_DIR"/*-go.log 2>/dev/null | sort | tail -1)
+    result="(fill in: works / dies at Ns / no enumerate / blocked at ...)"
+    if [[ -n $lastlog ]]; then
+        grep -q 'LINK SURVIVED' "$lastlog" && result=works
+        grep -qE 'link DIED' "$lastlog" && result="dies ($(grep -oE 'link DIED at ~[0-9]+s' "$lastlog" | tail -1 | grep -oE '[0-9]+s'))"
+    fi
+    date=$(date +%Y-%m-%d)
+    printf 'Row for HARDWARE.md (or an issue titled "hardware: %s + <dock>"):\n\n' "${host:-<host>}"
+    printf '| %s (%s, BIOS %s) | %s | %s | %s, %s, NVIDIA %s | %s | %s | %s | %s | |\n\n' \
+        "${host:-?}" "${board:-?}" "${bios:-?}" "$dock" "$gpu" "${distro:-?}" "$kernel" "${drv:-?}" "$result" "$link" "$mode" "$date"
+    printf 'Details:\n'
+    printf '  host            %s / %s / BIOS %s (%s)\n' "$host" "$board" "$bios" "$(cat "$DMI/sys_vendor" 2>/dev/null)"
+    printf '  root port       %s   internal dGPU %s (%s)\n' "${ROOT_PORT:-?}" "${INTERNAL_DGPU:-none}" "${INTERNAL_DEVID:-}"
+    printf '  eGPU            %s at %s\n' "$gpu" "${bdf:-<not on the bus>}"
+    printf '  loaded driver   RTD3=%s  drm=%s  EnablePCIeGen3=%s  GSP=%s\n' "$(nvidia_dpm_value)" "$(drm_layer_mode)" "$(nvidia_pcie_gen3_value)" "$(grep -oP 'EnableGpuFirmware: \K[0-9]+' "$NV_PARAMS" 2>/dev/null)"
+    printf '  last run        %s\n' "${lastlog:-none}"
+    printf '  egpu_connected  %s   egpu_enable %s\n' "$(read_attr "$ATTR_CONNECTED" 2>/dev/null)" "$(read_attr "$ATTR_ENABLE" 2>/dev/null)"
 }
 
 # ---------------------------------------------------------------- persistent run logs
@@ -2925,209 +2966,83 @@ cmd_off() {
 
 usage() {
     cat <<'EOF'
-xgm-egpu — XG Mobile eGPU control for the ROG Flow X13 (GV301QH)
+xgm-egpu — ASUS XG Mobile eGPU on ordinary Linux (ROG Flow / Ally, official or DIY dock)
 
-  xgm-egpu go                  THE ONE-SHOT. Checks the three persisted settings in
-                               the loaded driver (writes + reloads what is missing,
-                               first run only), refuses if your compositor holds the
-                               internal GPU, runs 'on --no-kms --freeze-link
-                               --force-kill', then proves it: nvidia-smi at Gen3 and
-                               glxinfo run as you inside your session naming the eGPU.
-                               Proven from a TTY (2026-09-09 21:58); from the desktop
-                               it works when kwin holds nothing, which it checks.
-  xgm-egpu status              show attributes, bus, modules, blockers
-  xgm-egpu detect              show the autodetected topology and how it was
-                               derived — run this first on a new machine, and
-                               paste it into an issue if anything looks wrong
-  xgm-egpu preflight           is NVIDIA RTD3 disarmed in the LOADED driver?
-                               run after every driver/initramfs change
-  xgm-egpu gsp [status|off|on] disable or re-enable NVIDIA GSP firmware. STRONGEST
-                               current lead: every death has GSP RPCs in flight,
-                               and GSP-off swaps the whole display-init path onto
-                               the legacy CPU-side RM. Proprietary driver only
-                               (this machine qualifies). 'off' then reload-driver
-                               or reboot, then 'on'.
+Everyday
+  xgm-egpu go                  THE ONE-SHOT. Checks the persisted settings in the
+                               loaded driver (writes + reloads what is missing, first
+                               run only), refuses if the compositor holds the internal
+                               GPU, activates with --no-kms --freeze-link --force-kill,
+                               then proves it (nvidia-smi at Gen3, glxinfo as you).
+  xgm-egpu off                 deactivate: unseal, restore the internal dGPU
+  xgm-egpu status              EC attributes, bus, modules, what holds the GPU
+  xgm-egpu detect              autodetected topology and how it was derived
+  xgm-egpu preflight           RTD3 and the DRM layer in the LOADED driver
+  xgm-egpu logs [N|show|dir]   persistent per-run logs in /var/log/xgm-egpu
+  xgm-egpu report              a HARDWARE.md row + the details an issue needs
+  xgm-egpu link [BDF]          PCIe speed/width and error counters
+
+Settings (persisted in modprobe.d + the initramfs; reload-driver or a reboot applies them)
+  xgm-egpu install-rules       RTD3 off, runtime PM pinned (modprobe shadow + udev)
+  xgm-egpu drm [status|nokms|nofbdev|safe|default]
+                               what nvidia_drm does to the eGPU when it appears
+                               (nokms = render node only, the working mode)
   xgm-egpu pcie [status|gen3|default]
-                               tell the RM that PCIe Gen3 is allowed
-                               (NVreg_EnablePCIeGen3=1). Found 2026-09-09 21:05:
-                               every death is the RM retraining the link down to
-                               the generation it allows, ~10 s after init, and
-                               this link does not survive a retrain at Gen3.
-                               Either this (full Gen3 x8) or 'on --link-gen 2'
-                               (Gen2 x8, no equalization, safest).
+                               allow PCIe Gen3 (NVreg_EnablePCIeGen3=1)
+  xgm-egpu gsp [status|off|on] GSP firmware off/on (proprietary driver only)
   xgm-egpu desktop [status|pin|unpin]
-                               pin kwin to the laptop's own GPU (KWIN_DRM_DEVICES in
-                               ~/.config/plasma-workspace/env). kwin otherwise probes
-                               every GPU with Vulkan and keeps it open, so 'on' had to
-                               kill it — 2026-09-09 21:31: eGPU up, desktop gone. Pinned,
-                               the session survives 'on'. Takes effect at next login.
-  xgm-egpu logs [N|show|dir]   the persistent per-run logs: every on/off/bind/
-                               reload-driver writes its full output to
-                               /var/log/xgm-egpu/<time>-<cmd>.log, and the watch
-                               saves the kernel log beside it. Survives reboots.
-  xgm-egpu drm [status|nofbdev|nokms|safe|default]
-                               set what the LOADED nvidia_drm does to the eGPU when
-                               it appears. It attaches by itself, with the parameters
-                               it booted with — modprobe cannot change a resident
-                               module, which is why every earlier --no-fbdev /
-                               --no-kms / --modeset-safe run silently ran the default.
-                                 nokms    modeset=0          render node only, and
-                                                             'on --no-kms' seals
-                                                             /dev/nvidia-modeset so
-                                                             no client can bring the
-                                                             display engine up.
-                                                             PRIME offload works.
-                                                             TRY THIS
-                                 nofbdev  modeset=1 fbdev=0  died 2026-09-09 19:30,
-                                                             identical. Ruled out
-                                 safe     nofbdev + nvidia_modeset HDMI-FRL/VRR off
-                               Writes /etc/modprobe.d/nvidia-xgm-drm.conf and rebuilds
-                               the initramfs; reload-driver or reboot applies it.
-  xgm-egpu capture [arm|read]  'on' and 'bind' ARM this automatically before the
-                               risky step (--no-capture to skip): the next hard
-                               hang becomes a panic with a backtrace in EFI pstore,
-                               plus netconsole to the Pi, best-effort. READ after
-                               a hang+reboot to see the kernel's last words.
-  xgm-egpu reload-driver       unload+reload the NVIDIA stack so a new modprobe.d
-                               value takes effect NOW, no reboot, no initramfs.
-                               Refuses if anything holds the GPU. eGPU must be off.
-  xgm-egpu on                  release the internal dGPU, then activate
-  xgm-egpu bind <target>       bind ONE layer of the driver stack to an already
-                               enumerated eGPU (after 'on --no-reload') and watch
-                               whether the link dies, logging who opens the
-                               display nodes. Established 2026-09-09:
-                                 core         nvidia only            SURVIVES
-                                 modeset      + nvidia_modeset only  ?  <- run this
-                                 drm-nokms    + nvidia_drm modeset=0 ?
-                                 drm-nofbdev  + nvidia_drm fbdev=0   ?
-                                 drm          + nvidia_drm (full)    DIES ~10s
-                                 audio        snd_hda_intel on HDMI  ?
-                                 all          everything
-  xgm-egpu watch [SECS] [FILE] sample power state every 0.5s after 'on' —
-                               shows exactly what changes when a link dies
-  xgm-egpu off                 deactivate and restore the internal dGPU
-  xgm-egpu link [BDF]          PCIe link speed/width and error counters
-  xgm-egpu link-speed <1-4>    pin the root port's target PCIe generation and
-                               retrain — the link on this machine is stable at a
-                               steady speed but fails when changing speed
-  xgm-egpu ec                  decode the EC's XGM state block (connect/lock/AC)
-  xgm-egpu install-rules       persist the runtime-PM pinning via udev +
-                               modprobe.d, so the eGPU survives reboots
+                               keep kwin off the NVIDIA GPU so the session survives 'on'
+  xgm-egpu reload-driver       unload + reload the stack so new settings load now
+                               (eGPU off; --force-kill closes what holds the GPU)
 
-Options:
-  --force-kill    kill processes holding /dev/nvidia* instead of refusing
-  --no-capture    do not arm the hang capture (pstore, panic-on-hang, netconsole)
-                  before activating. It is armed by default on every 'on'/'bind'.
-  --no-relaunch   do not bring back the processes --force-kill closed. By default
-                  each victim's command line, cwd and session variables are kept
-                  and it is started again, as you, into your still-running session
-                  when the run ends. A killed compositor cannot be restored (the
-                  session is over — 'desktop pin' prevents that case); the display
-                  manager then shows a login screen.
-  --keep-desktop  from a TTY, 'on'/'off' stop the display manager before the release
-                  and start it again when the run ends, so you land on a login
-                  screen either way. This flag skips that. --restart-desktop
-                  insists on it (refused from inside a desktop session, where it
-                  would kill the terminal running this).
-  --freeze-link   after the bind: lock the GPU at its max clocks (it never leaves
-                  P0, so the idle-time PCIe generation downshift never fires) and
-                  set Hardware Autonomous Speed/Width Disable on both ends of the
-                  link. Pair with 'pcie gen3'. The aim is a link nothing ever asks
-                  to change speed — the state in which an unbound card holds Gen3
-                  x8 indefinitely. Costs ~30 W idle on the dock. Applies to 'on'.
-  --audio         let snd_hda_intel bind the eGPU's HDMI-audio function (01:00.1).
-                  OFF by default since 2026-09-09 21:30: every recorded death has
-                  the HDA codec active at the instant of Link Down (ELD reads,
-                  "GPU sound probed, but not operational") and the GSP RPC in
-                  flight is always DFP_SET_ELD_AUDIO_CAPS; both survivors had no
-                  driver on that function and the internal 1650 has none. 'on'
-                  enumerates with autoprobe off, fences 01:00.1 with a
-                  driver_override, binds nvidia to 01:00.0 by hand. 'bind audio'
-                  binds it later on purpose.
-  --no-seal       with --no-kms, do NOT bind-mount /dev/null over /dev/nvidia-modeset.
-                  Sealed by default: kwin allocates the display engine 1.5 s after a
-                  GPU appears and every PRIME client does at start (measured), and
-                  that bring-up is what dies. Sealed, every NVKMS ioctl fails and
-                  clients carry on (tested); 'off' unseals.
-  --release LEVEL how much to tear down first (default: minimal)
-                    minimal  stop nvidia-powerd/persistenced only; the driver
-                             stays bound so the ACPI eject is a real one, which
-                             is what the AML's SUMA/WAT1 loop polls for
-                    unload   also unbind the driver and rmmod the stack
-                    remove   also remove the device from the PCI tree
-                  On this machine 'minimal' is the only level that has ever
-                  survived; 'remove' fails fastest. See the RELEASE_LEVEL comment.
-  --no-reload     stop after the eGPU enumerates, without binding the NVIDIA
-                  driver — separates an enumeration fault from a driver fault.
-                  Disables PCI driver autoprobe for the duration, otherwise the
-                  resident module binds on its own and the flag is meaningless.
-  --ignore-rtd3   activate even though the loaded driver has RTD3 armed. Only
-                  for reproducing the 10-second link death on purpose.
-  --survival N    after the bind, watch the link for N seconds and report whether
-                  it survived (default 15; the old failure was at 10). 0 to skip.
-  --no-kms        require the LOADED nvidia_drm to have modeset=0 ('drm nokms' +
-                  reload-driver; 'on' refuses otherwise). A render node and nothing
-                  else: no KMS, no fbdev, no display-engine bring-up. PRIME offload
-                  keeps working through a system-memory path (ioctl-traced
-                  2026-09-09). Applies to 'on'.
-  --cap-power     after the core binds and before the display engine loads, lock
-                  the GPU to its minimum clocks and lowest power limit. Tests the
-                  leading hypothesis: the display-init current step trips the
-                  board's over-current hiccup (osy Diary documents the GPU on two
-                  parallel supplies with FET-cutting OCP). If the link then
-                  survives, cap power at boot and it works. Applies to 'on'.
-  --modeset-safe  load nvidia_modeset with disable_hdmi_frl=1
-                  disable_vrr_memclk_switch=1 conceal_vrr_caps=1. The RPCs in
-                  flight at every death are HDMI-audio (SET_ELD_AUDIO_CAPS,
-                  SET_HDMI_AUDIO_MUTESTREAM, CTRL_HDMI) and VRR setup on the
-                  3060's physical outputs — the 1650 Mobile has no outputs and
-                  survives the same init. Requires 'drm safe' applied first;
-                  'on' verifies the loaded values. 'on', 'bind drm'.
-  --mask-pciehp   clear the root port's hotplug interrupt enables for the watch.
-                  Every death has Xid 79 raised from irq/NN-pciehp: if the link
-                  drop is momentary, this stops pciehp tearing the device down
-                  and the eGPU survives it. Restored on exit. 'on' and 'bind'.
-  --no-fbdev      require the LOADED nvidia_drm to have fbdev=0 ('drm nofbdev' +
-                  reload-driver). Tested for real 2026-09-09 19:30 (fbdev=N
-                  verified in the loaded module, no fb1 line): died at 8.5s,
-                  identical signature. Ruled out. Kept for the record.
-  --no-drm-poll   set drm_kms_helper.poll=0 before nvidia_drm loads. RULED OUT
-                  2026-09-09 by source: nvidia-drm calls drm_kms_helper_poll_disable
-                  itself right after init, and marks every non-VGA connector
-                  POLL_HPD, so the 10s DRM poll never runs for it. Kept only so
-                  the record shows it was tested in code, not on hardware.
-  --link-gen N    pin the root port's target PCIe generation (1-4) before the
-                  switch and again after enumeration. On this machine the link
-                  cannot complete training above Gen1: '--link-gen 1' is the
-                  working mitigation (~2 GB/s, but stable).
-  --aspm-performance
-                  disable ASPM so the link holds its top speed. Sounds right,
-                  measured worse here: pinned at Gen3 it died in ~18s at idle,
-                  where Gen1 ran 15 minutes. Off by default.
-  --dry-run       do everything except the sysfs write
-  --timeout N     seconds to wait on the write before declaring a wedge (default 180)
-  --root-port BDF override the detected PCIe root port (e.g. 0000:00:01.1)
+Research and recovery
+  xgm-egpu on                  activate with the options below ('go' uses the proven set)
+  xgm-egpu bind <core|modeset|drm-nokms|drm-nofbdev|drm|audio|all>
+                               bind one driver layer to an enumerated eGPU and watch
+                               (after 'on --no-reload'; a resident nvidia_drm refuses)
+  xgm-egpu watch [SECS] [FILE] sample the power state every 0.5 s
+  xgm-egpu capture [arm|read]  armed by on/bind: a hang becomes a panic with a
+                               backtrace in EFI pstore; 'read' after the reboot
+  xgm-egpu link-speed <1-4>    pin the root port's target generation and retrain
+  xgm-egpu ec [--dump]         decode the EC's XGM state block (connect/lock/AC)
+
+Options for 'on' ('go' sets the ones marked *)
+  --no-kms *         require nvidia_drm modeset=0 loaded; seals /dev/nvidia-modeset
+  --freeze-link *    lock the clocks at max (the GPU stays in P0) and set the PCIe
+                     autonomous-speed-disable bits on both ends, so nothing ever
+                     asks the link to retrain — the retrain is what killed every run
+  --force-kill *     close what holds /dev/nvidia*; it is started again afterwards
+  --no-seal          with --no-kms, leave /dev/nvidia-modeset open (reproduces the
+                     client-triggered death)
+  --no-relaunch      do not start again what --force-kill closed
+  --keep-desktop     from a TTY, do not stop/start the display manager around the run
+  --restart-desktop  insist on it (refused from inside a desktop session)
+  --no-capture       do not arm the hang capture
+  --no-fbdev         require nvidia_drm fbdev=0 loaded ('drm nofbdev')
+  --modeset-safe     require the 'drm safe' set loaded
+  --link-gen N       pin the root port's target PCIe generation (1-4); 2 needs no
+                     equalization and is the fallback if the freeze does not hold
+  --cap-power        lock the GPU to minimum clocks and power after the bind
+  --mask-pciehp      mask the root port's hotplug interrupts during the watch
+  --no-drm-poll      set drm_kms_helper.poll=0 before nvidia_drm loads
+  --audio            let snd_hda_intel bind the eGPU's HDMI-audio function
+  --aspm-performance set the ASPM policy to performance (measured worse here)
+  --no-reload        enumerate without binding the NVIDIA driver (autoprobe off)
+  --ignore-rtd3      activate even with RTD3 armed
+  --release LEVEL    minimal (default, the only level that survives here) | unload | remove
+  --survival N       watch the link N seconds after the bind (default 15; 0 skips)
+  --timeout N        seconds before treating the EC write as wedged (default 180)
+  --root-port BDF    override the detected PCIe root port
   --internal-dgpu BDF
-                  override the detected internal dGPU
+                     override the detected internal dGPU
+  --dry-run          everything except the sysfs write
 
-Topology is autodetected from sysfs; you should not normally need to tell this
-script anything about your machine. Persist overrides in /etc/xgm-egpu.conf:
+Topology is autodetected from sysfs. Overrides, and DOCK= for the hardware
+report, live in /etc/xgm-egpu.conf (ROOT_PORT=, INTERNAL_DGPU=, INTERNAL_DEVID=).
 
-    ROOT_PORT=0000:00:01.1
-    INTERNAL_DGPU=0000:01:00.0
-    INTERNAL_DEVID=0x1f9d
-
-Hosts with no internal dGPU (ROG Ally) are supported: there is nothing sharing
-the XGM's lanes, so activation triggers no eject and the release path is a no-op.
-
-A timeout is not a rollback. The kernel commits to the EC (armoury_set_devstate)
-BEFORE it calls armoury_pci_rescan(), and it is the rescan that blocks — on a lock
-the ACPI eject already holds. So a write that never returns has very likely taken
-effect anyway, and egpu_enable lives in the EC across reboots and power cycles.
-Never read a timeout as "nothing happened".
-
-'on' refuses to write unless every handle on the internal GPU is released.
-That refusal is the point: writing with a holder present wedges the machine.
+A timeout on the write is NOT a rollback: the EC has usually already committed,
+and egpu_enable is persistent EC state that survives a power-off. Read
+docs/RECOVERY.md before the first 'on'.
 EOF
 }
 
@@ -3142,7 +3057,7 @@ CMD=${1:-status}; shift || true
 if [[ $CMD == --* ]]; then
     die "'$CMD' is an option, not a command. Options go AFTER the command:
      $0 on $CMD ${*:-}
-     (commands: go status detect preflight gsp drm pcie desktop logs reload-driver on off bind watch link link-speed ec install-rules)"
+     (commands: go off status report detect preflight gsp drm pcie desktop logs reload-driver on off bind watch link link-speed ec install-rules)"
 fi
 # Options are accepted ANYWHERE on the line. The old loop stopped at the first
 # positional word, so `desktop pin --dry-run` silently ran for real (2026-09-09).
@@ -3206,6 +3121,7 @@ case "$CMD" in
     drm)        cmd_drm "${1:-status}" ;;
     pcie)       cmd_pcie "${1:-status}" ;;
     logs)       cmd_logs "${1:-list}" ;;
+    report)     cmd_report ;;
     desktop)    cmd_desktop "${1:-status}" ;;
     capture)    cmd_capture "${1:-arm}" ;;
     bind)       cmd_bind "${1:-core}" ;;

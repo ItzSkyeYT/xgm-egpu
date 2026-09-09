@@ -521,6 +521,20 @@ assert_eq  "nvidia_drm not loaded -> not counted as missing" "$(go_missing_setti
 rm -f "$T/params"
 assert_eq  "driver not loaded -> nothing known missing"  "$(go_missing_settings | tr '\n' ' ')" ""
 
+echo "== report =="
+mkdir -p "$T/dmi"; printf 'ROG Flow X13 GV301QH_GV301QH\n' > "$T/dmi/product_name"; printf 'GV301QH\n' > "$T/dmi/board_name"; printf 'GV301QH.415\n' > "$T/dmi/bios_version"; printf 'ASUSTeK\n' > "$T/dmi/sys_vendor"
+printf 'PRETTY_NAME="CachyOS"\n' > "$T/os-release"
+DMI=$T/dmi; OS_RELEASE=$T/os-release
+out=$(sub cmd_report 2>&1); rc=$?
+assert_eq  "report -> rc 0"                              "$rc" "0"
+assert_has "row starts with the host, underscore suffix dropped" "$out" '^\| ROG Flow X13 GV301QH \(GV301QH, BIOS GV301QH.415\) \|'
+assert_has "row carries distro and kernel"               "$out" "CachyOS, $(uname -r)"
+assert_has "result taken from the latest run log"        "$out" "\| dies \(9s\) \|"
+DOCK="osy Lite v0.6.1"
+out=$(sub cmd_report 2>&1)
+assert_has "DOCK= from the config fills the dock column" "$out" "\| osy Lite v0.6.1 \|"
+unset DOCK
+
 echo "== library mode =="
 assert_rc "sourcing in library mode does not dispatch" 0 bash -c 'XGM_LIBRARY_MODE=1 source bin/xgm-egpu; declare -F cmd_on >/dev/null'
 assert_rc "script still parses"               0 bash -n bin/xgm-egpu
