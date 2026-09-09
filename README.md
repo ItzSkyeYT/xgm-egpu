@@ -19,6 +19,18 @@ card runs at PCIe Gen3 x8 with the driver bound, zero link errors,
 HDMI (2026-09-09 23:30). Games render on the eGPU and display on either
 screen. `off` must run from a TTY in that mode, because kwin holds the card.
 
+### What works, on what
+
+| Host | Dock | GPU | Result | Modes that work | What it needed |
+|---|---|---|---|---|---|
+| ROG Flow X13 GV301QH (2021, AMD 5900HS) | DIY osy Lite v0.6.1, ALC04-S40EIA-00 instead of I-PEX CABLINE-VS | RTX 3060 (GA104, 10de:2487) | **works**, PCIe Gen3 x8, zero AER | render offload to the laptop screen (`go`); full display path with a monitor on the eGPU's HDMI (`go --display` + `desktop pin --outputs`) | `install-rules` (RTD3 off), `drm nokms` or `drm nofbdev`, `pcie gen3`, `--freeze-link`; ~40 W idle |
+| ROG Ally RC71L | DIY osy | RTX 3080 | in progress | | `pci=realloc=on pci=hpmmiosize=128M` on the kernel line for the BAR window |
+| *your machine* | | | | | `xgm-egpu report` prints a row - see [HARDWARE.md](HARDWARE.md) |
+
+Full details, dock revisions and the per-model notes from the osy community
+are in [HARDWARE.md](HARDWARE.md); a row there, working or not, is the most
+useful thing you can add.
+
 The whole hunt, cause included, is in [FINDINGS.md](FINDINGS.md). The one-line
 version: the NVIDIA driver retrains the PCIe link about ten seconds after
 init, when the GPU leaves P0, and a DIY link cannot complete a retrain at
