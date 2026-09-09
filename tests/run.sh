@@ -535,6 +535,28 @@ out=$(sub cmd_report 2>&1)
 assert_has "DOCK= from the config fills the dock column" "$out" "\| osy Lite v0.6.1 \|"
 unset DOCK
 
+echo "== in_graphical_session walks the ancestors for a display variable =="
+# the negative case needs a process tree with NO graphical ancestor: a fresh PID namespace gives one
+if out=$(unshare -Urpf --mount-proc env -i PATH="$PATH" bash -c 'XGM_LIBRARY_MODE=1 source bin/xgm-egpu; in_graphical_session && echo yes || echo no' 2>/dev/null) && [[ -n $out ]]; then
+    assert_eq  "no DISPLAY anywhere above -> not graphical"  "$out" "no"
+else
+    pass "no DISPLAY anywhere above -> not graphical (skipped: no user namespaces here)"
+fi
+out=$(env -i PATH="$PATH" WAYLAND_DISPLAY=wayland-0 bash -c 'XGM_LIBRARY_MODE=1 source bin/xgm-egpu; bash -c "XGM_LIBRARY_MODE=1 source bin/xgm-egpu; in_graphical_session && echo yes || echo no"')
+assert_eq  "WAYLAND_DISPLAY in a grandparent -> graphical" "$out" "yes"
+echo "== kill_nv_holders refuses a compositor inside a session =="
+in_graphical_session() { return 0; }
+mkdir -p "$T/fakeproc"
+out=$(sub kill_nv_holders "$$ bash" 2>&1); rc=$?   # our own pid: comm is bash, not a compositor -> proceeds (dry-run kills nothing)
+assert_eq  "a non-compositor holder is allowed"          "$rc" "0"
+kp=$(pgrep -x kwin_wayland | head -1)
+if [[ -n $kp ]]; then
+    out=$(DRY_RUN=1 sub kill_nv_holders "$kp kwin_wayland" 2>&1); rc=$?
+    assert_eq  "a compositor holder -> refused"            "$rc" "1"
+    assert_has "...naming desktop pin"                     "$out" "desktop pin"
+fi
+unset -f in_graphical_session
+
 echo "== library mode =="
 assert_rc "sourcing in library mode does not dispatch" 0 bash -c 'XGM_LIBRARY_MODE=1 source bin/xgm-egpu; declare -F cmd_on >/dev/null'
 assert_rc "script still parses"               0 bash -n bin/xgm-egpu

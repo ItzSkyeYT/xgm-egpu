@@ -205,10 +205,22 @@ active_display_manager() {
     done
     return 1
 }
+# Are we being run from inside a graphical session? Decided by the ANCESTOR
+# processes: sudo from a terminal window has a shell above it whose
+# environment carries WAYLAND_DISPLAY or DISPLAY; a console login or ssh does
+# not. The audit session id was tried first (2026-09-09 22:38) and is unset
+# under sddm-started sessions, so 'off' from the desktop believed it was on a
+# TTY, stopped sddm, and logged the user out.
 in_graphical_session() {
-    local sid t; sid=$(cat /proc/self/sessionid 2>/dev/null) || return 1
-    t=$(loginctl show-session "$sid" -p Type --value 2>/dev/null) || return 1
-    [[ $t == wayland || $t == x11 ]]
+    local pid=$$ ppid env
+    while [[ $pid -gt 1 ]]; do
+        env=$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null)
+        [[ $env == *$'\n'WAYLAND_DISPLAY=* || $env == $'WAYLAND_DISPLAY='* || $env == *$'\n'DISPLAY=* || $env == $'DISPLAY='* ]] && return 0
+        ppid=$(awk '/^PPid:/{print $2}' "/proc/$pid/status" 2>/dev/null) || return 1
+        [[ -n $ppid && $ppid != "$pid" ]] || return 1
+        pid=$ppid
+    done
+    return 1
 }
 dm_restart() {
     [[ -n $DM_STOPPED ]] || return 0
@@ -478,6 +490,10 @@ cmd_report() {
 run_log_start() {
     local cmd=$1 argv=$2
     [[ $EUID -eq 0 ]] || return 0
+    # A terminal that disappears mid-run (2026-09-09 22:38: the desktop session
+    # ended under the tool) must not kill the run: ignore HUP before tee is
+    # spawned so it inherits that, and PIPE so a dead tee only costs output.
+    trap '' HUP PIPE
     mkdir -p "$LOG_DIR" 2>/dev/null || return 0
     RUN_LOG="$LOG_DIR/$(date +%Y%m%d-%H%M%S)-$cmd.log"
     {
@@ -843,7 +859,9 @@ seal_nvkms_door() {
 unseal_nvkms_door() {
     nvkms_door_sealed || return 0
     [[ $DRY_RUN -eq 1 ]] && { info "  would: umount $NVKMS_NODE"; return 0; }
-    if umount "$NVKMS_NODE" 2>/dev/null; then info "  unsealed $NVKMS_NODE"; else warn "  could not umount $NVKMS_NODE"; return 1; fi
+    if umount "$NVKMS_NODE" 2>/dev/null; then info "  unsealed $NVKMS_NODE"
+    elif umount -l "$NVKMS_NODE" 2>/dev/null; then info "  unsealed $NVKMS_NODE (lazily: something still had it open; new opens get the real node)"
+    else warn "  could not umount $NVKMS_NODE"; return 1; fi
 }
 
 # The option flags say what the DRM layer must be; refuse unless the loaded
@@ -2176,7 +2194,18 @@ relaunch_killed() {
 # `reload-driver --force-kill`. Each victim is remembered so relaunch_killed
 # can bring it back when the run ends.
 kill_nv_holders() {
-    local h=$1 pid
+    local h=$1 pid comm
+    # Killing the compositor ends the session; from inside it that is a logout
+    # nobody asked for (2026-09-09, twice). Refuse and name the ways out.
+    if in_graphical_session; then
+        while read -r pid _; do
+            [[ -n $pid ]] || continue
+            comm=$(cat "/proc/$pid/comm" 2>/dev/null)
+            [[ $comm =~ ^($COMPOSITORS)$ ]] && die "$comm ($pid) holds the GPU and it is your desktop session: killing it logs you out.
+     Either:   xgm-egpu desktop pin      then log out and back in (kwin never opens NVIDIA again), or
+               run this from a TTY (Ctrl+Alt+F3): the display manager is stopped and started again for you."
+        done <<<"$h"
+    fi
     add_exit_hook relaunch_killed
     while read -r pid _; do
         [[ -n $pid ]] || continue
