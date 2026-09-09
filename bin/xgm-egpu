@@ -69,6 +69,8 @@ NV_VERSION=${XGM_NV_VERSION:-/proc/driver/nvidia/version}
 GSP_CONF=${XGM_GSP_CONF:-$ETC_MODPROBE_D/nvidia-xgm-nogsp.conf}
 DRM_CONF=${XGM_DRM_CONF:-$ETC_MODPROBE_D/nvidia-xgm-drm.conf}
 NVKMS_NODE=${XGM_NVKMS_NODE:-/dev/nvidia-modeset}
+LOG_DIR=${XGM_LOG_DIR:-/var/log/xgm-egpu}        # persistent per-run logs (root fs, survives reboots)
+RUN_LOG=                                          # set by run_log_start for state-changing commands
 NETCONSOLE_TARGET=${XGM_NETCONSOLE_TARGET:-192.168.1.7}   # the Pi
 BUGREPORT_DIR=${XGM_BUGREPORT_DIR:-/var/tmp}
 
@@ -154,7 +156,70 @@ fi
 # Mirror everything into the journal. This machine has persistent journald, so if
 # an attempt takes the kernel down with it, 'journalctl -b -1 -t xgm-egpu' still
 # says how far we got — terminal scrollback does not survive a forced power-off.
-_log() { command -v logger >/dev/null 2>&1 && logger -t xgm-egpu -p "user.$1" -- "$2"; }
+_log() { [[ ${XGM_LIBRARY_MODE:-0} -eq 1 ]] && return 0; command -v logger >/dev/null 2>&1 && logger -t xgm-egpu -p "user.$1" -- "$2"; }
+
+# ---------------------------------------------------------------- persistent run logs
+#
+# Terminal scrollback dies with a power-cycle and /tmp is tmpfs. Every
+# state-changing command mirrors its complete output (colour codes stripped)
+# to $LOG_DIR/<timestamp>-<command>.log, and the survival watch drops the
+# kernel log beside it. 'xgm-egpu logs' lists them.
+run_log_start() {
+    local cmd=$1 argv=$2
+    [[ $EUID -eq 0 ]] || return 0
+    mkdir -p "$LOG_DIR" 2>/dev/null || return 0
+    RUN_LOG="$LOG_DIR/$(date +%Y%m%d-%H%M%S)-$cmd.log"
+    {
+        printf '# xgm-egpu run log  %s\n' "$(date -Is)"
+        printf '# command: xgm-egpu %s\n' "$argv"
+        printf '# kernel: %s   driver: %s\n' "$(uname -r)" "$(grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' "$NV_VERSION" 2>/dev/null | head -1)"
+        printf '# drm layer: %s   egpu_enable: %s   door: %s\n' "$(drm_layer_mode 2>/dev/null)" "$(read_attr "$ATTR_ENABLE" 2>/dev/null)" "$(nvkms_door_sealed && echo sealed || echo open)"
+    } > "$RUN_LOG" 2>/dev/null || { RUN_LOG=; return 0; }
+    # shellcheck disable=SC2312
+    exec > >(tee >(sed -u $'s/\e\[[0-9;]*m//g' >> "$RUN_LOG")) 2>&1
+    info "run log: $RUN_LOG"
+}
+# Snapshot the kernel log next to the run log (death: 600 lines, survival: 150).
+save_kernel_log() {
+    local lines=${1:-600} f
+    [[ -n $RUN_LOG ]] || return 0
+    f=${RUN_LOG%.log}-kernel.log
+    { journalctl -k -b --no-pager 2>/dev/null || dmesg 2>/dev/null; } | tail -n "$lines" > "$f" 2>/dev/null && sync
+    [[ -s $f ]] && info "kernel log saved: $f"
+    [[ -r /var/tmp/xgm-last-run.txt ]] && cp -f /var/tmp/xgm-last-run.txt "${RUN_LOG%.log}-watch.txt" 2>/dev/null
+    return 0
+}
+cmd_logs() {
+    local sub=${1:-list} f n
+    case $sub in
+      dir)  printf '%s\n' "$LOG_DIR" ;;
+      show)
+        # timestamps lead the names, so lexical order is chronological
+        local latest=''
+        for f in "$LOG_DIR"/*.log; do [[ -e $f && $f != *-kernel.log ]] && latest=$f; done
+        f=$latest
+        [[ -n $f ]] || die "no run logs in $LOG_DIR yet"
+        cat "$f"
+        [[ -s ${f%.log}-kernel.log ]] && printf '\n# kernel log: %s (last 40 lines)\n' "${f%.log}-kernel.log" && tail -40 "${f%.log}-kernel.log"
+        ;;
+      list|[0-9]*)
+        n=${sub//[!0-9]/}; n=${n:-10}
+        [[ -d $LOG_DIR ]] || die "no run logs in $LOG_DIR yet (created by the first on/off/bind/reload-driver)"
+        printf '%-28s %-10s %s\n' "log" "result" "command"
+        local files=() i
+        for f in "$LOG_DIR"/*.log; do [[ -e $f && $f != *-kernel.log ]] && files+=("$f"); done
+        for (( i=${#files[@]}-1; i>=0 && n>0; i--, n-- )); do
+            f=${files[i]}
+            local res=refused
+            grep -q 'LINK SURVIVED' "$f" && res=SURVIVED
+            grep -qE 'link DIED|LINK DIED' "$f" && res=DIED
+            printf '%-28s %-10s %s\n' "$(basename "$f")" "$res" "$(grep -m1 '^# command:' "$f" | cut -d: -f2-)"
+        done
+        printf '\n%s\n' "show the latest:  $0 logs show     crash dumps: ls -t $BUGREPORT_DIR/xgm-bugreport-*"
+        ;;
+      *) die "usage: $0 logs [list|N|show|dir]" ;;
+    esac
+}
 
 info() { printf '%s==>%s %s\n' "$C_B" "$C_0" "$*";     _log info  "$*"; }
 ok()   { printf '%s ok %s %s\n' "$C_G" "$C_0" "$*";    _log notice "$*"; }
@@ -895,10 +960,12 @@ cmd_bind() {
     done
     if (( alive )); then
         ok "LINK SURVIVED ${SURVIVAL_SECS}s with '$what' bound."
+        save_kernel_log 150
         cmd_link "$bdf"
     else
         warn "link DIED at ~${t}s with '$what' bound. That layer is implicated."
         dmesg 2>/dev/null | grep -iE 'Link Down|Xid|NVRM' | tail -6 | sed 's/^/    /' >&2
+        save_kernel_log 600
         collect_gpu_crash_dump || true
         death_recovery_hint
         return 1
@@ -1126,6 +1193,7 @@ death_recovery_hint() {
     warn "    2. sudo xgm-egpu off"
     warn "If that does not bring the desktop back, rebooting is fine — the crash"
     warn "dump above is already on disk and survives it."
+    [[ -n $RUN_LOG ]] && warn "This whole run, plus the kernel log, is in: $RUN_LOG  (xgm-egpu logs)"
 }
 
 # ---------------------------------------------------------------- GSP firmware
@@ -2276,9 +2344,11 @@ $(printf '     %s\n' "$d")"
             echo "end t=${t} alive=${alive}" >> "$crumb"; sync
             if (( alive )); then
                 ok "LINK SURVIVED ${SURVIVAL_SECS}s past driver init."
+                save_kernel_log 150
             else
                 warn "link DIED at ~${t}s. dmesg tail:"
                 dmesg 2>/dev/null | grep -iE 'Link Down|Xid|nvrm' | tail -5 | sed 's/^/    /' >&2
+                save_kernel_log 600
                 collect_gpu_crash_dump || true
                 death_recovery_hint
                 warn ""
@@ -2356,6 +2426,10 @@ xgm-egpu — XG Mobile eGPU control for the ROG Flow X13 (GV301QH)
                                the legacy CPU-side RM. Proprietary driver only
                                (this machine qualifies). 'off' then reload-driver
                                or reboot, then 'on'.
+  xgm-egpu logs [N|show|dir]   the persistent per-run logs: every on/off/bind/
+                               reload-driver writes its full output to
+                               /var/log/xgm-egpu/<time>-<cmd>.log, and the watch
+                               saves the kernel log beside it. Survives reboots.
   xgm-egpu drm [status|nofbdev|nokms|safe|default]
                                set what the LOADED nvidia_drm does to the eGPU when
                                it appears. It attaches by itself, with the parameters
@@ -2500,13 +2574,14 @@ EOF
 # without dispatching, so tests/ can exercise them against fixtures.
 [[ ${XGM_LIBRARY_MODE:-0} -eq 1 ]] && return 0 2>/dev/null
 
+XGM_ARGV="$*"
 CMD=${1:-status}; shift || true
 # An option in the command slot is the #1 way to get the usage dump by mistake
 # (`xgm-egpu --cap-power --force-kill` — no verb). Say what happened instead.
 if [[ $CMD == --* ]]; then
     die "'$CMD' is an option, not a command. Options go AFTER the command:
      $0 on $CMD ${*:-}
-     (commands: status detect preflight gsp drm reload-driver on off bind watch link link-speed ec install-rules)"
+     (commands: status detect preflight gsp drm logs reload-driver on off bind watch link link-speed ec install-rules)"
 fi
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -2547,11 +2622,16 @@ case "$CMD" in
 esac
 
 case "$CMD" in
+    on|off|bind|reload-driver|link-speed|install-rules|gsp|drm|capture) run_log_start "$CMD" "$XGM_ARGV" ;;
+esac
+
+case "$CMD" in
     status)     cmd_status ;;
     detect)     cmd_detect ;;
     preflight)  cmd_preflight ;;
     gsp)        cmd_gsp "${1:-status}" ;;
     drm)        cmd_drm "${1:-status}" ;;
+    logs)       cmd_logs "${1:-list}" ;;
     capture)    cmd_capture "${1:-arm}" ;;
     bind)       cmd_bind "${1:-core}" ;;
     reload-driver) cmd_reload_driver ;;

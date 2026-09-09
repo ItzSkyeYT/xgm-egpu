@@ -88,6 +88,9 @@ xgm-egpu gsp [status|off|on] disable NVIDIA GSP firmware (proprietary driver onl
 xgm-egpu drm [status|nofbdev|nokms|safe|default]
                              set what the LOADED nvidia_drm does to the eGPU when it
                              appears (persisted via modprobe.d + initramfs; `on` verifies)
+xgm-egpu logs [N|show|dir]   persistent per-run logs in /var/log/xgm-egpu (full
+                             output of every on/off/bind/reload-driver, plus the
+                             kernel log saved by the watch); survives reboots
 xgm-egpu capture [arm|read]  armed automatically by `on`/`bind`; `read` after a
                              hang+reboot shows the kernel's last words from pstore
 xgm-egpu bind <core|modeset|drm-nokms|drm-nofbdev|drm|audio|all>

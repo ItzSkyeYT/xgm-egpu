@@ -24,7 +24,7 @@ load() {
            XGM_MKINITCPIO_CONF=$T/mkinitcpio.conf XGM_MKINITCPIO_D=$T/mkinitcpio.conf.d \
            XGM_DISTRO_MODPROBE=$T/usrlib/nvidia.conf XGM_ETC_MODPROBE_D=$T/etc \
            XGM_AUTOPROBE=$T/drivers_autoprobe XGM_STATE_DIR=$T/state \
-           XGM_SYS_MODULE=$T/module XGM_SYSFS_PCI=$T/pci XGM_DRM_POLL=$T/drm_poll XGM_PSTORE=$T/pstore XGM_EFI_PSTORE_DISABLE=$T/efi_pstore_disable XGM_BUGREPORT_DIR=$T/bugreports XGM_NV_VERSION=$T/nvver XGM_GSP_CONF=$T/etc/nvidia-xgm-nogsp.conf XGM_DRM_CONF=$T/etc/nvidia-xgm-drm.conf XGM_NVKMS_NODE=$T/nvidia-modeset
+           XGM_SYS_MODULE=$T/module XGM_SYSFS_PCI=$T/pci XGM_DRM_POLL=$T/drm_poll XGM_PSTORE=$T/pstore XGM_EFI_PSTORE_DISABLE=$T/efi_pstore_disable XGM_BUGREPORT_DIR=$T/bugreports XGM_NV_VERSION=$T/nvver XGM_GSP_CONF=$T/etc/nvidia-xgm-nogsp.conf XGM_DRM_CONF=$T/etc/nvidia-xgm-drm.conf XGM_NVKMS_NODE=$T/nvidia-modeset XGM_LOG_DIR=$T/log
     mkdir -p "$T/gpus" "$T/mkinitcpio.conf.d" "$T/usrlib" "$T/etc" "$T/module" "$T/pci"
     # shellcheck disable=SC1091
     XGM_LIBRARY_MODE=1 source bin/xgm-egpu
@@ -379,6 +379,24 @@ mkdir -p "$T/module/nvidia_drm/parameters"; printf 'N\n' > "$T/module/nvidia_drm
 out=$(preflight_drm_layer 2>&1)
 assert_has "--no-seal warns that a client can open the door" "$out" "no-seal"
 NO_KMS=0; SEAL_NVKMS=1; rm -rf "$T/module/nvidia_drm"
+
+echo "== persistent run logs =="
+out=$(sub cmd_logs 2>&1); rc=$?
+assert_eq  "logs with no directory -> rc 1"              "$rc" "1"
+mkdir -p "$T/log"
+printf '# command: xgm-egpu on --no-kms\nblah\n ok  LINK SURVIVED 15s past driver init.\n' > "$T/log/20260909-200000-on.log"
+sleep 0.01
+printf '# command: xgm-egpu on --no-fbdev\n  !  link DIED at ~9s. dmesg tail:\n' > "$T/log/20260909-200100-on.log"
+printf 'kernel stuff\n' > "$T/log/20260909-200100-on-kernel.log"
+out=$(sub cmd_logs 2>&1)
+assert_has "list marks the survived run"                 "$out" "20260909-200000-on.log +SURVIVED"
+assert_has "list marks the dead run"                     "$out" "20260909-200100-on.log +DIED"
+assert_not "kernel logs are not listed as runs"          "$out" "kernel.log +(SURVIVED|DIED|refused)"
+out=$(sub cmd_logs show 2>&1)
+assert_has "show prints the latest run"                  "$out" "no-fbdev"
+assert_has "show appends its kernel log"                 "$out" "kernel stuff"
+assert_eq  "dir prints the directory"                    "$(sub cmd_logs dir)" "$T/log"
+assert_rc  "run_log_start is a no-op without root"       0 run_log_start on "on --no-kms"
 
 echo "== library mode =="
 assert_rc "sourcing in library mode does not dispatch" 0 bash -c 'XGM_LIBRARY_MODE=1 source bin/xgm-egpu; declare -F cmd_on >/dev/null'
