@@ -23,7 +23,7 @@ load() {
            XGM_MKINITCPIO_CONF=$T/mkinitcpio.conf XGM_MKINITCPIO_D=$T/mkinitcpio.conf.d \
            XGM_DISTRO_MODPROBE=$T/usrlib/nvidia.conf XGM_ETC_MODPROBE_D=$T/etc \
            XGM_AUTOPROBE=$T/drivers_autoprobe XGM_STATE_DIR=$T/state \
-           XGM_SYS_MODULE=$T/module XGM_SYSFS_PCI=$T/pci XGM_DRM_POLL=$T/drm_poll XGM_PSTORE=$T/pstore
+           XGM_SYS_MODULE=$T/module XGM_SYSFS_PCI=$T/pci XGM_DRM_POLL=$T/drm_poll XGM_PSTORE=$T/pstore XGM_EFI_PSTORE_DISABLE=$T/efi_pstore_disable
     mkdir -p "$T/gpus" "$T/mkinitcpio.conf.d" "$T/usrlib" "$T/etc" "$T/module" "$T/pci"
     # shellcheck disable=SC1091
     XGM_LIBRARY_MODE=1 source bin/xgm-egpu
@@ -218,6 +218,16 @@ out=$(DRY_RUN=1 sub cmd_capture arm 2>&1); rc=$?
 assert_eq  "dry-run arm rc 0"                      "$rc" "0"
 assert_has "dry-run lists the sysctls"             "$out" "would set kernel.nmi_watchdog=1"
 assert_has "dry-run mentions pstore mount"         "$out" "would mount pstore"
+assert_has "hung_task timeout lowered from 120"     "${CAPTURE_SYSCTLS[*]}" "kernel.hung_task_timeout_secs=30"
+echo 1 > "$T/efi_pstore_disable"
+out=$(DRY_RUN=1 sub cmd_capture arm 2>&1)
+assert_has "dry-run would clear efi_pstore.pstore_disable" "$out" "would write 0 > $T/efi_pstore_disable"
+rm -f "$T/efi_pstore_disable"
+out=$(DRY_RUN=1 sub cmd_capture arm 2>&1)
+assert_has "missing knob -> warns with the cmdline fallback" "$out" "efi_pstore.pstore_disable=0"
+# the kernel reports a NULL pstore backend as the literal string "(null)"
+be='(null)'; [[ $be == "(null)" ]] && be=""
+assert_eq  "'(null)' backend string is treated as no backend" "$be" ""
 rm -rf "$T/pstore"
 out=$(sub cmd_capture read 2>&1); rc=$?
 assert_eq  "read with no pstore dir -> rc 1"       "$rc" "1"

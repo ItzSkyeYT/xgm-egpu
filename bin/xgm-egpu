@@ -64,6 +64,7 @@ SYS_MODULE=${XGM_SYS_MODULE:-/sys/module}
 SYSFS_PCI=${XGM_SYSFS_PCI:-/sys/bus/pci/devices}
 DRM_POLL=${XGM_DRM_POLL:-/sys/module/drm_kms_helper/parameters/poll}
 PSTORE=${XGM_PSTORE:-/sys/fs/pstore}
+EFI_PSTORE_DISABLE=${XGM_EFI_PSTORE_DISABLE:-/sys/module/efi_pstore/parameters/pstore_disable}
 NETCONSOLE_TARGET=${XGM_NETCONSOLE_TARGET:-192.168.1.7}   # the Pi
 
 # The write legitimately takes a long time: it drives a full ACPI eject and PCI
@@ -770,6 +771,7 @@ CAPTURE_SYSCTLS=(
     kernel.hardlockup_panic=1
     kernel.softlockup_panic=1
     kernel.hung_task_panic=1       # D-state > hung_task_timeout -> panic (cf. the eject wedges)
+    kernel.hung_task_timeout_secs=30   # default 120 is too slow for a wedged eject
     kernel.panic_on_oops=1
     kernel.panic_on_rcu_stall=1
     kernel.panic=30                # come back on its own 30s after the panic
@@ -786,12 +788,34 @@ capture_arm() {
             warn "  could not set $k"; rc=1
         fi
     done
+    # CONFIG_EFI_VARS_PSTORE_DEFAULT_DISABLE=y on this kernel: the EFI backend is
+    # built in but OFF until this parameter is cleared. Mounting pstore without
+    # this looks armed and records nothing — the same fail-open shape as the
+    # lsof guard. Flip it, then verify a backend is actually registered.
+    if [[ -e $EFI_PSTORE_DISABLE ]]; then
+        if [[ $DRY_RUN -eq 1 ]]; then info "  would write 0 > $EFI_PSTORE_DISABLE"
+        elif echo 0 > "$EFI_PSTORE_DISABLE" 2>/dev/null; then info "  efi_pstore enabled (pstore_disable=0)"
+        else warn "  could not enable efi_pstore via $EFI_PSTORE_DISABLE"; rc=1; fi
+    else
+        warn "  $EFI_PSTORE_DISABLE absent — efi_pstore may be disabled; add efi_pstore.pstore_disable=0 to the kernel cmdline"
+    fi
     if ! mountpoint -q "$PSTORE" 2>/dev/null; then
         if [[ $DRY_RUN -eq 1 ]]; then info "  would mount pstore at $PSTORE"
         elif mount -t pstore pstore "$PSTORE" 2>/dev/null; then info "  pstore mounted at $PSTORE (backend: $(cat /sys/module/pstore/parameters/backend 2>/dev/null))"
         else warn "  could not mount pstore at $PSTORE"; rc=1; fi
     else
         info "  pstore already mounted at $PSTORE"
+    fi
+    # The mount succeeding is not the same as a backend being able to record.
+    # The kernel prints a NULL backend as the literal string "(null)".
+    local be; be=$(cat /sys/module/pstore/parameters/backend 2>/dev/null)
+    [[ $be == "(null)" ]] && be=""
+    if [[ $DRY_RUN -eq 0 && -z $be ]]; then
+        warn "  pstore has NO backend registered — a panic would write nothing."
+        warn "  netconsole to the Pi is then the only capture; make sure it says armed below."
+        rc=1
+    elif [[ -n $be ]]; then
+        info "  pstore backend: $be"
     fi
     return $rc
 }
