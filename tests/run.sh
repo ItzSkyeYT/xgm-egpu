@@ -432,17 +432,40 @@ assert_rc  "run_log_start is a no-op without root"       0 run_log_start on "on 
 echo "== desktop pin =="
 mkdir -p "$T/pci/0000:08:00.0" "$T/pci/0000:01:00.0"; printf '1\n' > "$T/pci/0000:08:00.0/boot_vga"; printf '0\n' > "$T/pci/0000:01:00.0/boot_vga"
 assert_eq  "boot_vga device found"                       "$(boot_vga_bdf)" "0000:08:00.0"
-export XGM_DESKTOP_HOME=$T/home
+# a fake /dev/dri: by-path symlink -> card1 (amdgpu), card2 (nvidia)
+mkdir -p "$T/dri/by-path" "$T/drm/card1/device" "$T/drm/card2/device" "$T/drivers/amdgpu" "$T/drivers/nvidia"
+: > "$T/dri/card1"; : > "$T/dri/card2"
+ln -sfn ../card1 "$T/dri/by-path/pci-0000:08:00.0-card"; ln -sfn ../card2 "$T/dri/by-path/pci-0000:01:00.0-card"
+ln -sfn "$T/drivers/amdgpu" "$T/drm/card1/device/driver"; ln -sfn "$T/drivers/nvidia" "$T/drm/card2/device/driver"
+export XGM_DESKTOP_HOME=$T/home XGM_DRI_BY_PATH=$T/dri/by-path XGM_DRM_CLASS=$T/drm
+DRI_BY_PATH=$T/dri/by-path; DRM_CLASS=$T/drm
 out=$(DRY_RUN=0 sub cmd_desktop pin 2>&1); rc=$?
 assert_eq  "desktop pin -> rc 0"                         "$rc" "0"
-assert_eq  "pin file content"                            "$(cat "$T/home/.config/plasma-workspace/env/xgm-egpu-kwin.sh")" "export KWIN_DRM_DEVICES=/dev/dri/by-path/pci-0000:08:00.0-card"
+PIN=$T/home/.config/plasma-workspace/env/xgm-egpu-kwin.sh
+assert_not "pin file never exports a by-path name (colons!)" "$(cat "$PIN")" "KWIN_DRM_DEVICES=.*by-path"
+assert_eq  "sourced by /bin/sh like Plasma does, it yields the resolved card" "$(/bin/sh -c '. "$1"; printf %s "$KWIN_DRM_DEVICES"' _ "$PIN")" "$T/dri/card1"
+assert_has "pin reports the checked value"               "$out" "kwin uses $T/dri/card1 \(amdgpu\)"
+assert_has "pin tells the rollback"                      "$out" "desktop unpin"
 out=$(sub cmd_desktop status 2>&1)
-assert_has "status shows the pin file"                   "$out" "xgm-egpu-kwin.sh"
+assert_has "status validates the pin"                    "$out" "next login: kwin uses $T/dri/card1"
+echo "== desktop_pin_check catches the 2026-09-09 mistake =="
+printf 'export KWIN_DRM_DEVICES=%s\n' "$T/dri/by-path/pci-0000:08:00.0-card" > "$T/bad1.sh"
+assert_rc  "by-path value (contains colons) -> rejected"  1 desktop_pin_check "$T/bad1.sh"
+printf 'export KWIN_DRM_DEVICES=%s\n' "$T/dri/card2" > "$T/bad2.sh"
+assert_rc  "the NVIDIA card -> rejected"                 1 desktop_pin_check "$T/bad2.sh"
+printf 'export KWIN_DRM_DEVICES=%s\n' "$T/dri/card9" > "$T/bad3.sh"
+assert_rc  "a card that does not exist -> rejected"      1 desktop_pin_check "$T/bad3.sh"
+printf 'true\n' > "$T/bad4.sh"
+assert_rc  "a file that sets nothing -> rejected"        1 desktop_pin_check "$T/bad4.sh"
+rm -f "$T/dri/by-path/pci-0000:08:00.0-card"
+out=$(DRY_RUN=0 sub cmd_desktop pin 2>&1); rc=$?
+assert_eq  "pin with no by-path link -> refuses"         "$rc" "1"
+ln -sfn ../card1 "$T/dri/by-path/pci-0000:08:00.0-card"
 out=$(DRY_RUN=0 sub cmd_desktop unpin 2>&1)
 assert_eq  "unpin removes the file"                      "$(ls "$T/home/.config/plasma-workspace/env/" 2>/dev/null | wc -l)" "0"
 out=$(sub cmd_desktop bogus 2>&1); rc=$?
 assert_eq  "desktop bogus -> rc 1"                       "$rc" "1"
-unset XGM_DESKTOP_HOME
+unset XGM_DESKTOP_HOME XGM_DRI_BY_PATH XGM_DRM_CLASS
 echo "== exit hooks accumulate =="
 H1=0; H2=0; h1() { H1=1; }; h2() { H2=1; }
 out=$(add_exit_hook h1; add_exit_hook h2; run_exit_hooks; echo "$H1$H2")
@@ -450,6 +473,15 @@ assert_eq  "both hooks run"                              "$out" "11"
 RESTART_DESKTOP=0
 assert_rc  "dm_stop_for_run is a no-op with --keep-desktop" 0 dm_stop_for_run
 RESTART_DESKTOP=auto
+
+echo "== options are parsed anywhere on the line (the dry run that was not) =="
+rm -rf "$T/home2"
+out=$(XGM_DESKTOP_HOME=$T/home2 XGM_SYSFS_PCI=$T/pci XGM_DRI_BY_PATH=$T/dri/by-path XGM_DRM_CLASS=$T/drm bash bin/xgm-egpu desktop pin --dry-run 2>&1); rc=$?
+assert_eq  "desktop pin --dry-run -> rc 0"               "$rc" "0"
+assert_has "...says 'would write'"                      "$out" "would write"
+assert_eq  "...and writes NOTHING"                       "$(ls "$T/home2/.config/plasma-workspace/env/" 2>/dev/null | wc -l)" "0"
+out=$(bash bin/xgm-egpu logs --no-such-option 2>&1)
+assert_has "unknown option is reported, not swallowed"   "$out" "ignoring unknown option --no-such-option"
 
 echo "== library mode =="
 assert_rc "sourcing in library mode does not dispatch" 0 bash -c 'XGM_LIBRARY_MODE=1 source bin/xgm-egpu; declare -F cmd_on >/dev/null'

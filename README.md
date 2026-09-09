@@ -162,6 +162,15 @@ and the eGPU came up on a dead desktop. Two fixes, use both:
 xgm-egpu desktop pin      # KWIN_DRM_DEVICES -> the laptop's own card; log out and in once
 ```
 
+`pin` writes a small `/bin/sh` snippet into `~/.config/plasma-workspace/env/`
+that resolves the laptop card's by-path link to its `/dev/dri/cardN` at each
+login, then validates the file the same way Plasma sources it before it lets
+you log out. That validation exists because the first version exported the
+by-path name itself, `KWIN_DRM_DEVICES` is colon-separated, and
+`pci-0000:08:00.0-card` therefore killed the session on the reference machine
+until the file was deleted from a TTY. If a session ever fails to start:
+Ctrl+Alt+F3, log in, `xgm-egpu desktop unpin`.
+
 After that, kwin never opens an NVIDIA device, and `on` from a desktop
 terminal only has to close whatever else holds the GPU (a browser with GPU
 acceleration, typically) - the session survives. And when `on` or `off` is
