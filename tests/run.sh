@@ -380,6 +380,18 @@ out=$(preflight_drm_layer 2>&1)
 assert_has "--no-seal warns that a client can open the door" "$out" "no-seal"
 NO_KMS=0; SEAL_NVKMS=1; rm -rf "$T/module/nvidia_drm"
 
+echo "== the audio function =="
+mkdir -p "$T/pci/0000:01:00.1"; : > "$T/pci/0000:01:00.1/driver_override"
+out=$(DRY_RUN=0 fence_audio_function 0000:01:00.0 2>&1); rc=$?
+assert_eq  "fence -> rc 0"                               "$rc" "0"
+assert_eq  "driver_override gets a name no driver has"   "$(cat "$T/pci/0000:01:00.1/driver_override")" "xgm-egpu-noaudio"
+assert_has "fence says what it did"                      "$out" "fenced off"
+rm -rf "$T/pci/0000:01:00.1"
+out=$(DRY_RUN=0 fence_audio_function 0000:01:00.0 2>&1); rc=$?
+assert_eq  "no audio function -> rc 0"                   "$rc" "0"
+assert_has "...and says so"                              "$out" "nothing to fence"
+assert_eq  "audio is fenced by default"                  "$NO_AUDIO" "1"
+
 echo "== persistent run logs =="
 out=$(sub cmd_logs 2>&1); rc=$?
 assert_eq  "logs with no directory -> rc 1"              "$rc" "1"
