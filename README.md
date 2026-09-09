@@ -19,8 +19,8 @@ meet them undocumented.**
 | Activation (eGPU enumerates on the PCIe bus) | **Works** |
 | NVIDIA driver binds, DRM nodes appear | **Works** |
 | Link stays up under runtime power management | **Works**, with the shipped udev + modprobe rules |
-| Link trains above PCIe Gen1 | **Fails on the reference machine** - see [Findings](FINDINGS.md#pcie-link-speed) |
-| GPU initialises and renders | **Open** - `Xid 154 GPU Reset Required` |
+| Link trains at PCIe Gen3 x8 | **Works** - earlier "Gen1 cap" was an idle-state reading, see [Findings](FINDINGS.md#pcie-link-speed) |
+| Link survives past 10 seconds | **Root cause found, fix pending verification** - NVIDIA RTD3, see [Findings §8](FINDINGS.md#8-the-ten-second-link-death-nvidia-rtd3) |
 
 The reference machine is the most marginal configuration that exists: a DIY dock
 with substituted connectors, on the oldest Flow model. If you have an official
@@ -54,14 +54,16 @@ Read that file before your first `xgm-egpu on`.
 ```sh
 git clone https://github.com/ItzSkyeYT/xgm-egpu
 cd xgm-egpu
-sudo ./install.sh          # installs bin/xgm-egpu, udev rule, modprobe.d conf
+sudo ./install.sh          # installs bin/xgm-egpu
+sudo xgm-egpu install-rules  # udev PM pinning + modprobe shadow + initramfs rebuild
 ```
 
 Then, with the dock connected and locked, and on AC power:
 
 ```sh
 xgm-egpu detect            # safe, read-only - what it worked out about your machine
-xgm-egpu status            # safe, read-only - always start here
+xgm-egpu preflight         # safe, read-only - is RTD3 disarmed? `on` refuses if not
+xgm-egpu status            # safe, read-only
 sudo xgm-egpu on
 ```
 
@@ -79,12 +81,15 @@ mean the write was rejected; the EC has usually already committed by then. See
 ```
 xgm-egpu status              attributes, bus state, modules, blockers
 xgm-egpu detect              autodetected topology, and how it was derived
+xgm-egpu preflight           is NVIDIA RTD3 disarmed in the LOADED driver? run this first
+xgm-egpu watch [SECS]        sample power state every 0.5s after activation
 xgm-egpu on                  release the internal dGPU, then activate
 xgm-egpu off                 deactivate, restore the internal dGPU
 xgm-egpu link [BDF]          PCIe link speed/width and error counters
 xgm-egpu link-speed <1-4>    pin the root port's target generation and retrain
 xgm-egpu ec                  decode the EC's XGM state block (connect/lock/AC)
-xgm-egpu install-rules       persist the runtime-PM pinning
+xgm-egpu install-rules       persist runtime-PM pinning, disarm NVIDIA RTD3,
+                             rebuild the initramfs if nvidia is baked in
 ```
 
 Useful options:
@@ -110,7 +115,7 @@ repo - [Findings §6](FINDINGS.md#6-less-teardown-not-more).
 
 | Host | Dock | Result |
 |---|---|---|
-| ROG Flow X13 GV301QH | DIY osy Lite v0.6.1, RTX 3060, ALC04-S40EIA-00 connectors | Enumerates, binds, Gen1 only, `Xid 154` |
+| ROG Flow X13 GV301QH | DIY osy Lite v0.6.1, RTX 3060, ALC04-S40EIA-00 connectors | Enumerates, binds, Gen3 x8, 0 AER; dies at 10s from NVIDIA RTD3 (fix identified, [§8](FINDINGS.md#8-the-ten-second-link-death-nvidia-rtd3)) |
 | ROG Ally + CachyOS | DIY osy, RTX 3080 | Testing in progress |
 
 If you run this on anything, please [open an

@@ -39,9 +39,13 @@ Next steps:
 
      egpu_connected must read 1 before anything else will work.
 
-  4. Once activation succeeds, persist the runtime-PM pinning or the link will
-     drop ~10s after the GPU goes idle:
+  4. BEFORE activating, disarm NVIDIA RTD3 and pin runtime PM, or the link
+     will drop exactly ~10s after the GPU goes idle:
 
-       sudo xgm-egpu install-rules
+       sudo xgm-egpu install-rules      # modprobe shadow + udev + initramfs
+       sudo reboot
+       xgm-egpu preflight               # must report DynamicPowerManagement 0
+
+     `xgm-egpu on` refuses to run until preflight passes.
 
 EOF

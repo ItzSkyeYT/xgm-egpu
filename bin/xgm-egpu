@@ -51,6 +51,16 @@ STATE_FILE=$STATE_DIR/topology.conf
 NV_MODULES=(nvidia_drm nvidia_modeset nvidia_uvm nvidia)
 NV_SERVICES=(nvidia-powerd nvidia-persistenced)
 
+# Paths the new checks read. Overridable so the test-suite can point them at
+# fixture files and run without root or hardware.
+NV_PARAMS=${XGM_NV_PARAMS:-/proc/driver/nvidia/params}
+NV_GPUS_DIR=${XGM_NV_GPUS_DIR:-/proc/driver/nvidia/gpus}
+MKINITCPIO_CONF=${XGM_MKINITCPIO_CONF:-/etc/mkinitcpio.conf}
+MKINITCPIO_D=${XGM_MKINITCPIO_D:-/etc/mkinitcpio.conf.d}
+DISTRO_MODPROBE=${XGM_DISTRO_MODPROBE:-/usr/lib/modprobe.d/nvidia.conf}
+ETC_MODPROBE_D=${XGM_ETC_MODPROBE_D:-/etc/modprobe.d}
+AUTOPROBE=${XGM_AUTOPROBE:-/sys/bus/pci/drivers_autoprobe}
+
 # The write legitimately takes a long time: it drives a full ACPI eject and PCI
 # rescan cycle synchronously. Observed 2026-07-31 — an 'off' that "timed out" at
 # 25s had in fact completed successfully a short while later. Slow is not stuck,
@@ -85,6 +95,7 @@ DRY_RUN=0
 #   remove  — also remove the device from the PCI tree. Most aggressive; worst
 #             observed results.
 RELEASE_LEVEL=minimal
+IGNORE_RTD3=0         # --ignore-rtd3: activate even with RTD3 armed (to reproduce the failure)
 RELOAD_NVIDIA=1       # modprobe the NVIDIA stack back after a successful switch;
                       # --no-reload leaves the eGPU enumerated but unbound
 
@@ -288,6 +299,194 @@ cmd_detect() {
     echo "If any of this is wrong, please open an issue with this output —"
     echo "detection failing on a machine is a bug, not something to work around."
     return 0
+}
+
+# ---------------------------------------------------------------- nvidia RTD3
+#
+# THE root cause of the eGPU dying ~10s after the driver binds (found 2026-09-09):
+#
+# NVIDIA's "dynamic power management" (RTD3). On any GA102-or-newer GPU in a
+# machine whose DMI chassis says notebook, the driver auto-selects FINE mode
+# (src/nvidia/arch/nvalloc/unix/src/dynamic-power.c, rmReadAndParseDynamicPowerRegkey).
+# In FINE mode an idle timer runs: 5s precondition check, IDLE_INSTANT ->
+# IDLE_SUSTAINED, another 5s check, revoke mappings, 200ms, indicate idle.
+# 5 + 5 + 0.2 = the exact 10 seconds observed, four times out of four.
+#
+# On a real Optimus laptop the platform expects the GPU to drop its link for
+# GC6. On the XG Mobile port, pciehp is live, sees Link Down, and treats it as
+# surprise removal: Xid 79 attributed to irq/NN-pciehp, zero AER errors (the
+# drop was intentional), then Xid 154. The internal Turing 1650 never hit this
+# because RTD3 reads "Not supported" on it.
+#
+# NVreg_DynamicPowerManagement=0 disarms the whole state machine (mode NEVER:
+# CreateDynamicPowerCallbacks is never called, no timers). But getting that
+# value to the driver is a trap in its own right, see write_modprobe_shadow().
+
+# Effective DynamicPowerManagement value of the LOADED module. Empty if the
+# driver is not loaded. This is the only number that matters: what is written in
+# modprobe.d is irrelevant if the module was loaded from an initramfs built
+# before the file existed.
+nvidia_dpm_value() {
+    grep -oP '^DynamicPowerManagement: \K[0-9]+' "$NV_PARAMS" 2>/dev/null
+}
+
+# Per-GPU runtime D3 status, from /proc/driver/nvidia/gpus/<bdf>/power.
+# "Not supported" on the reference machine's Turing dGPU; the thing to check on
+# an Ampere eGPU right after it binds.
+nvidia_gpu_power_status() {
+    local bdf=$1
+    grep -m1 'Runtime D3 status' "$NV_GPUS_DIR/$bdf/power" 2>/dev/null | sed 's/.*: *//'
+}
+
+# Refuse to activate while the loaded driver still has RTD3 armed. Returns 0 if
+# safe, 1 if not (and explains). This single check would have saved a day.
+preflight_rtd3() {
+    local v; v=$(nvidia_dpm_value)
+    if [[ -z $v ]]; then
+        info "nvidia module not loaded; RTD3 check deferred to after the bind"
+        return 0
+    fi
+    if [[ $v == 0 ]]; then
+        ok "NVIDIA DynamicPowerManagement=0 (RTD3 disarmed) in the loaded module"
+        return 0
+    fi
+    warn "NVIDIA DynamicPowerManagement=$v in the LOADED module. RTD3 is armed."
+    warn ""
+    warn "With this set, an Ampere-or-newer eGPU will drop its PCIe link exactly"
+    warn "~10s after it goes idle (5s + 5s idle timer in the driver), pciehp will"
+    warn "report Link Down, and you get Xid 79 then Xid 154. Every time."
+    warn ""
+    warn "Fix:  $0 install-rules   (writes the modprobe shadow and rebuilds the"
+    warn "initramfs if nvidia is baked into it), then REBOOT, then confirm with:"
+    warn "      grep DynamicPowerManagement $NV_PARAMS     -> must print 0"
+    warn ""
+    warn "Do not activate until it does. Override with --ignore-rtd3 if you are"
+    warn "deliberately reproducing the failure."
+    return 1
+}
+
+# Is nvidia baked into the initramfs? If so, modprobe.d changes do nothing until
+# the image is rebuilt: the module loads before switch-root with whatever config
+# the image was built with. On CachyOS this comes from chwd via
+# /etc/mkinitcpio.conf.d/10-chwd.conf, which is easy to miss when the main file
+# says MODULES=().
+initramfs_has_nvidia() {
+    local f
+    for f in "$MKINITCPIO_CONF" "$MKINITCPIO_D"/*.conf; do
+        [[ -r $f ]] || continue
+        grep -E '^[[:space:]]*MODULES(\+?=)' "$f" 2>/dev/null | grep -q 'nvidia' && return 0
+    done
+    return 1
+}
+
+# Write /etc/modprobe.d/nvidia.conf so that it SHADOWS the distro's copy.
+#
+# Why a shadow and not a new file: modprobe sorts all config files
+# lexicographically regardless of directory, and '-' sorts before '.', so
+# nvidia-anything.conf loses to nvidia.conf. Worse, a later-sorting duplicate
+# (zz-*.conf) did NOT win either on 2026-09-09; the second assignment was
+# ignored. Only a same-named file in /etc replaces the /usr/lib one outright.
+#
+# Preserves every other option the distro file sets (a CachyOS file also sets
+# InitializeSystemMemoryAllocations), only forcing DynamicPowerManagement=0.
+# Prints the generated content; writes it if $2 is 'write'.
+write_modprobe_shadow() {
+    local out=$1 mode=${2:-print}
+    local opts=''
+    if [[ -r $DISTRO_MODPROBE ]]; then
+        # Join continuation lines, keep every NVreg_ option except DPM.
+        opts=$(sed -e ':a' -e '/\\$/N; s/\\\n//; ta' "$DISTRO_MODPROBE" \
+               | grep -E '^[[:space:]]*options[[:space:]]+nvidia[[:space:]]' \
+               | sed -E 's/^[[:space:]]*options[[:space:]]+nvidia[[:space:]]+//' \
+               | tr ' ' '\n' | grep -E '^NVreg_' | grep -v '^NVreg_DynamicPowerManagement=' \
+               | tr '\n' ' ')
+    fi
+    local content
+    content=$(cat <<EOF
+# Written by xgm-egpu install-rules. Shadows $DISTRO_MODPROBE by name.
+#
+# The distro file enables NVIDIA runtime power management (RTD3) so a notebook
+# dGPU can power itself down when idle. Correct for an internal GPU; fatal for
+# an XG Mobile eGPU: in FINE mode the driver drops the card's PCIe link ~10s
+# after idle, pciehp sees Link Down, and the GPU is gone (Xid 79 -> Xid 154).
+#
+# Every other option from the distro file is preserved below. Only
+# NVreg_DynamicPowerManagement is forced to 0 (NEVER).
+#
+# If nvidia is in your initramfs this file does nothing until you rebuild it
+# (mkinitcpio -P) and reboot. Verify with:
+#   grep DynamicPowerManagement /proc/driver/nvidia/params   -> 0
+options nvidia ${opts}NVreg_DynamicPowerManagement=0
+EOF
+)
+    if [[ $mode == write ]]; then
+        printf '%s\n' "$content" > "$out"
+    else
+        printf '%s\n' "$content"
+    fi
+}
+
+# Save/restore /sys/bus/pci/drivers_autoprobe. Needed for --no-reload to mean
+# anything: skipping our own modprobe is pointless when the nvidia module is
+# already resident, because the kernel auto-binds it to the new device the
+# moment it enumerates (observed 2026-09-09, which invalidated a test).
+_AUTOPROBE_SAVED=
+autoprobe_disable() {
+    [[ -w $AUTOPROBE ]] || { warn "cannot write $AUTOPROBE"; return 1; }
+    _AUTOPROBE_SAVED=$(cat "$AUTOPROBE" 2>/dev/null)
+    [[ $DRY_RUN -eq 1 ]] && return 0
+    echo 0 > "$AUTOPROBE" && info "  drivers_autoprobe=0 (new devices will NOT be bound)"
+}
+autoprobe_restore() {
+    [[ -n $_AUTOPROBE_SAVED && -w $AUTOPROBE ]] || return 0
+    [[ $DRY_RUN -eq 1 ]] && return 0
+    echo "$_AUTOPROBE_SAVED" > "$AUTOPROBE" && info "  drivers_autoprobe restored to $_AUTOPROBE_SAVED"
+    _AUTOPROBE_SAVED=
+}
+
+cmd_preflight() {
+    check_interface
+    echo "RTD3 (NVIDIA dynamic power management):"
+    local v; v=$(nvidia_dpm_value)
+    printf '  %-28s %s\n' "loaded-module value" "${v:-<nvidia not loaded>}"
+    printf '  %-28s %s\n' "would-load value" "$(modprobe --show-depends nvidia 2>/dev/null | tr ' ' '\n' | grep -oP 'NVreg_DynamicPowerManagement=\K\S+' | tail -1)"
+    printf '  %-28s %s\n' "nvidia in initramfs" "$(initramfs_has_nvidia && echo yes || echo no)"
+    printf '  %-28s %s\n' "shadow file present" "$([[ -f $ETC_MODPROBE_D/nvidia.conf ]] && echo yes || echo no)"
+    local g
+    for g in "$NV_GPUS_DIR"/*/; do
+        [[ -d $g ]] && printf '  %-28s %s\n' "$(basename "$g") runtime D3" "$(nvidia_gpu_power_status "$(basename "$g")")"
+    done
+    echo
+    preflight_rtd3
+}
+
+# Sample the eGPU's power state every 0.5s so a link death shows exactly what
+# changed. Integer arithmetic only: this machine is fr_FR and printf %f wants a
+# comma, which bit the first version of this.
+cmd_watch() {
+    local secs=${1:-40} out=${2:-/tmp/xgm-watch.log}
+    export LC_ALL=C
+    need_root_port
+    local gpu; gpu=$(egpu_bdf || echo "")
+    local aud=${gpu%.*}.1
+    r() { cat "/sys/bus/pci/devices/$1/$2" 2>/dev/null || echo '-'; }
+    : > "$out"
+    {
+      echo "time  port_ctl port_rt   gpu_ctl gpu_rt    aud_ctl aud_rt    link      dpm  rtd3"
+      local i n=$(( secs * 2 ))
+      for ((i=0; i<n; i++)); do
+        printf '%2d.%d  %-8s %-9s %-7s %-9s %-7s %-9s %-9s %-4s %s\n' \
+          $(( i / 2 )) $(( (i % 2) * 5 )) \
+          "$(r "$ROOT_PORT" power/control)" "$(r "$ROOT_PORT" power/runtime_status)" \
+          "$(r "$gpu" power/control)"       "$(r "$gpu" power/runtime_status)" \
+          "$(r "$aud" power/control)"       "$(r "$aud" power/runtime_status)" \
+          "$(r "$ROOT_PORT" current_link_speed | tr -d ' ')" \
+          "$(nvidia_dpm_value)" "$(nvidia_gpu_power_status "$gpu")"
+        sleep 0.5
+      done
+      echo; echo "--- kernel log tail ---"; dmesg 2>/dev/null | tail -30
+    } >> "$out" 2>&1
+    ok "saved to $out"
 }
 
 # ---------------------------------------------------------------- preconditions
@@ -497,7 +696,7 @@ cmd_ec() {
 }
 
 UDEV_RULE=/etc/udev/rules.d/99-xgm-egpu-pm.rules
-MODPROBE_CONF=/etc/modprobe.d/nvidia-xgm-egpu.conf
+MODPROBE_CONF=$ETC_MODPROBE_D/nvidia.conf   # SHADOWS the distro file by name — see write_modprobe_shadow()
 
 # Persist the power-management pinning so it survives reboots and applies the
 # instant the device appears — before anything can suspend it.
@@ -533,13 +732,24 @@ $port_rule
 EOF
     ok "wrote $UDEV_RULE"
 
-    cat > "$MODPROBE_CONF" <<'EOF'
-# Installed by xgm-egpu. The NVIDIA driver has its own runtime power management
-# that suspends the GPU into D3cold independently of the PCI core's, which is a
-# second route to the same "GPU has fallen off the bus" failure.
-options nvidia NVreg_DynamicPowerManagement=0
-EOF
-    ok "wrote $MODPROBE_CONF"
+    # Remove the old file this tool used to write. It sorted BEFORE the distro's
+    # nvidia.conf ('-' < '.') and lost, so DynamicPowerManagement=0 never took.
+    rm -f "$ETC_MODPROBE_D/nvidia-xgm-egpu.conf" "$ETC_MODPROBE_D/zz-nvidia-xgm-egpu.conf"
+    write_modprobe_shadow "$MODPROBE_CONF" write
+    ok "wrote $MODPROBE_CONF (shadows $DISTRO_MODPROBE)"
+
+    if initramfs_has_nvidia; then
+        warn "nvidia is baked into the initramfs (MODULES= in $MKINITCPIO_CONF or $MKINITCPIO_D)."
+        warn "The module loads BEFORE switch-root with whatever modprobe.d the image was"
+        warn "built with, so the file above does nothing until the image is rebuilt."
+        if command -v mkinitcpio >/dev/null 2>&1; then
+            info "rebuilding: mkinitcpio -P"
+            [[ $DRY_RUN -eq 1 ]] || mkinitcpio -P >/dev/null 2>&1 && ok "initramfs rebuilt" || warn "mkinitcpio -P failed — run it by hand"
+        else
+            warn "mkinitcpio not found; rebuild your initramfs by hand (dracut -f, etc.)"
+        fi
+        warn "REBOOT, then confirm:  grep DynamicPowerManagement $NV_PARAMS   -> 0"
+    fi
 
     udevadm control --reload-rules 2>/dev/null && ok "udev rules reloaded"
     info "Applying to devices already present:"
@@ -814,11 +1024,11 @@ reload_nvidia() {
     fi
     info "Reloading the NVIDIA stack"
     [[ $DRY_RUN -eq 1 ]] && return 0
-    # NVreg_DynamicPowerManagement=0 stops the NVIDIA driver runtime-suspending
-    # the GPU into D3cold on its own, which is a second route to the same
-    # link-down death that the bridge's runtime PM causes.
-    modprobe nvidia NVreg_DynamicPowerManagement=0 2>/dev/null ||
-        modprobe nvidia || warn "modprobe nvidia failed"
+    # This used to pass NVreg_DynamicPowerManagement=0 here. That is a no-op:
+    # modprobe of an already-resident module ignores parameters, and with
+    # --release minimal the module is never unloaded. The value has to be right
+    # at BOOT (modprobe shadow + initramfs), which preflight_rtd3 verifies.
+    modprobe nvidia || warn "modprobe nvidia failed"
     modprobe nvidia_modeset  || true
     modprobe nvidia_uvm      || true
     modprobe nvidia_drm      || true
@@ -1108,7 +1318,20 @@ cmd_on() {
      attempt is wedged and only a reboot clears it:
 $(printf '     %s\n' "$d")"
 
+    # The check that would have saved 2026-09-09. Refuse while the loaded driver
+    # has RTD3 armed, unless explicitly reproducing the failure.
+    if ! preflight_rtd3; then
+        [[ $IGNORE_RTD3 -eq 1 ]] && warn "--ignore-rtd3: proceeding anyway" || die "not activating with RTD3 armed"
+    fi
+
     release_internal_gpu
+
+    # --no-reload must mean "the driver does not touch the card". Skipping our
+    # own modprobe is not enough: the resident module auto-binds on enumeration.
+    if [[ $RELOAD_NVIDIA -eq 0 ]]; then
+        info "Disabling PCI driver autoprobe so the eGPU enumerates UNBOUND"
+        autoprobe_disable && trap autoprobe_restore EXIT
+    fi
 
     info "Writing 1 to egpu_enable (timeout ${TIMEOUT}s)"
     [[ $DRY_RUN -eq 1 ]] && { ok "dry run — stopping before the write"; return 0; }
@@ -1181,6 +1404,16 @@ $(printf '     %s\n' "$d")"
 
     reload_nvidia
     sleep 2
+
+    # What actually matters after the bind: is RTD3 armed on THIS GPU?
+    if [[ $RELOAD_NVIDIA -eq 1 ]]; then
+        local rtd3; rtd3=$(nvidia_gpu_power_status "$bdf")
+        local dpm;  dpm=$(nvidia_dpm_value)
+        printf '\n'; info "RTD3 on $bdf: ${rtd3:-unknown}   (module DynamicPowerManagement=${dpm:-?})"
+        if [[ $rtd3 == Enabled* || ( -n $dpm && $dpm != 0 ) ]]; then
+            warn "RTD3 is ARMED on the eGPU. Expect Link Down in ~10s. See: $0 preflight"
+        fi
+    fi
     echo; cmd_link "$bdf"
     echo; info "nvidia-smi"; nvidia-smi 2>&1 | head -15
 }
@@ -1238,7 +1471,11 @@ xgm-egpu — XG Mobile eGPU control for the ROG Flow X13 (GV301QH)
   xgm-egpu detect              show the autodetected topology and how it was
                                derived — run this first on a new machine, and
                                paste it into an issue if anything looks wrong
+  xgm-egpu preflight           is NVIDIA RTD3 disarmed in the LOADED driver?
+                               run after every driver/initramfs change
   xgm-egpu on                  release the internal dGPU, then activate
+  xgm-egpu watch [SECS] [FILE] sample power state every 0.5s after 'on' —
+                               shows exactly what changes when a link dies
   xgm-egpu off                 deactivate and restore the internal dGPU
   xgm-egpu link [BDF]          PCIe link speed/width and error counters
   xgm-egpu link-speed <1-4>    pin the root port's target PCIe generation and
@@ -1259,7 +1496,11 @@ Options:
                   On this machine 'minimal' is the only level that has ever
                   survived; 'remove' fails fastest. See the RELEASE_LEVEL comment.
   --no-reload     stop after the eGPU enumerates, without binding the NVIDIA
-                  driver — separates an enumeration fault from a driver fault
+                  driver — separates an enumeration fault from a driver fault.
+                  Disables PCI driver autoprobe for the duration, otherwise the
+                  resident module binds on its own and the flag is meaningless.
+  --ignore-rtd3   activate even though the loaded driver has RTD3 armed. Only
+                  for reproducing the 10-second link death on purpose.
   --link-gen N    pin the root port's target PCIe generation (1-4) before the
                   switch and again after enumeration. On this machine the link
                   cannot complete training above Gen1: '--link-gen 1' is the
@@ -1295,6 +1536,10 @@ That refusal is the point: writing with a holder present wedges the machine.
 EOF
 }
 
+# Library mode: `XGM_LIBRARY_MODE=1 source bin/xgm-egpu` loads the functions
+# without dispatching, so tests/ can exercise them against fixtures.
+[[ ${XGM_LIBRARY_MODE:-0} -eq 1 ]] && return 0 2>/dev/null
+
 CMD=${1:-status}; shift || true
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -1302,6 +1547,7 @@ while [[ $# -gt 0 ]]; do
         --release)    RELEASE_LEVEL=$2; shift ;;
         --release=*)  RELEASE_LEVEL=${1#*=} ;;
         --no-reload)  RELOAD_NVIDIA=0 ;;
+        --ignore-rtd3) IGNORE_RTD3=1 ;;
         --aspm-performance) ASPM_PERF=1 ;;
         --link-gen)   LINK_GEN=$2; shift ;;
         --link-gen=*) LINK_GEN=${1#*=} ;;
@@ -1327,6 +1573,8 @@ esac
 case "$CMD" in
     status)     cmd_status ;;
     detect)     cmd_detect ;;
+    preflight)  cmd_preflight ;;
+    watch)      cmd_watch "${1:-40}" "${2:-/tmp/xgm-watch.log}" ;;
     on)         cmd_on ;;
     off)        cmd_off ;;
     link)       cmd_link "${1:-}" ;;

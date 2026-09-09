@@ -263,44 +263,148 @@ The fix took three iterations, and the progression is the useful part:
 | udev rule pinning **both** | no `Link Down`, no `Xid 79` |
 
 **Port and endpoint must be pinned separately.** `pcie_port_pm=off` does not
-cover the card. And the NVIDIA driver has its own runtime PM that reaches D3cold
-independently of the PCI core's, so `NVreg_DynamicPowerManagement=0` is also
-required. `xgm-egpu install-rules` writes both.
+cover the card. `xgm-egpu install-rules` pins both via udev.
+
+This fixed the *PCI core's* runtime PM. It did **not** fix the ten-second death,
+which turned out to be a different mechanism entirely — see §8. An earlier
+version of this document claimed `NVreg_DynamicPowerManagement=0` closed "the
+NVIDIA driver's own route into D3cold". The option was written to a file that
+never took effect (§8 explains why), so that claim was never actually tested.
+
+---
+
+## 8. The ten-second link death: NVIDIA RTD3
+
+**Root cause of the `Link Down` → `Xid 79` → `Xid 154` sequence. Found
+2026-09-09, from the driver source.**
+
+The eGPU came up, ran at Gen3 x8 with zero AER errors, and died exactly ten
+seconds after `nvidia-drm` initialised — four times out of four:
+
+| run | driver init | Link Down | delta |
+|---|---|---|---|
+| 31/07 | 19:13:51 | 19:14:01 | 10s |
+| 09/09 | 09:33:46 | 09:33:56 | 10s |
+| 09/09 | 10:03:53 | 10:04:03 | 10s |
+| 09/09 | 10:15:59 | 10:16:09 | 10s |
+
+That precision rules out signal integrity. It is a timer, and it is in
+`src/nvidia/arch/nvalloc/unix/src/dynamic-power.c` of NVIDIA's open kernel
+modules.
+
+### The mechanism
+
+NVIDIA "dynamic power management" (RTD3) lets a notebook dGPU power itself down
+when idle. In `rmReadAndParseDynamicPowerRegkey()`:
+
+```c
+// If User has set some value, honor that value
+if (*pRegkeyValue != NV_REG_DYNAMIC_POWER_MANAGEMENT_DEFAULT) { *pOption = *pRegkeyValue; return; }
+// From GA102+, we enable RTD3 only if system is found to be Notebook
+if ((chipId >= GA102) && rm_is_system_notebook()) { *pOption = FINE; return; }
+```
+
+The RTX 3060 is GA104 (≥ GA102). The Flow's DMI chassis type is 10 (Notebook).
+So with the driver default, the eGPU gets **FINE** mode automatically. The
+internal GTX 1650 is Turing, so it gets NEVER — which is why
+`/proc/driver/nvidia/gpus/…/power` reads `Runtime D3 status: Not supported` on
+it, and why the internal card never showed this problem.
+
+In FINE mode an idle state machine runs:
+
+```c
+#define GC6_PRECONDITION_CHECK_TIME    ((NvU64)5 * 1000 * 1000 * 1000)   // 5s
+#define GC6_BAR1_BLOCKER_CHECK_AND_METHOD_FLUSH_TIME (200 * 1000 * 1000)  // 200ms
+```
+
+1. 5s precondition check → `IDLE_INSTANT` becomes `IDLE_SUSTAINED`
+2. Another 5s check → revoke user mappings
+3. 200ms → `RmIndicateIdle` → `nv_indicate_idle` → GPU enters its low-power state
+
+**5 + 5 + 0.2 = 10.2 seconds.** On a real Optimus laptop the platform expects
+the GPU to drop its PCIe link for GC6 and brings it back on demand. On the XG
+Mobile port, `pciehp` is live, sees the link drop, and treats it as **surprise
+removal**. Hence `Xid 79` attributed to `irq/33-pciehp`, zero AER errors (the
+drop was intentional, not a fault), then `Xid 154 GPU Reset Required`.
+
+`power/control=on` on the device does not prevent this: your own watch log
+shows `runtime_status` staying `active` throughout. RTD3 FINE does not need the
+PCI core to suspend the device — the driver acts on the GPU directly.
+
+### The fix, and the trap inside the fix
+
+`NVreg_DynamicPowerManagement=0` (NEVER) disarms the entire state machine:
+`CreateDynamicPowerCallbacks()` is never called, no timers exist, and
+`RmConfigureUpstreamPortForRTD3()` never touches the root port. Getting that
+value to the driver cost a day, for two stacked reasons:
+
+**1. modprobe.d file ordering.** modprobe sorts all config files
+lexicographically *regardless of directory*, and `-` (0x2D) sorts before `.`
+(0x2E). So `nvidia-xgm-egpu.conf` in `/etc` loses to the distro's `nvidia.conf`
+in `/usr/lib`, which on CachyOS (`cachyos-settings`) sets
+`NVreg_DynamicPowerManagement=0x02`. A later-sorting duplicate (`zz-*.conf`) did
+not win either. Only a **same-named** `/etc/modprobe.d/nvidia.conf` replaces the
+distro file outright. `xgm-egpu install-rules` now writes that shadow,
+preserving the distro file's other options.
+
+**2. The initramfs.** Even with the shadow in place the loaded value stayed 2,
+because:
+
+```
+[    1.393019] nvidia: loading out-of-tree module taints kernel.
+[    6.201640] Starting Plymouth switch root service...
+```
+
+nvidia loads **before switch-root**, from the initramfs. On CachyOS the
+`chwd` hardware-detection tool drops `MODULES+=(nvidia …)` into
+`/etc/mkinitcpio.conf.d/10-chwd.conf` — invisible if you only check the main
+file's `MODULES=()`. The `modconf` hook bakes whatever `modprobe.d` existed at
+build time into the image. Nothing in `/etc/modprobe.d` matters until
+`mkinitcpio -P` and a reboot.
+
+`xgm-egpu install-rules` detects this and rebuilds. `xgm-egpu preflight`
+reports the value of the **loaded** module — the only number that matters —
+and `xgm-egpu on` refuses to activate while it is not 0.
+
+### Why the `--no-reload` test was invalid
+
+`--no-reload` skipped the tool's own `modprobe`, but the resident nvidia module
+auto-binds to any new NVIDIA device the moment it enumerates. The driver was
+never out of the picture. The flag now disables `/sys/bus/pci/drivers_autoprobe`
+for the duration so the eGPU genuinely enumerates unbound.
 
 ---
 
 ## PCIe link speed
 
-**Unresolved, and the evidence is genuinely contradictory. Do not treat the
-connectors as either exonerated or convicted.**
+**Resolved 2026-09-09. The "Linux cannot train above Gen1" finding was a
+measurement artifact.**
 
-On **Windows**, with this exact DIY assembly:
+NVIDIA downshifts the PCIe link to Gen1 at idle (P8) and clocks back up under
+load. Measured on the internal GTX 1650 with no eGPU involved:
 
-- NVIDIA Control Panel reports **PCI Express x8 Gen3** — full XG Mobile spec
-- **FurMark runs** at sustained maximum load without crashing
-- **WHEA-Logger is empty** — zero corrected PCIe errors
+```
+idle:       P8, pcie.link.gen.current 1, 300 MHz,  3.3 W
+under load: P0, pcie.link.gen.current 3, 1740 MHz, 19.1 W
+```
 
-On **Linux**, with the same hardware:
+Every "stuck at Gen1" reading in the earlier notes was taken at idle. The eGPU
+itself has been observed at **Gen3 x8, P0, zero AER errors** on the same root
+port, whose hardware ceiling is `max_link_speed 8.0 GT/s` (Gen3 — the 2021
+GV301QH on Cezanne is PCIe 3.0; 2023 Flows do Gen4).
 
-- The link **cannot complete training above Gen1**
-- Held at Gen3 it died in ~18 seconds at idle
-- At Gen1 it survived 15 minutes
+**Never read `current_link_speed` or `pcie.link.gen.current` at idle and call
+it a ceiling.** Put load on the GPU first.
 
-Both observations are solid. They are not obviously compatible. Candidate
-explanations, none confirmed:
+The observation that pinning Gen3 "died in ~18s at idle" was the RTD3 death of
+§8 seen from a different angle, not a link-speed problem. `--link-gen` is no
+longer needed and should not be used to work around it.
 
-- Windows' link training is firmware-mediated through the EC and takes a
-  different path than Linux's.
-- The link is genuinely marginal and Windows' error handling masks it.
-- Something in Linux's retrain path is wrong for this bridge.
+### Windows
 
-`--link-gen 1` is the working mitigation on the reference machine: roughly
-2 GB/s, but stable. Setting ASPM to `performance` — which sounds correct and
-keeps the link at top speed — made things strictly **worse**.
-
-**If you have an official dock, please report your link speed.** That single
-data point would resolve this, and it is the most useful thing anyone with
-different hardware can contribute.
+Windows reports Gen3 x8 with FurMark stable and an empty WHEA log on the same
+cable. That is consistent with everything above: the link is fine; the
+difference was never the hardware.
 
 ---
 
@@ -358,10 +462,12 @@ instability.
 
 ## Open questions
 
-1. `Xid 154 GPU Reset Required` — the GPU enumerates and binds but will not
-   initialise. Untried: power-cycling the dock at the mains (the dock's ATX
-   supply means no host reboot has ever removed power from the card), and
-   disabling Resizable BAR in the BIOS.
-2. Why the link cannot train above Gen1 under Linux but does Gen3 under Windows.
-3. Whether an official dock behaves differently from a DIY one on Linux.
-4. What `egpu_enable` values `2` (`0x101`) and `3` (`0x201`) do.
+1. **Does the eGPU survive with RTD3 genuinely disarmed?** The fix is
+   identified and the tool now refuses to run without it, but the confirming
+   run (loaded `DynamicPowerManagement: 0`, link up past ten seconds) has not
+   yet been done.
+2. Whether an official dock behaves differently from a DIY one on Linux.
+3. What `egpu_enable` values `2` (`0x101`) and `3` (`0x201`) do.
+4. Whether RTD3 can be disabled per-GPU rather than globally, so the internal
+   dGPU keeps its battery saving. `NVreg_RegistryDwordsPerDevice` is the
+   candidate; untested.
