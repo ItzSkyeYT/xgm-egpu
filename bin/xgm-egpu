@@ -268,7 +268,8 @@ boot_vga_bdf() {
 desktop_pin_check() {
     local file=$1 v name drv
     [[ -r $file ]] || { echo "pin file missing"; return 1; }
-    v=$(/bin/sh -c '. "$1" >/dev/null 2>&1; printf %s "$KWIN_DRM_DEVICES"' _ "$file" 2>/dev/null)
+    # unset first: a session that already has the pin exported would otherwise validate any file
+    v=$(/bin/sh -c 'unset KWIN_DRM_DEVICES; . "$1" >/dev/null 2>&1; printf %s "$KWIN_DRM_DEVICES"' _ "$file" 2>/dev/null)
     [[ -n $v ]] || { echo "sourcing $file yields an EMPTY KWIN_DRM_DEVICES (kwin would then use every GPU — harmless, but not pinned)"; return 1; }
     [[ $v == *:* ]] && { echo "value '$v' contains ':' — kwin splits on it; the login would fail"; return 1; }
     name=$(basename "$v")

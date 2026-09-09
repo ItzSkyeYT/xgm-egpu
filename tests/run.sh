@@ -423,11 +423,11 @@ out=$(sub cmd_logs 2>&1)
 assert_has "list marks the survived run"                 "$out" "20260909-200000-on.log +SURVIVED"
 assert_has "list marks the dead run"                     "$out" "20260909-200100-on.log +DIED"
 assert_not "kernel logs are not listed as runs"          "$out" "kernel.log +(SURVIVED|DIED|refused|ran)"
-printf '# command: xgm-egpu off\n ok  egpu_enable now reads: 0\n' > "$T/log/20260909-200200-off.log"
-printf '# command: xgm-egpu on\nfail not activating\n' > "$T/log/20260909-200300-on.log"
+printf '# command: xgm-egpu off\n ok  egpu_enable now reads: 0\n' > "$T/log/20260909-195900-off.log"
+printf '# command: xgm-egpu on\nfail not activating\n' > "$T/log/20260909-195800-on.log"
 out=$(sub cmd_logs 2>&1)
-assert_has "a successful off is labelled off ok"          "$out" "20260909-200200-off.log +off ok"
-assert_has "a die() is labelled refused"                  "$out" "20260909-200300-on.log +refused"
+assert_has "a successful off is labelled off ok"          "$out" "20260909-195900-off.log +off ok"
+assert_has "a die() is labelled refused"                  "$out" "20260909-195800-on.log +refused"
 out=$(sub cmd_logs show 2>&1)
 assert_has "show prints the latest run"                  "$out" "no-fbdev"
 assert_has "show appends its kernel log"                 "$out" "kernel stuff"
