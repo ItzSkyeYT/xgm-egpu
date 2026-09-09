@@ -163,15 +163,15 @@ prime-run glxinfo -B        # must name the eGPU
 On a Flow the internal dGPU is ejected when the XG Mobile is active, so the
 eGPU is the only NVIDIA GPU and `prime-run` needs no device selection.
 
-One residual risk, worth rehearsing on the **internal** dGPU first (it never
-dies): every PRIME client also opens `/dev/nvidia-modeset` and tries
-`NVKMS_IOCTL_ALLOC_DEVICE` once as a capability probe. Today that fails because
-nvidia-drm already owns the device; with `modeset=0` nothing does, and NVKMS
-has no privilege check on it, so a game could bring the display engine up
-itself. Rehearsal: `drm nokms`, `reload-driver`, `prime-run vkcube --c 300`,
-then `dmesg | grep -c 'Correcting number of heads'` before and after - a new
-line means the client allocated the NVKMS device. Blocking the device node is
-not an option: a client whose `open()` of it fails segfaults (tested).
+The catch, measured on the internal dGPU: with `modeset=0` loaded, **kwin
+brings the display engine up anyway 1.5 s after a GPU appears** (its Vulkan
+probe of the new device), and every PRIME client does so once at start -
+`NVKMS_IOCTL_ALLOC_DEVICE` has no privilege check. So `on --no-kms` **seals
+the door** first: it bind-mounts `/dev/null` over `/dev/nvidia-modeset`.
+Clients still open it, every display-engine ioctl fails, and they carry on
+(vkcube, vulkaninfo, glxgears all tested; the allocation count stays flat).
+`off` unseals. Making the node unopenable instead is not an option - the
+Vulkan driver segfaults on that. `--no-seal` skips the seal on purpose.
 
 `--release minimal` is the default **and on the reference machine it is the only
 level that has ever survived.** More teardown makes it fail harder and faster.

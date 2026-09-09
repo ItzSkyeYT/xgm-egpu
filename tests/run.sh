@@ -24,7 +24,7 @@ load() {
            XGM_MKINITCPIO_CONF=$T/mkinitcpio.conf XGM_MKINITCPIO_D=$T/mkinitcpio.conf.d \
            XGM_DISTRO_MODPROBE=$T/usrlib/nvidia.conf XGM_ETC_MODPROBE_D=$T/etc \
            XGM_AUTOPROBE=$T/drivers_autoprobe XGM_STATE_DIR=$T/state \
-           XGM_SYS_MODULE=$T/module XGM_SYSFS_PCI=$T/pci XGM_DRM_POLL=$T/drm_poll XGM_PSTORE=$T/pstore XGM_EFI_PSTORE_DISABLE=$T/efi_pstore_disable XGM_BUGREPORT_DIR=$T/bugreports XGM_NV_VERSION=$T/nvver XGM_GSP_CONF=$T/etc/nvidia-xgm-nogsp.conf XGM_DRM_CONF=$T/etc/nvidia-xgm-drm.conf
+           XGM_SYS_MODULE=$T/module XGM_SYSFS_PCI=$T/pci XGM_DRM_POLL=$T/drm_poll XGM_PSTORE=$T/pstore XGM_EFI_PSTORE_DISABLE=$T/efi_pstore_disable XGM_BUGREPORT_DIR=$T/bugreports XGM_NV_VERSION=$T/nvver XGM_GSP_CONF=$T/etc/nvidia-xgm-nogsp.conf XGM_DRM_CONF=$T/etc/nvidia-xgm-drm.conf XGM_NVKMS_NODE=$T/nvidia-modeset
     mkdir -p "$T/gpus" "$T/mkinitcpio.conf.d" "$T/usrlib" "$T/etc" "$T/module" "$T/pci"
     # shellcheck disable=SC1091
     XGM_LIBRARY_MODE=1 source bin/xgm-egpu
@@ -363,6 +363,22 @@ assert_eq  "drm bogus -> rc 1"                         "$rc" "1"
 out=$(sub cmd_drm status 2>&1); rc=$?
 assert_eq  "drm status runs unprivileged"              "$rc" "0"
 assert_has "status lists the modes"                    "$out" "nofbdev"
+
+echo "== the NVKMS door =="
+rm -f "$T/nvidia-modeset"
+assert_rc  "not sealed when nothing is mounted there"    1 nvkms_door_sealed
+assert_rc  "seal with the node absent -> ok (nothing to do)" 0 seal_nvkms_door
+out=$(seal_nvkms_door 2>&1); assert_has "...and says so" "$out" "absent"
+: > "$T/nvidia-modeset"
+out=$(DRY_RUN=1 seal_nvkms_door 2>&1); rc=$?
+assert_eq  "dry-run seal -> rc 0"                        "$rc" "0"
+assert_has "dry-run seal names the bind mount"           "$out" "mount --bind /dev/null $T/nvidia-modeset"
+assert_rc  "unseal when not sealed -> ok"                0 unseal_nvkms_door
+NO_KMS=1; SEAL_NVKMS=0
+mkdir -p "$T/module/nvidia_drm/parameters"; printf 'N\n' > "$T/module/nvidia_drm/parameters/modeset"; printf 'Y\n' > "$T/module/nvidia_drm/parameters/fbdev"
+out=$(preflight_drm_layer 2>&1)
+assert_has "--no-seal warns that a client can open the door" "$out" "no-seal"
+NO_KMS=0; SEAL_NVKMS=1; rm -rf "$T/module/nvidia_drm"
 
 echo "== library mode =="
 assert_rc "sourcing in library mode does not dispatch" 0 bash -c 'XGM_LIBRARY_MODE=1 source bin/xgm-egpu; declare -F cmd_on >/dev/null'
