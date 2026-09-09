@@ -21,6 +21,20 @@ fi
 install -Dm755 "$SRC" "$BIN_DIR/xgm-egpu"
 echo "installed $BIN_DIR/xgm-egpu"
 
+# A stale copy earlier on the user's PATH silently shadows this one for
+# unprivileged calls, while `sudo xgm-egpu` (secure_path) runs the new one —
+# so `xgm-egpu preflight` says "unknown command" and `sudo xgm-egpu on` works.
+# Bit the author on 2026-09-09. Check the invoking user's ~/.local/bin.
+home=$(getent passwd "${SUDO_USER:-$USER}" | cut -d: -f6)
+stale="$home/.local/bin/xgm-egpu"
+if [[ -e $stale && ! -L $stale ]] && ! cmp -s "$stale" "$BIN_DIR/xgm-egpu"; then
+    echo
+    echo "WARNING: $stale is a DIFFERENT, older copy and ~/.local/bin is usually"
+    echo "         first on PATH. Unprivileged 'xgm-egpu' will run the old one."
+    echo "         Replace it with a symlink:"
+    echo "           ln -sf $BIN_DIR/xgm-egpu $stale"
+fi
+
 cat <<'EOF'
 
 Next steps:
