@@ -22,7 +22,7 @@ meet them undocumented.**
 | Link trains at PCIe Gen3 x8 | **Works** - earlier "Gen1 cap" was an idle-state reading, see [Findings](FINDINGS.md#pcie-link-speed) |
 | Link survives **unbound** | **Works** - Gen3 x8 indefinitely, zero AER. The hardware is fine |
 | Link survives with `nvidia` core bound | **Works** - Gen3 x8, P0, `nvidia-smi` reads it |
-| Link survives with `nvidia_drm` loaded | **Open.** Dies at ~7-10s and can hard-hang the machine. RTD3, fbdev, DRM poll and a power transient (card flat at 23 W) all ruled out. Arm `capture` first; next: `on --mask-pciehp`, `on --no-kms`. See [Findings §8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause) |
+| Link survives with `nvidia_drm` loaded | **Open.** Dies at ~7-10s. Not a kernel hang: the compositor and fbcon freeze, the kernel keeps running. RTD3, fbdev, DRM poll, power transient, pciehp, stray DMA all ruled out. The tool now saves `nvidia-bug-report.sh` at the moment of death. See [Findings §8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause) |
 
 The reference machine is the most marginal configuration that exists: a DIY dock
 with substituted connectors, on the oldest Flow model. If you have an official

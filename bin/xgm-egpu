@@ -66,6 +66,7 @@ DRM_POLL=${XGM_DRM_POLL:-/sys/module/drm_kms_helper/parameters/poll}
 PSTORE=${XGM_PSTORE:-/sys/fs/pstore}
 EFI_PSTORE_DISABLE=${XGM_EFI_PSTORE_DISABLE:-/sys/module/efi_pstore/parameters/pstore_disable}
 NETCONSOLE_TARGET=${XGM_NETCONSOLE_TARGET:-192.168.1.7}   # the Pi
+BUGREPORT_DIR=${XGM_BUGREPORT_DIR:-/var/tmp}
 
 # The write legitimately takes a long time: it drives a full ACPI eject and PCI
 # rescan cycle synchronously. Observed 2026-07-31 — an 'off' that "timed out" at
@@ -691,6 +692,8 @@ cmd_bind() {
     else
         warn "link DIED at ~${t}s with '$what' bound. That layer is implicated."
         dmesg 2>/dev/null | grep -iE 'Link Down|Xid|NVRM' | tail -6 | sed 's/^/    /' >&2
+        collect_gpu_crash_dump || true
+        death_recovery_hint
         return 1
     fi
 }
@@ -858,6 +861,51 @@ cmd_capture() {
         ;;
       *) die "usage: $0 capture [arm|read]" ;;
     esac
+}
+
+# ---------------------------------------------------------------- death hook
+#
+# Every death prints: "NVRM: A GPU crash dump has been created. If possible,
+# please run nvidia-bug-report.sh as root to collect this data before the
+# NVIDIA kernel module is unloaded." That dump is the GPU side's own account
+# of why it stopped answering — GSP logs, RPC history, the fault it saw — and
+# it lives only in the driver's memory. Every reboot so far has destroyed it.
+#
+# The kernel is ALIVE at the moment the watch detects death (2026-09-09: the
+# breadcrumb fsynced and the journal flushed after Xid 79; what "hangs" is the
+# compositor and fbcon, not the kernel). So collect it right then, before any
+# teardown, and before the user reaches for the power button.
+collect_gpu_crash_dump() {
+    local tag; tag=$(date +%Y%m%d-%H%M%S)
+    local out="$BUGREPORT_DIR/xgm-bugreport-$tag.log.gz"
+    local script; script=$(command -v nvidia-bug-report.sh 2>/dev/null) || { warn "nvidia-bug-report.sh not installed; crash dump not collected"; return 1; }
+    [[ $DRY_RUN -eq 1 ]] && { info "  would run: $script --output-file $out"; return 0; }
+    info "Collecting NVIDIA's crash dump NOW (kernel is alive, module still loaded): $out"
+    info "  this takes 10-40s; the screen may look frozen — it is not the kernel."
+    # --safe-mode skips live GPU queries that would hang on a card that is off
+    # the bus. --output-file is long-standing; fall back to cwd if it errs.
+    if ! "$script" --safe-mode --output-file "$out" >/dev/null 2>&1; then
+        ( cd "$BUGREPORT_DIR" && "$script" --safe-mode >/dev/null 2>&1 && mv -f nvidia-bug-report.log.gz "$out" 2>/dev/null ) || true
+    fi
+    sync
+    if [[ -s $out ]]; then
+        ok "crash dump saved: $out  ($(du -h "$out" | cut -f1))"
+        ok "it survives reboot. Paste the NVRM/Xid/GSP section of:  zcat $out | grep -nA40 'GPU crash dump\|Xid' | head -120"
+    else
+        warn "nvidia-bug-report.sh produced nothing at $out"
+        return 1
+    fi
+}
+
+# What to tell a user whose screen just froze: the machine is up.
+death_recovery_hint() {
+    warn ""
+    warn "THE KERNEL IS STILL RUNNING. Only the display stack froze (compositor +"
+    warn "fbcon). Do NOT power-cycle — that destroys the evidence and the"
+    warn "filesystem journal. From a phone or the Pi:"
+    warn "    ssh $(id -un)@$(ip -4 addr show wlan0 2>/dev/null | grep -oE 'inet [0-9.]+' | awk '{print $2}' || echo '<this-ip>')"
+    warn "    sudo xgm-egpu off      # clean ACPI eject, display comes back"
+    warn "or wait: this command finishes on its own once the dump is collected."
 }
 
 # ---------------------------------------------------------------- preconditions
@@ -1841,6 +1889,8 @@ $(printf '     %s\n' "$d")"
             else
                 warn "link DIED at ~${t}s. dmesg tail:"
                 dmesg 2>/dev/null | grep -iE 'Link Down|Xid|nvrm' | tail -5 | sed 's/^/    /' >&2
+                collect_gpu_crash_dump || true
+                death_recovery_hint
                 warn ""
                 warn "RTD3 is NOT the cause: on 2026-09-09 this died at exactly 10s with"
                 warn "DynamicPowerManagement=0 confirmed on the card. Next step is to"
