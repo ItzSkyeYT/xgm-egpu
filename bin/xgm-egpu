@@ -1904,6 +1904,13 @@ EOF
 [[ ${XGM_LIBRARY_MODE:-0} -eq 1 ]] && return 0 2>/dev/null
 
 CMD=${1:-status}; shift || true
+# An option in the command slot is the #1 way to get the usage dump by mistake
+# (`xgm-egpu --cap-power --force-kill` — no verb). Say what happened instead.
+if [[ $CMD == --* ]]; then
+    die "'$CMD' is an option, not a command. Options go AFTER the command:
+     $0 on $CMD ${*:-}
+     (commands: status detect preflight reload-driver on off bind watch link link-speed ec install-rules)"
+fi
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --force-kill) FORCE_KILL=1 ;;

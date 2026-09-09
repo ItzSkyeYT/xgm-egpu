@@ -202,6 +202,13 @@ out=$(PATH="$T/fakebin:$PATH" DRY_RUN=1 sub cap_gpu_power 0000:01:00.0 2>&1); rc
 assert_eq  "dry-run -> rc 0"                      "$rc" "0"
 assert_has "dry-run announces the clamp plan"     "$out" "would: nvidia-smi -pm 1; -lgc 0,405"
 
+echo "== option-in-command-slot gives a real message, not the usage dump =="
+out=$(bash bin/xgm-egpu --cap-power --force-kill 2>&1); rc=$?
+assert_eq  "rc 1"                                 "$rc" "1"
+assert_has "names the mistake"                    "$out" "is an option, not a command"
+assert_has "shows the corrected command"          "$out" "on --cap-power --force-kill"
+assert_not "does NOT dump the full usage"         "$out" "Options:"
+
 echo "== library mode =="
 assert_rc "sourcing in library mode does not dispatch" 0 bash -c 'XGM_LIBRARY_MODE=1 source bin/xgm-egpu; declare -F cmd_on >/dev/null'
 assert_rc "script still parses"               0 bash -n bin/xgm-egpu
