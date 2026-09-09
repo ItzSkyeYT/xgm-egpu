@@ -415,12 +415,40 @@ never took effect (§8 explains why), so that claim was never actually tested.
 > fault would have logged correctable errors first. Core-only survives because
 > the display engine never powers up.
 >
-> `--cap-power` tests this from software: after the core binds (which survives
-> indefinitely), lock the graphics clock to ≤405 MHz and set the card's minimum
-> power limit, *then* load the display path. If the link survives, the fix is
-> to cap power at bring-up and lift it afterwards. Hypothesis — the connectors
-> were called exonerated once already; but this one predicts the zero-AER
-> signature and the core/display split, which nothing else so far has.
+> `--cap-power` tested this from software, and **ruled it out**. With the
+> graphics clock locked to 405 MHz and the power limit at its 100 W floor, the
+> card sat at **23.5 W, flat, for the full 7 seconds** — drifting *down*
+> (23.56 → 23.23 W), never up — at 29 °C, P0, Gen3, and the link died anyway.
+> A display-init current step would show as a climb before the drop. There is
+> none. Whatever this is, it is not the card drawing more power.
+>
+> ### The machine hard-hangs, and nothing about the death has ever reached disk
+>
+> The `--cap-power` boot's journal is **hard-cut**: no shutdown lines, and the
+> next boot ran F2FS recovery over half-written files. That run did not just
+> lose the eGPU — the whole machine hung at ~7 s, with the internal panel on
+> the AMD iGPU, which an NVIDIA link-drop should never do by itself. And it left
+> **no record**: pstore is not mounted, there is no ramoops, and
+> `kernel.nmi_watchdog=0`, so an IRQs-off lockup is undetectable by
+> configuration. Every "death" analysed so far was read from the *survivable*
+> runs; the hangs have been blind spots.
+>
+> The NVMe is on `00:02.4`, not under the XGM bridge, so this is not the eGPU
+> taking storage down with it. The hang is in the teardown path itself — which
+> rhymes with the D-state eject wedges of §4.
+>
+> **`xgm-egpu capture`** arms the machine at runtime (no reboot): NMI watchdog
+> on, hard/soft-lockup and hung-task and oops → panic, `panic=30` so it comes
+> back on its own, EFI-backed pstore mounted, netconsole to the Pi best-effort.
+> The next hang becomes a panic with a backtrace that survives the reboot.
+> **Arm it before every activation from now on.** The survival watch also
+> writes an fsync'd breadcrumb (`/var/tmp/xgm-last-run.txt`) every second.
+>
+> Seven mechanisms have now been eliminated. What remains testable in
+> software: `--mask-pciehp` (stops pciehp starting the surprise-removal
+> teardown — which may be both what makes the drop fatal *and* what hangs the
+> box) and `--no-kms` (never powers the display engine; a working render-only
+> eGPU). The next run should be `--mask-pciehp` with capture armed.
 
 ### The RTD3 finding itself (real, worth keeping, not the cause)
 

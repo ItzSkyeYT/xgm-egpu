@@ -22,7 +22,7 @@ meet them undocumented.**
 | Link trains at PCIe Gen3 x8 | **Works** - earlier "Gen1 cap" was an idle-state reading, see [Findings](FINDINGS.md#pcie-link-speed) |
 | Link survives **unbound** | **Works** - Gen3 x8 indefinitely, zero AER. The hardware is fine |
 | Link survives with `nvidia` core bound | **Works** - Gen3 x8, P0, `nvidia-smi` reads it |
-| Link survives with `nvidia_drm` loaded | **Open.** Dies at ~10s, bisected to nvidia_modeset+nvidia_drm. RTD3, fbdev, DRM poll all ruled out. Next: `on --no-kms` (usable render-only eGPU?) and `on --mask-pciehp`. See [Findings §8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause) |
+| Link survives with `nvidia_drm` loaded | **Open.** Dies at ~7-10s and can hard-hang the machine. RTD3, fbdev, DRM poll and a power transient (card flat at 23 W) all ruled out. Arm `capture` first; next: `on --mask-pciehp`, `on --no-kms`. See [Findings §8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause) |
 
 The reference machine is the most marginal configuration that exists: a DIY dock
 with substituted connectors, on the oldest Flow model. If you have an official
@@ -84,6 +84,7 @@ mean the write was rejected; the EC has usually already committed by then. See
 xgm-egpu status              attributes, bus state, modules, blockers
 xgm-egpu detect              autodetected topology, and how it was derived
 xgm-egpu preflight           is NVIDIA RTD3 disarmed in the LOADED driver? run this first
+xgm-egpu capture [arm|read]  arm the kernel so a hard hang leaves a backtrace in pstore
 xgm-egpu bind <core|modeset|drm-nokms|drm-nofbdev|drm|audio|all>
                              bind one driver layer to an enumerated eGPU and
                              watch whether the link dies (bisection)
@@ -105,8 +106,8 @@ Useful options:
 --link-gen N     pin PCIe generation 1-4 before switching
 --no-reload      enumerate without binding NVIDIA - separates enumeration
                  faults from driver faults
---cap-power      lock clocks + min power limit before the display engine loads.
-                 Tests the leading (power-transient) hypothesis
+--cap-power      lock clocks + min power limit before the display engine loads
+                 (ruled out: card sat flat at 23 W and died anyway; kept for the record)
 --no-kms         load nvidia_drm with modeset=0: render node only. If the link
                  survives, the eGPU works for compute / PRIME offload today
 --mask-pciehp    stop pciehp turning a momentary Link Down into a teardown
