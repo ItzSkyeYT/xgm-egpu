@@ -1,330 +1,153 @@
 # xgm-egpu
 
-Activating an ASUS XG Mobile eGPU on an ordinary Linux distribution - including
-DIY docks built from [osy/XG_Mobile_Station](https://github.com/osy/XG_Mobile_Station).
+Use an ASUS XG Mobile eGPU on an ordinary Linux distribution: ROG Flow and
+ROG Ally hosts, official docks and DIY ones built from
+[osy/XG_Mobile_Station](https://github.com/osy/XG_Mobile_Station).
 
-Not a SteamOS plugin. No Decky Loader, no Gaming Mode, no immutable-root
-bind-mount machinery. A shell script, two config files, and a long document
-explaining why the obvious approach hard-hangs your machine.
+A shell script, two config files, and the write-up of why the obvious
+approaches hang or kill the machine. Not a SteamOS plugin: no Decky, no Gaming
+Mode, no immutable-root machinery. On SteamOS or Bazzite use
+[Kentronix57/Decky-Loader-XGMobile-Manager](https://github.com/Kentronix57/Decky-Loader-XGMobile-Manager) instead.
 
-## Status: working (render offload). Read this before you start.
+## Status
 
-**2026-09-09, 21:31 and 21:58:** the RTX 3060 on a DIY osy Lite dock runs at
-PCIe Gen3 x8 on a ROG Flow X13 GV301QH under CachyOS, driver bound, zero AER,
-`nvidia-smi` and PRIME render offload working, activated from a TTY with the
-tool handing the display manager back afterwards. The one-line version of the cause: **the NVIDIA
-driver retrains the PCIe link about ten seconds after init, when the GPU
-leaves P0, and this link does not survive a retrain at Gen3.** An unbound
-card holds Gen3 x8 forever because nothing retrains it. The fix removes every
-reason to retrain. Details in [Findings §8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause).
+**Working, render offload.** On the reference machine (Flow X13 GV301QH, DIY
+osy Lite v0.6.1 dock, RTX 3060, CachyOS) the card runs at PCIe Gen3 x8 with
+the driver bound, zero link errors, `nvidia-smi` and PRIME render offload
+working. Games render on the eGPU and display on the laptop screen. What is
+not supported yet is a monitor on the eGPU's own ports (see [Open questions](#open-questions)).
 
-One command, from a TTY or the desktop:
+The whole hunt, cause included, is in [FINDINGS.md](FINDINGS.md). The one-line
+version: the NVIDIA driver retrains the PCIe link about ten seconds after
+init, when the GPU leaves P0, and a DIY link cannot complete a retrain at
+Gen3. The fix removes every reason to retrain.
 
-```sh
-sudo xgm-egpu go
-```
+See [HARDWARE.md](HARDWARE.md) for what has been tested, and add your machine.
 
-It checks that the three persisted settings are in the loaded driver (RTD3
-off, `nvidia_drm modeset=0`, `NVreg_EnablePCIeGen3=1`), writes and reloads
-whatever is missing on the first run, refuses if your compositor is holding
-the internal GPU (see "Using it from the desktop"), activates with
-`--no-kms --freeze-link --force-kill`, then proves the result: `nvidia-smi`
-at Gen3 x8 and `glxinfo` run as you inside your session naming the eGPU.
-Games: Steam launch options `prime-run %command%`. `sudo xgm-egpu off` when
-done. The pieces, if you want them separately:
+## Read this first
 
-```sh
-sudo xgm-egpu install-rules      # RTD3 off, runtime PM pinned (modprobe.d + udev + initramfs)
-sudo xgm-egpu drm nokms          # nvidia_drm modeset=0: render node only
-sudo xgm-egpu pcie gen3          # NVreg_EnablePCIeGen3=1: the driver may keep Gen3
-sudo xgm-egpu reload-driver --force-kill   # or reboot
-xgm-egpu desktop pin             # kwin off the NVIDIA GPU; log out and in once
-sudo xgm-egpu on --no-kms --freeze-link --force-kill
-```
-
-`--freeze-link` locks the GPU at its maximum clocks so it never leaves P0 and
-sets the PCIe Hardware Autonomous Speed/Width Disable bits on both ends.
-`--no-kms` also seals `/dev/nvidia-modeset` so no client can bring the display
-engine up. What this does **not** give you is a monitor on the eGPU's own
-ports; whether the full display path also survives now that the retrain is
-gone is untested (see the table). It costs about 40 W at idle on the dock.
-
-This is still a findings dump with a working tool attached, published because
-**the failure modes here will destroy your afternoon if you meet them
-undocumented.**
-
-| Stage | State |
-|---|---|
-| Activation (eGPU enumerates on the PCIe bus) | **Works** |
-| NVIDIA driver binds, DRM nodes appear | **Works** |
-| Link stays up under runtime power management | **Works**, with the shipped udev + modprobe rules |
-| Link trains at PCIe Gen3 x8 | **Works** - earlier "Gen1 cap" was an idle-state reading, see [Findings](FINDINGS.md#pcie-link-speed) |
-| Link survives **unbound** | **Works** - Gen3 x8 indefinitely, zero AER. The hardware is fine |
-| Link survives with `nvidia` core bound | **Works** - Gen3 x8, P0, `nvidia-smi` reads it |
-| Link survives with the driver stack bound, render-only | **Works** - `drm nokms` + `pcie gen3` + `on --no-kms --freeze-link`: Gen3 x8 held, P0, zero AER, PRIME offload; run from a TTY with the display manager handed back (2026-09-09 21:58) |
-| Monitor on the eGPU's own ports (`modeset=1`) | **Open** - every earlier death was the retrain, not the display engine; `drm default` + `pcie gen3` + `--freeze-link` is the untested next experiment |
-
-The reference machine is the most marginal configuration that exists: a DIY dock
-with substituted connectors, on the oldest Flow model. If you have an official
-dock, you are strictly closer to the happy path and several of these walls may
-simply not be there for you.
-
-## Is this for you?
-
-**Probably yes if:** you have an ASUS ROG Flow or ROG Ally, an XG Mobile
-(official or DIY), and a normal Linux distro (Arch, CachyOS, Fedora, Debian…).
-
-**Probably no if:** you are on SteamOS or Bazzite. Use
-[Kentronix57/Decky-Loader-XGMobile-Manager](https://github.com/Kentronix57/Decky-Loader-XGMobile-Manager)
-instead - it handles the immutable root and Gaming Mode integration properly,
-which this does not attempt.
-
-## The one thing to read first
-
-**[docs/RECOVERY.md](docs/RECOVERY.md)** - how to get your machine back.
-
-`egpu_enable` is **persistent EC state.** It survives a reboot and a forced
-power-off. If it commits and no eGPU enumerates, you have no discrete GPU at
-all, and with the dock attached **the machine will not boot.** That is not a
-brick, and the recovery takes five minutes, but only if you know it before you
-need it.
-
-Read that file before your first `xgm-egpu on`.
+**[docs/RECOVERY.md](docs/RECOVERY.md).** `egpu_enable` is persistent EC state:
+it survives reboots and forced power-offs. If it commits and no eGPU
+enumerates, you have no discrete GPU, and with the dock attached the machine
+may not boot. Recovery takes five minutes if you know it before you need it.
 
 ## Quick start
 
 ```sh
 git clone https://github.com/ItzSkyeYT/xgm-egpu
 cd xgm-egpu
-sudo ./install.sh          # installs bin/xgm-egpu
-sudo xgm-egpu install-rules  # udev PM pinning + modprobe shadow + initramfs rebuild
+sudo ./install.sh --link       # symlink into /usr/local/bin so edits are live
+xgm-egpu detect                # read-only: what it worked out about your machine
+xgm-egpu status                # read-only: egpu_connected must be 1
 ```
 
-Then, with the dock connected and locked, and on AC power:
+Then, dock connected and locked, laptop on mains:
 
 ```sh
-xgm-egpu detect            # safe, read-only - what it worked out about your machine
-xgm-egpu preflight         # safe, read-only - is RTD3 disarmed? `on` refuses if not
-xgm-egpu status            # safe, read-only
-sudo xgm-egpu on
+sudo xgm-egpu go
 ```
 
-`status` tells you whether the EC has detected your dock (`egpu_connected=1`)
-before you attempt anything that can wedge the machine. If it reads `0`, stop:
-nothing else in this repo will help until the EC sees the board.
+`go` does everything in order and says which stage it is in: it checks the
+three persisted settings in the loaded driver (RTD3 off, `nvidia_drm
+modeset=0`, PCIe Gen3 allowed) and writes and reloads whatever is missing on
+the first run; refuses if your compositor is holding the internal GPU; runs
+the activation that works (`on --no-kms --freeze-link --force-kill`); then
+proves the result with `nvidia-smi` at Gen3 and `glxinfo` run as you inside
+your session, naming the eGPU. The EC write can take up to two minutes; slow
+is not stuck.
 
-**The write takes a long time - up to a couple of minutes.** It drives a full
-ACPI eject and PCI rescan synchronously. Slow is not stuck. A timeout does *not*
-mean the write was rejected; the EC has usually already committed by then. See
-[Findings §2](FINDINGS.md#2-a-timed-out-write-has-usually-already-succeeded).
+Games: Steam launch options `prime-run %command%` (add `mangohud` to see the
+GPU name in the overlay; native Wayland games need `SDL_VIDEODRIVER=x11`).
+When done: `sudo xgm-egpu off`. Every setting persists; the activation is
+one command per boot.
 
-## Commands
+## What the working configuration is
 
-```
-xgm-egpu status              attributes, bus state, modules, blockers
-xgm-egpu detect              autodetected topology, and how it was derived
-xgm-egpu preflight           is NVIDIA RTD3 disarmed in the LOADED driver? run this first
-xgm-egpu gsp [status|off|on] disable NVIDIA GSP firmware (proprietary driver only)
-xgm-egpu drm [status|nofbdev|nokms|safe|default]
-                             set what the LOADED nvidia_drm does to the eGPU when it
-                             appears (persisted via modprobe.d + initramfs; `on` verifies)
-xgm-egpu pcie [status|gen3|default]
-                             tell the driver PCIe Gen3 is allowed so it never retrains
-                             the link down (NVreg_EnablePCIeGen3=1); or use `on --link-gen 2`
-xgm-egpu desktop [status|pin|unpin]
-                             pin kwin to the laptop's own GPU so the desktop survives
-                             `on` (it otherwise holds the internal dGPU and has to be killed)
-xgm-egpu logs [N|show|dir]   persistent per-run logs in /var/log/xgm-egpu (full
-                             output of every on/off/bind/reload-driver, plus the
-                             kernel log saved by the watch); survives reboots
-xgm-egpu capture [arm|read]  armed automatically by `on`/`bind`; `read` after a
-                             hang+reboot shows the kernel's last words from pstore
-xgm-egpu bind <core|modeset|drm-nokms|drm-nofbdev|drm|audio|all>
-                             bind one driver layer to an enumerated eGPU and
-                             watch whether the link dies (bisection)
-xgm-egpu watch [SECS]        sample power state every 0.5s after activation
-xgm-egpu on                  release the internal dGPU, then activate
-xgm-egpu off                 deactivate, restore the internal dGPU
-xgm-egpu link [BDF]          PCIe link speed/width and error counters
-xgm-egpu link-speed <1-4>    pin the root port's target generation and retrain
-xgm-egpu ec                  decode the EC's XGM state block (connect/lock/AC)
-xgm-egpu install-rules       persist runtime-PM pinning, disarm NVIDIA RTD3,
-                             rebuild the initramfs if nvidia is baked in
-```
+| Piece | What it does | Why |
+|---|---|---|
+| `install-rules` | RTD3 off, runtime PM pinned on the root port and the eGPU | RTD3 drops the link 10 s after idle; the port must never autosuspend |
+| `drm nokms` | `nvidia_drm modeset=0`: the eGPU gets a render node only | no display engine bring-up; PRIME offload still works through a system-memory path |
+| `pcie gen3` | `NVreg_EnablePCIeGen3=1` | the driver otherwise treats Gen3 as forbidden on an unrecognised platform and pulls the link down |
+| `on --freeze-link` | clocks locked at max (GPU stays in P0), PCIe autonomous-speed-disable bits on both ends | the idle-time generation downshift is the retrain that killed every run |
+| `on --no-kms` seal | `/dev/null` bind-mounted over `/dev/nvidia-modeset` for the run | kwin and every PRIME client otherwise bring the display engine up themselves |
+| `desktop pin` | `KWIN_DRM_DEVICES` pinned to the laptop's card | kwin otherwise holds the internal dGPU and has to be killed for the eject |
 
-Useful options:
-
-```
---dry-run        everything except the sysfs write
---release LEVEL  minimal (default) | unload | remove
---link-gen N     pin PCIe generation 1-4 before switching
---no-reload      enumerate without binding NVIDIA - separates enumeration
-                 faults from driver faults
---cap-power      lock clocks + min power limit before the display engine loads
-                 (ruled out: card sat flat at 23 W and died anyway; kept for the record)
---no-kms         require the loaded nvidia_drm to have modeset=0 (`drm nokms` first):
-                 render node only, the display engine is never touched. PRIME
-                 render offload keeps working - see "Render-only mode" below
---mask-pciehp    stop pciehp turning a momentary Link Down into a teardown
---no-fbdev       require the loaded nvidia_drm to have fbdev=0 (`drm nofbdev` first).
-                 Tested for real 2026-09-09 19:30: died identically. Ruled out
---freeze-link    lock the GPU at max clocks (stays in P0) and set the PCIe autonomous-speed
-                 disable bits on both ends, so nothing asks the link to retrain; with
-                 `pcie gen3` this is the full-Gen3 attempt
---audio          let snd_hda_intel bind the eGPU's HDMI-audio function. Off by default:
-                 that codec is what every recorded death has in common
---modeset-safe   require the `drm safe` set (fbdev=0 + nvidia_modeset HDMI-FRL/VRR off)
---no-drm-poll    disable DRM's 10s connector poll (ruled out; kept for the record)
---timeout N      default 180s
---root-port BDF  override the autodetected PCIe root port
---internal-dgpu BDF
-                 override the autodetected internal dGPU
-```
-
-**The display-layer flags only verify.** `nvidia_drm` attaches to a GPU the
-moment it appears on the bus, with the parameters it was *loaded* with, and
-`modprobe` silently ignores parameters for a module that is already resident.
-So `on --no-fbdev` cannot load anything differently; it checks that the loaded
-module already is `fbdev=0` and refuses otherwise. Set the layer once with
-`sudo xgm-egpu drm nofbdev` (or `nokms`, `safe`), apply it with
-`sudo xgm-egpu reload-driver --force-kill` or a reboot, confirm with
-`xgm-egpu drm status`, then activate. Three earlier "ruled out" results in the
-findings were this trap - [Findings §8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause).
+Cost: about 40 W idle on the dock, because the GPU never leaves P0.
 
 ## Using it from the desktop
 
-`on` has to release the internal dGPU, and the compositor is what holds it:
-kwin probes every DRM device with Vulkan at start and keeps the file
-descriptors. `--force-kill` therefore killed kwin on the reference machine,
-and the eGPU came up on a dead desktop. Two fixes, use both:
+`on` must release the internal dGPU, and the compositor is what usually holds
+it. Two mechanisms keep your session alive:
 
-```sh
-xgm-egpu desktop pin      # KWIN_DRM_DEVICES -> the laptop's own card; log out and in once
-```
+- `xgm-egpu desktop pin` (no sudo, then log out and in once) keeps kwin off
+  every NVIDIA device. It validates the file the way Plasma sources it before
+  you log out, and prints the rollback (`desktop unpin` from a TTY).
+- Whatever `--force-kill` has to close (a browser with GPU acceleration,
+  typically) is started again when the run ends, as you, into your session.
 
-`pin` writes a small `/bin/sh` snippet into `~/.config/plasma-workspace/env/`
-that resolves the laptop card's by-path link to its `/dev/dri/cardN` at each
-login, then validates the file the same way Plasma sources it before it lets
-you log out. That validation exists because the first version exported the
-by-path name itself, `KWIN_DRM_DEVICES` is colon-separated, and
-`pci-0000:08:00.0-card` therefore killed the session on the reference machine
-until the file was deleted from a TTY. If a session ever fails to start:
-Ctrl+Alt+F3, log in, `xgm-egpu desktop unpin`.
+From a TTY, `go`/`on`/`off` stop the display manager before the release and
+start it again when the run ends, success or not, so you land on a login
+screen rather than a dead console (`--keep-desktop` skips that). `go` checks
+for a compositor holding the GPU before it touches anything.
 
-After that, kwin never opens an NVIDIA device, and `on` from a desktop
-terminal only has to close whatever else holds the GPU (a browser with GPU
-acceleration, typically) - the session survives, and **whatever `--force-kill`
-closed is started again when the run ends**, as you, into your session, with
-the command line and working directory it had (`--no-relaunch` to skip). A
-killed compositor is the one thing that cannot be brought back, which is what
-the pin is for. And when `on` or `off` is
-run from a **TTY** with a display manager active, the tool stops the display
-manager before the release and starts it again when the run ends, success or
-not, so you land on a login screen rather than a dead console.
-(`--keep-desktop` skips that.)
+## Commands
 
-## Render-only mode (no monitor on the eGPU)
+Everyday: `go`, `off`, `status`, `detect`, `preflight`, `logs`, `report`,
+`link`. Settings: `install-rules`, `drm`, `pcie`, `gsp`, `desktop`,
+`reload-driver`. Research: `on` with its options, `bind`, `watch`, `capture`,
+`link-speed`, `ec`. `xgm-egpu --help` documents every one; each has a
+`--dry-run`.
 
-If you do not need to drive a monitor from the eGPU's own ports - you just
-want its compute and render power for games and apps on the laptop screen -
-`drm nokms` (`nvidia_drm modeset=0`) is the safest configuration: the eGPU
-gets a DRM **render node only**, and the display-engine bring-up that every
-death so far happened inside is never run.
-
-What still works with `modeset=0`, checked on this driver (580) by tracing the
-ioctls a PRIME client makes and emulating the kernel's `modeset=0` behaviour
-for it (the exact set of gated ioctls, `GET_DEV_INFO` reporting no NVKMS
-allocation): CUDA / OpenCL / headless Vulkan, and **PRIME render offload** -
-the NVIDIA userspace falls back from `GEM_IMPORT_NVKMS_MEMORY` (modeset-gated)
-to `GEM_IMPORT_USERSPACE_MEMORY` (not gated) for the buffers it shares with the
-iGPU. Xwayland/X11 clients (which is what Proton games are) render and present
-normally; native-Wayland clients present through a slower copy path.
-
-```sh
-prime-run vkcube            # or: __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia <app>
-prime-run glxinfo -B        # must name the eGPU
-# Steam launch options:      prime-run %command%
-```
-
-On a Flow the internal dGPU is ejected when the XG Mobile is active, so the
-eGPU is the only NVIDIA GPU and `prime-run` needs no device selection.
-
-The catch, measured on the internal dGPU: with `modeset=0` loaded, **kwin
-brings the display engine up anyway 1.5 s after a GPU appears** (its Vulkan
-probe of the new device), and every PRIME client does so once at start -
-`NVKMS_IOCTL_ALLOC_DEVICE` has no privilege check. So `on --no-kms` **seals
-the door** first: it bind-mounts `/dev/null` over `/dev/nvidia-modeset`.
-Clients still open it, every display-engine ioctl fails, and they carry on
-(vkcube, vulkaninfo, glxgears all tested; the allocation count stays flat).
-`off` unseals. Making the node unopenable instead is not an option - the
-Vulkan driver segfaults on that. `--no-seal` skips the seal on purpose.
-
-`--release minimal` is the default **and on the reference machine it is the only
-level that has ever survived.** More teardown makes it fail harder and faster.
-That is counterintuitive and it is the single most important finding in this
-repo - [Findings §6](FINDINGS.md#6-less-teardown-not-more).
-
-## Hardware
-
-| Host | Dock | Result |
-|---|---|---|
-| ROG Flow X13 GV301QH | DIY osy Lite v0.6.1, RTX 3060, ALC04-S40EIA-00 connectors | **Works**, Gen3 x8, render offload, with `drm nokms` + `pcie gen3` + `on --no-kms --freeze-link` ([§8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause)) |
-| ROG Ally + CachyOS | DIY osy, RTX 3080 | Testing in progress |
-
-If you run this on anything, please [open an
-issue](../../issues) with your `xgm-egpu status` output - see
-[CONTRIBUTING.md](CONTRIBUTING.md). The tested-hardware table is the most
-valuable thing this repo can accumulate.
+Every `go`/`on`/`off`/`bind`/`reload-driver` writes its complete output to
+`/var/log/xgm-egpu/<time>-<command>.log`, and the survival watch saves the
+kernel log beside it. `xgm-egpu logs` lists them; after any failure,
+`xgm-egpu logs show` is what to paste into an issue.
 
 ## Other machines
 
-**Nothing to configure.** Topology is autodetected from sysfs at startup - the
-internal dGPU, its device ID, and the PCIe root port the XG Mobile shares lanes
-with. Check what it worked out:
+Nothing to configure: the internal dGPU, its device ID and the PCIe root port
+the XG Mobile shares lanes with are autodetected from sysfs (`xgm-egpu
+detect` shows the reasoning). Hosts without an internal dGPU (ROG Ally) are
+the easier case: nothing shares the lanes, so activation triggers no eject.
+Detection only refuses to guess when a host has several empty hotplug slots
+and no internal dGPU; then one line in `/etc/xgm-egpu.conf` (`ROOT_PORT=`)
+or `--root-port` settles it. [docs/PORTING.md](docs/PORTING.md) explains the
+derivation. Detection getting a machine wrong is a bug worth an issue.
 
-```sh
-xgm-egpu detect
-```
+## Contributing
 
-Hosts with **no internal dGPU** (ROG Ally) are supported and are the easier case:
-nothing shares the XGM's lanes, so activation triggers no eject, and the entire
-release path - the hardest part of this problem - is a no-op. Detection finds the
-root port from the empty hotplug slot instead.
+The most valuable contribution is a row in [HARDWARE.md](HARDWARE.md). Run
+`xgm-egpu report` while the eGPU is active; it prints the row and the details
+for an issue. "It died at stage 3" is as useful as "it works". See
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
-Detection only refuses to guess when a host has several empty hotplug slots and
-no internal dGPU to disambiguate them. It says so, and you set one value:
+## Open questions
 
-```sh
-# /etc/xgm-egpu.conf
-ROOT_PORT=0000:00:01.1
-```
-
-`--root-port` and `--internal-dgpu` do the same thing for one run.
-
-If detection gets your machine wrong, that is a bug worth reporting - paste
-`xgm-egpu detect` into an issue. [docs/PORTING.md](docs/PORTING.md) explains how
-the detection works and how to derive the values by hand.
+- A monitor on the eGPU's own ports: every earlier death was the retrain,
+  not the display engine, so `drm default` + `pcie gen3` + `--freeze-link` is
+  the untested next experiment.
+- Whether the idle downshift can be prevented without locking clocks (a
+  registry key rather than P0 forever).
+- Official docks: the reference machine is the most marginal build that
+  exists. An official dock may need none of `--freeze-link`.
 
 ## Documentation
 
-- **[docs/RECOVERY.md](docs/RECOVERY.md)** - unbootable machine, wedged terminal, stuck EC state
-- **[FINDINGS.md](FINDINGS.md)** - the reverse-engineering: AML decode, teardown ordering, power management, and the dead ends so you don't repeat them
-- **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** - symptom → cause → fix
-- **[docs/PORTING.md](docs/PORTING.md)** - adapting to another Flow or an Ally
+- [docs/RECOVERY.md](docs/RECOVERY.md): unbootable machine, wedged terminal, stuck EC state
+- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md): symptom, cause, fix
+- [FINDINGS.md](FINDINGS.md): the reverse-engineering, the dead ends, the resolution
+- [docs/PORTING.md](docs/PORTING.md): how detection works, deriving values by hand
+- [HARDWARE.md](HARDWARE.md): tested hosts, docks and GPUs
 
 ## Credits
 
-- **[osy/XG_Mobile_Station](https://github.com/osy/XG_Mobile_Station)** - the DIY dock, and `Docs/ACPI_Annotated.asl` + `Docs/Software.md`, which are the single most useful references for any of this. Most of [FINDINGS.md](FINDINGS.md) is applied osy.
-- **[stensmir/xg-mobile-linux](https://github.com/stensmir/xg-mobile-linux)** - first to show the sysfs write is all you need on SteamOS.
-- **[Kentronix57/Decky-Loader-XGMobile-Manager](https://github.com/Kentronix57/Decky-Loader-XGMobile-Manager)** - the mature SteamOS/Bazzite implementation.
-- **Luke Jones and the [asus-linux](https://asus-linux.org/) project** - `asus-wmi` and `asus-armoury`, which are what make any of this possible from userspace.
+- [osy/XG_Mobile_Station](https://github.com/osy/XG_Mobile_Station): the DIY dock, and `Docs/ACPI_Annotated.asl` + `Docs/Software.md`, the primary sources for all of this.
+- [stensmir/xg-mobile-linux](https://github.com/stensmir/xg-mobile-linux): first to show the sysfs write is all it takes on SteamOS.
+- [Kentronix57/Decky-Loader-XGMobile-Manager](https://github.com/Kentronix57/Decky-Loader-XGMobile-Manager): the SteamOS/Bazzite implementation.
+- Luke Jones and [asus-linux](https://asus-linux.org/): `asus-wmi` and `asus-armoury`.
 
-## Maintenance
+## Maintenance and licence
 
-**Unmaintained by default.** This is research published in case it helps, by
-someone with one machine and limited time. Issues are welcome and will be read,
-but do not expect timely fixes. Forks are encouraged.
-
-## Licence
-
-MIT - see [LICENSE](LICENSE).
+Unmaintained by default: research published in case it helps, by someone with
+one machine. Issues are read; fixes may be slow; forks are encouraged. MIT,
+see [LICENSE](LICENSE).

@@ -10,6 +10,15 @@ that repo are the primary sources and are worth reading before this file.
 The negative results at the end are as valuable as the positive ones. Each cost
 hours.
 
+> **TL;DR (2026-09-09).** Activation is one sysfs write; the EC state is
+> persistent. The link then died ~10 s after the driver bound, every time, for
+> a day of hypotheses (RTD3, fbdev, the display engine, GSP, power). The cause
+> was the NVIDIA driver **retraining the PCIe link when the GPU leaves P0**,
+> which a DIY link cannot complete at Gen3. Allow Gen3
+> (`NVreg_EnablePCIeGen3=1`), keep the GPU in P0 and set the PCIe
+> autonomous-speed-disable bits (`--freeze-link`), and it holds Gen3 x8
+> indefinitely. Resolution and evidence at the end of [§8](#8-the-ten-second-link-death--rtd3-was-not-the-cause).
+
 ---
 
 ## 0. The interface already exists

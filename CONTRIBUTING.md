@@ -8,26 +8,24 @@ That said, some contributions are worth far more than others.
 
 ## The most valuable thing you can contribute
 
-**A hardware report.** The tested-hardware table is the point of this repo. Even
-"it didn't work" is useful, and "it didn't work at step 3" is extremely useful.
-
-Open an issue titled `hardware: <your model> + <your dock>` with:
+**A row in [HARDWARE.md](HARDWARE.md).** Even "it didn't work" is useful, and
+"it died at stage 3 of `go`" is extremely useful. While the eGPU is active
+(or as far as you got):
 
 ```sh
-xgm-egpu detect            # topology autodetection — most useful single output
-xgm-egpu status
-uname -r
-cat /sys/class/dmi/id/product_name /sys/class/dmi/id/bios_version
-lspci -nn
-sudo dmesg | grep -iE 'asus|nvidia|pcieport|nvrm|xid|acpi' | tail -60
+xgm-egpu report            # prints the row and the details an issue needs
+xgm-egpu detect            # topology autodetection — the single most useful output
+xgm-egpu logs show         # the last run, with its kernel log, if something went wrong
 ```
+
+Set `DOCK="official XG Mobile 2021"` or `DOCK="osy Lite v0.6.1, I-PEX"` in
+`/etc/xgm-egpu.conf` and the report fills the dock column in. Then either open
+a pull request adding the row, or an issue with the "Hardware report" template.
 
 **`xgm-egpu detect` getting your machine wrong is itself a bug worth reporting**,
 separately from whether activation works. Detection is meant to need no
 configuration on any ASUS host; a machine where it guesses wrong, or refuses to
 guess, is something to fix in the script rather than work around in your config.
-
-Plus: official dock or DIY? Which osy variant and revision? Which GPU?
 
 ## Specific open questions
 

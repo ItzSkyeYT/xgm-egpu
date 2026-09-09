@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # install.sh — put xgm-egpu somewhere sudo can find it.
 #
-# Deliberately minimal. It does NOT install the udev/modprobe rules, because
-# those pin a specific root-port address that differs per machine; run
-# `sudo xgm-egpu install-rules` once you have set your constants (docs/PORTING.md).
+# Deliberately minimal. It does NOT install the udev/modprobe rules: those are
+# generated for your machine's detected root port by `sudo xgm-egpu
+# install-rules`, which `xgm-egpu go` runs for you on its first run.
 
 set -euo pipefail
 
