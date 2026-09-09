@@ -11,11 +11,13 @@ Mode, no immutable-root machinery. On SteamOS or Bazzite use
 
 ## Status
 
-**Working, render offload.** On the reference machine (Flow X13 GV301QH, DIY
-osy Lite v0.6.1 dock, RTX 3060, CachyOS) the card runs at PCIe Gen3 x8 with
-the driver bound, zero link errors, `nvidia-smi` and PRIME render offload
-working. Games render on the eGPU and display on the laptop screen. What is
-not supported yet is a monitor on the eGPU's own ports (see [Open questions](#open-questions)).
+**Working, including a monitor on the eGPU's own ports.** On the reference
+machine (Flow X13 GV301QH, DIY osy Lite v0.6.1 dock, RTX 3060, CachyOS) the
+card runs at PCIe Gen3 x8 with the driver bound, zero link errors,
+`nvidia-smi` and PRIME render offload working, and with `go --display` plus
+`desktop pin --outputs` the desktop extends onto a monitor on the eGPU's
+HDMI (2026-09-09 23:30). Games render on the eGPU and display on either
+screen. `off` must run from a TTY in that mode, because kwin holds the card.
 
 The whole hunt, cause included, is in [FINDINGS.md](FINDINGS.md). The one-line
 version: the NVIDIA driver retrains the PCIe link about ten seconds after
@@ -123,9 +125,10 @@ for an issue. "It died at stage 3" is as useful as "it works". See
 
 ## Open questions
 
-- A monitor on the eGPU's own ports: every earlier death was the retrain,
-  not the display engine, so `drm default` + `pcie gen3` + `--freeze-link` is
-  the untested next experiment.
+- Performance in display mode vs render-only: render-only presents through
+  a system-memory path with no GPU fences and serialises CPU and GPU (about
+  half the frame rate on the reference machine); display mode should restore
+  the fences. Not yet measured.
 - Whether the idle downshift can be prevented without locking clocks (a
   registry key rather than P0 forever).
 - Official docks: the reference machine is the most marginal build that
