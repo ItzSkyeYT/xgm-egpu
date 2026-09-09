@@ -571,8 +571,38 @@ never took effect (§8 explains why), so that claim was never actually tested.
 > "Correcting number of heads" at +10.7 s too and lives — it has no connector
 > to commit to. `fbdev=0` removes the only DRM client that commits anything.
 > It also keeps `modeset=1`, i.e. full PRIME (video-memory import, semaphore
-> fences). **Test order: `drm nofbdev` first, `drm nokms` second, `gsp off`
-> third.**
+> fences).
+>
+> **Tested for real at 19:30 — died identically.** `drm nofbdev` applied,
+> `reload-driver`, `drm status` → `modeset=Y fbdev=N`, `on --no-fbdev`
+> verified it, and the journal has no `fb1` line this time. Then:
+>
+> ```
+> 15098.759  [nvidia-drm] [GPU ID 0x100] Loading driver
+> 15100.454  Initialized nvidia-drm 0.0.0 for 0000:01:00.0 on minor 0
+> 15100.46   kwin_wayland: eglInitialize failed ... Failed to open drm device   (x4)
+> 15103-110  watch: P0, 1792 MHz, 7501 MHz, 31 W, Gen3 x8, 28 C - flat, every second, through 8 s
+> 15111.078  pciehp: Slot(0): Link Down                                      <- 12.3 s after attach
+> 15111.570  Xid 79 from irq/33-pciehp (inside pciehp_unconfigure_device -> nv_drm_dev_destroy)
+> 15111.575  nvidia-modeset: Failed to query display engine channel state  (channels 2..7)
+> ```
+>
+> Three things this run settles. **fbdev is out**, for real. **The link drops
+> first**: Link Down is logged 0.5 s before the Xid, the Xid is raised from
+> pciehp's own teardown path, and the GSP RPC history printed at death is a
+> run of `FREE`s completing in 200-250 us — the firmware was healthy. **Seven
+> display-engine channels were live** at death (the "Failed to query display
+> engine channel state" lines are nvidia-modeset finding them gone). And the
+> card is at rest the whole time: no clock, power or temperature movement at
+> 1 Hz. Whatever the display engine does to this link, it does it without
+> drawing power, and it takes 8-12 s.
+>
+> The run was made from the desktop; kwin opened the eGPU's `card0` and the
+> whole session froze into the usual blue garbage at death, the box was
+> power-cycled, and the journal ends at the modeset errors — no crash dump.
+> `on` now warns and pauses when a compositor is live and a KMS path is
+> requested. **Revised order: `drm nokms` (no display-engine channels at
+> all; render node only), then `gsp off`, then `drm safe`.**
 >
 > **4. What `modeset=0` costs — measured, no root needed.** An `LD_PRELOAD`
 > ioctl tracer on `vkcube` (xcb and native Wayland WSI) and `glxgears` under
