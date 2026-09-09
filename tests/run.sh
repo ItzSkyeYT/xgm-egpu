@@ -24,7 +24,7 @@ load() {
            XGM_MKINITCPIO_CONF=$T/mkinitcpio.conf XGM_MKINITCPIO_D=$T/mkinitcpio.conf.d \
            XGM_DISTRO_MODPROBE=$T/usrlib/nvidia.conf XGM_ETC_MODPROBE_D=$T/etc \
            XGM_AUTOPROBE=$T/drivers_autoprobe XGM_STATE_DIR=$T/state \
-           XGM_SYS_MODULE=$T/module XGM_SYSFS_PCI=$T/pci XGM_DRM_POLL=$T/drm_poll XGM_PSTORE=$T/pstore XGM_EFI_PSTORE_DISABLE=$T/efi_pstore_disable XGM_BUGREPORT_DIR=$T/bugreports XGM_NV_VERSION=$T/nvver XGM_GSP_CONF=$T/etc/nvidia-xgm-nogsp.conf XGM_DRM_CONF=$T/etc/nvidia-xgm-drm.conf XGM_NVKMS_NODE=$T/nvidia-modeset XGM_LOG_DIR=$T/log
+           XGM_SYS_MODULE=$T/module XGM_SYSFS_PCI=$T/pci XGM_DRM_POLL=$T/drm_poll XGM_PSTORE=$T/pstore XGM_EFI_PSTORE_DISABLE=$T/efi_pstore_disable XGM_BUGREPORT_DIR=$T/bugreports XGM_NV_VERSION=$T/nvver XGM_GSP_CONF=$T/etc/nvidia-xgm-nogsp.conf XGM_DRM_CONF=$T/etc/nvidia-xgm-drm.conf XGM_NVKMS_NODE=$T/nvidia-modeset XGM_LOG_DIR=$T/log XGM_PCIE_CONF=$T/etc/nvidia-xgm-pcie.conf
     mkdir -p "$T/gpus" "$T/mkinitcpio.conf.d" "$T/usrlib" "$T/etc" "$T/module" "$T/pci"
     # shellcheck disable=SC1091
     XGM_LIBRARY_MODE=1 source bin/xgm-egpu
@@ -391,6 +391,19 @@ out=$(DRY_RUN=0 fence_audio_function 0000:01:00.0 2>&1); rc=$?
 assert_eq  "no audio function -> rc 0"                   "$rc" "0"
 assert_has "...and says so"                              "$out" "nothing to fence"
 assert_eq  "audio is fenced by default"                  "$NO_AUDIO" "1"
+
+echo "== pcie gen3 =="
+out=$(DRY_RUN=0 sub cmd_pcie gen3 2>&1); rc=$?
+assert_eq  "pcie gen3 -> rc 0"                          "$rc" "0"
+assert_eq  "writes NVreg_EnablePCIeGen3=1"              "$(cat "$T/etc/nvidia-xgm-pcie.conf")" "options nvidia NVreg_EnablePCIeGen3=1"
+assert_has "says how to apply"                          "$out" "reload-driver"
+out=$(DRY_RUN=0 sub cmd_pcie default 2>&1)
+assert_eq  "default removes the file"                   "$(ls "$T/etc"/nvidia-xgm-pcie.conf 2>/dev/null | wc -l)" "0"
+out=$(sub cmd_pcie bogus 2>&1); rc=$?
+assert_eq  "pcie bogus -> rc 1"                         "$rc" "1"
+printf 'EnablePCIeGen3: 1\n' > "$T/params"
+out=$(sub cmd_pcie status 2>&1)
+assert_has "status reads the loaded value"              "$out" "EnablePCIeGen3 \(loaded\): 1"
 
 echo "== persistent run logs =="
 out=$(sub cmd_logs 2>&1); rc=$?

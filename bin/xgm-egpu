@@ -68,6 +68,7 @@ EFI_PSTORE_DISABLE=${XGM_EFI_PSTORE_DISABLE:-/sys/module/efi_pstore/parameters/p
 NV_VERSION=${XGM_NV_VERSION:-/proc/driver/nvidia/version}
 GSP_CONF=${XGM_GSP_CONF:-$ETC_MODPROBE_D/nvidia-xgm-nogsp.conf}
 DRM_CONF=${XGM_DRM_CONF:-$ETC_MODPROBE_D/nvidia-xgm-drm.conf}
+PCIE_CONF=${XGM_PCIE_CONF:-$ETC_MODPROBE_D/nvidia-xgm-pcie.conf}
 NVKMS_NODE=${XGM_NVKMS_NODE:-/dev/nvidia-modeset}
 LOG_DIR=${XGM_LOG_DIR:-/var/log/xgm-egpu}        # persistent per-run logs (root fs, survives reboots)
 RUN_LOG=                                          # set by run_log_start for state-changing commands
@@ -1338,6 +1339,45 @@ EOM
     esac
 }
 
+# ---------------------------------------------------------------- PCIe generation policy
+#
+# The RM only allows Gen3 on platforms it recognises unless NVreg_EnablePCIeGen3=1
+# (osinit.c turns that into RMPcieLinkSpeed ALLOW_GEN3). On this DIY dock the
+# link trains at Gen3, the RM's allowed speed is lower, and ~10 s after init
+# it retrains the link down — which this link does not survive (21:05 run:
+# 8.0 -> 5.0 GT/s, Card present/Link Up, Xid 79). Telling the RM Gen3 is
+# allowed removes the reason to retrain. Alternative: `on --link-gen 2`.
+cmd_pcie() {
+    local sub=${1:-status}
+    case $sub in
+      status)
+        printf '  EnablePCIeGen3 (loaded): %s   (0 = RM allows Gen3 only on platforms it recognises; 1 = allowed)\n' "$(grep -oP 'EnablePCIeGen3: \K[0-9]+' "$NV_PARAMS" 2>/dev/null || echo '<nvidia not loaded>')"
+        printf '  config file:             %s\n' "$([[ -f $PCIE_CONF ]] && { printf '%s: ' "$PCIE_CONF"; tr '\n' ';' < "$PCIE_CONF"; } || echo 'none (driver default)')"
+        printf '  would-load:              %s\n' "$(modprobe -c 2>/dev/null | grep -E '^options nvidia .*EnablePCIeGen3' | tr '\n' ';')"
+        printf '  root port %s: %s x%s\n' "$ROOT_PORT" "$(cat "$SYSFS_PCI/$ROOT_PORT/current_link_speed" 2>/dev/null)" "$(cat "$SYSFS_PCI/$ROOT_PORT/current_link_width" 2>/dev/null)"
+        ;;
+      gen3)
+        need_root
+        [[ $DRY_RUN -eq 1 ]] && { info "would write 'options nvidia NVreg_EnablePCIeGen3=1' to $PCIE_CONF"; return 0; }
+        printf 'options nvidia NVreg_EnablePCIeGen3=1\n' > "$PCIE_CONF"
+        ok "wrote $PCIE_CONF — the RM will treat Gen3 as allowed at the next nvidia load"
+        drm_rebuild_initramfs
+        info "Apply now (eGPU off):   $0 reload-driver --force-kill      (or reboot)"
+        info "Confirm with:           $0 pcie status   -> EnablePCIeGen3 1"
+        info "Then activate WITHOUT --link-gen (full Gen3 x8 if the link's own training holds):"
+        info "                        $0 on --no-kms --force-kill"
+        ;;
+      default)
+        need_root
+        [[ $DRY_RUN -eq 1 ]] && { info "would remove $PCIE_CONF"; return 0; }
+        rm -f "$PCIE_CONF" && ok "removed $PCIE_CONF — RM default at next load"
+        drm_rebuild_initramfs
+        info "Apply now:  $0 reload-driver --force-kill   (or reboot)"
+        ;;
+      *) die "usage: $0 pcie [status|gen3|default]" ;;
+    esac
+}
+
 # ---------------------------------------------------------------- preconditions
 
 need_root() {
@@ -2513,6 +2553,14 @@ xgm-egpu — XG Mobile eGPU control for the ROG Flow X13 (GV301QH)
                                the legacy CPU-side RM. Proprietary driver only
                                (this machine qualifies). 'off' then reload-driver
                                or reboot, then 'on'.
+  xgm-egpu pcie [status|gen3|default]
+                               tell the RM that PCIe Gen3 is allowed
+                               (NVreg_EnablePCIeGen3=1). Found 2026-09-09 21:05:
+                               every death is the RM retraining the link down to
+                               the generation it allows, ~10 s after init, and
+                               this link does not survive a retrain at Gen3.
+                               Either this (full Gen3 x8) or 'on --link-gen 2'
+                               (Gen2 x8, no equalization, safest).
   xgm-egpu logs [N|show|dir]   the persistent per-run logs: every on/off/bind/
                                reload-driver writes its full output to
                                /var/log/xgm-egpu/<time>-<cmd>.log, and the watch
@@ -2677,7 +2725,7 @@ CMD=${1:-status}; shift || true
 if [[ $CMD == --* ]]; then
     die "'$CMD' is an option, not a command. Options go AFTER the command:
      $0 on $CMD ${*:-}
-     (commands: status detect preflight gsp drm logs reload-driver on off bind watch link link-speed ec install-rules)"
+     (commands: status detect preflight gsp drm pcie logs reload-driver on off bind watch link link-speed ec install-rules)"
 fi
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -2720,7 +2768,7 @@ case "$CMD" in
 esac
 
 case "$CMD" in
-    on|off|bind|reload-driver|link-speed|install-rules|gsp|drm|capture) run_log_start "$CMD" "$XGM_ARGV" ;;
+    on|off|bind|reload-driver|link-speed|install-rules|gsp|drm|pcie|capture) run_log_start "$CMD" "$XGM_ARGV" ;;
 esac
 
 case "$CMD" in
@@ -2729,6 +2777,7 @@ case "$CMD" in
     preflight)  cmd_preflight ;;
     gsp)        cmd_gsp "${1:-status}" ;;
     drm)        cmd_drm "${1:-status}" ;;
+    pcie)       cmd_pcie "${1:-status}" ;;
     logs)       cmd_logs "${1:-list}" ;;
     capture)    cmd_capture "${1:-arm}" ;;
     bind)       cmd_bind "${1:-core}" ;;

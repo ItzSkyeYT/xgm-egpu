@@ -88,6 +88,9 @@ xgm-egpu gsp [status|off|on] disable NVIDIA GSP firmware (proprietary driver onl
 xgm-egpu drm [status|nofbdev|nokms|safe|default]
                              set what the LOADED nvidia_drm does to the eGPU when it
                              appears (persisted via modprobe.d + initramfs; `on` verifies)
+xgm-egpu pcie [status|gen3|default]
+                             tell the driver PCIe Gen3 is allowed so it never retrains
+                             the link down (NVreg_EnablePCIeGen3=1); or use `on --link-gen 2`
 xgm-egpu logs [N|show|dir]   persistent per-run logs in /var/log/xgm-egpu (full
                              output of every on/off/bind/reload-driver, plus the
                              kernel log saved by the watch); survives reboots
