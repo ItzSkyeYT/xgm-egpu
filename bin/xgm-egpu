@@ -123,6 +123,8 @@ MODESET_SAFE=0        # --modeset-safe: nvidia_modeset disable_hdmi_frl=1 disabl
                       # REQUIRES `drm safe` applied first: resident modules ignore modprobe params.
 MASK_PCIEHP=0         # --mask-pciehp: clear the root port's hotplug interrupt enables so a
                       # momentary Link Down is not turned into a surprise-removal teardown.
+AUTO_CAPTURE=1        # arm the hang capture (pstore + panic-on-hang + netconsole) inside
+                      # 'on' and 'bind' before the risky step; --no-capture skips it
 RELOAD_NVIDIA=1       # modprobe the NVIDIA stack back after a successful switch;
                       # --no-reload leaves the eGPU enumerated but unbound
 
@@ -816,6 +818,15 @@ cmd_bind() {
 
     printf '  driver on %s: %s\n' "$bdf" "$(basename "$(readlink -f "/sys/bus/pci/devices/$bdf/driver" 2>/dev/null)" 2>/dev/null || echo none)"
     [[ $MASK_PCIEHP -eq 1 ]] && { pciehp_mask && trap pciehp_restore EXIT; }
+    # Every activation is a potential hang, and every hang so far that was not
+    # armed left nothing on disk. So arm the capture here, unconditionally,
+    # instead of relying on a separate command being remembered (2026-09-09).
+    if [[ $AUTO_CAPTURE -eq 1 ]]; then
+        info "Arming hang capture (automatic; --no-capture to skip)"
+        capture_arm || warn "  capture partially armed — see above"
+        capture_netconsole || true
+    fi
+
     info "Watching the link for ${SURVIVAL_SECS}s, and who opens the display nodes..."
     # On 2026-09-09 "Correcting number of heads" printed a SECOND time at +9s,
     # i.e. something re-allocated the NVKMS device right before the death. Log
@@ -990,8 +1001,8 @@ cmd_capture() {
         capture_arm || warn "capture partially armed — see above"
         capture_netconsole || true
         echo
-        ok "armed. Now run the activation. If the machine hangs it will panic and"
-        ok "reboot itself in ~30s; afterwards:   $0 capture read"
+        ok "armed. ('on' and 'bind' do this by themselves now.) If the machine hangs"
+        ok "it will panic and reboot itself in ~30s; afterwards:   $0 capture read"
         ;;
       read)
         if ! ls "$PSTORE"/* >/dev/null 2>&1; then
@@ -2089,6 +2100,15 @@ $(printf '     %s\n' "$d")"
         autoprobe_disable && trap autoprobe_restore EXIT
     fi
 
+    # Every activation is a potential hang, and every hang so far that was not
+    # armed left nothing on disk. So arm the capture here, unconditionally,
+    # instead of relying on a separate command being remembered (2026-09-09).
+    if [[ $AUTO_CAPTURE -eq 1 ]]; then
+        info "Arming hang capture (automatic; --no-capture to skip)"
+        capture_arm || warn "  capture partially armed — see above"
+        capture_netconsole || true
+    fi
+
     info "Writing 1 to egpu_enable (timeout ${TIMEOUT}s)"
     [[ $DRY_RUN -eq 1 ]] && { ok "dry run — stopping before the write"; return 0; }
 
@@ -2295,11 +2315,11 @@ xgm-egpu — XG Mobile eGPU control for the ROG Flow X13 (GV301QH)
                                  safe     nofbdev + nvidia_modeset HDMI-FRL/VRR off
                                Writes /etc/modprobe.d/nvidia-xgm-drm.conf and rebuilds
                                the initramfs; reload-driver or reboot applies it.
-  xgm-egpu capture [arm|read]  ARM before an activation: turns the next hard
-                               hang into a panic with a backtrace in EFI pstore
-                               (and netconsole to the Pi, best-effort). READ after
-                               the reboot to see what the kernel was doing when
-                               it died. Every hang so far left no record.
+  xgm-egpu capture [arm|read]  'on' and 'bind' ARM this automatically before the
+                               risky step (--no-capture to skip): the next hard
+                               hang becomes a panic with a backtrace in EFI pstore,
+                               plus netconsole to the Pi, best-effort. READ after
+                               a hang+reboot to see the kernel's last words.
   xgm-egpu reload-driver       unload+reload the NVIDIA stack so a new modprobe.d
                                value takes effect NOW, no reboot, no initramfs.
                                Refuses if anything holds the GPU. eGPU must be off.
@@ -2328,6 +2348,8 @@ xgm-egpu — XG Mobile eGPU control for the ROG Flow X13 (GV301QH)
 
 Options:
   --force-kill    kill processes holding /dev/nvidia* instead of refusing
+  --no-capture    do not arm the hang capture (pstore, panic-on-hang, netconsole)
+                  before activating. It is armed by default on every 'on'/'bind'.
   --release LEVEL how much to tear down first (default: minimal)
                     minimal  stop nvidia-powerd/persistenced only; the driver
                              stays bound so the ACPI eject is a real one, which
@@ -2433,6 +2455,7 @@ while [[ $# -gt 0 ]]; do
         --no-drm-poll) NO_DRM_POLL=1 ;;
         --no-fbdev)   NO_FBDEV=1 ;;
         --no-kms)     NO_KMS=1 ;;
+        --no-capture) AUTO_CAPTURE=0 ;;
         --mask-pciehp) MASK_PCIEHP=1 ;;
         --modeset-safe) MODESET_SAFE=1 ;;
         --cap-power)  CAP_POWER=1 ;;
