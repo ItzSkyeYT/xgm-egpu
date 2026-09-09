@@ -21,7 +21,7 @@ load() {
            XGM_MKINITCPIO_CONF=$T/mkinitcpio.conf XGM_MKINITCPIO_D=$T/mkinitcpio.conf.d \
            XGM_DISTRO_MODPROBE=$T/usrlib/nvidia.conf XGM_ETC_MODPROBE_D=$T/etc \
            XGM_AUTOPROBE=$T/drivers_autoprobe XGM_STATE_DIR=$T/state \
-           XGM_SYS_MODULE=$T/module XGM_SYSFS_PCI=$T/pci
+           XGM_SYS_MODULE=$T/module XGM_SYSFS_PCI=$T/pci XGM_DRM_POLL=$T/drm_poll
     mkdir -p "$T/gpus" "$T/mkinitcpio.conf.d" "$T/usrlib" "$T/etc" "$T/module" "$T/pci"
     # shellcheck disable=SC1091
     XGM_LIBRARY_MODE=1 source bin/xgm-egpu
@@ -157,6 +157,22 @@ read_attr() { echo 1; }
 out=$(DRY_RUN=1 cmd_reload_driver 2>&1); rc=$?
 assert_eq  "refuses while egpu_enable=1"                  "$rc" "1"
 assert_has "explains eGPU must be off"                    "$out" "eGPU OFF"
+
+echo "== drm poll save/restore =="
+echo Y > "$T/drm_poll"
+DRY_RUN=0
+drm_poll_disable >/dev/null 2>&1
+assert_eq "disable writes 0"                  "$(cat "$T/drm_poll")" "0"
+drm_poll_restore >/dev/null 2>&1
+assert_eq "restore puts back the saved Y"     "$(cat "$T/drm_poll")" "Y"
+drm_poll_restore >/dev/null 2>&1
+assert_eq "second restore is a no-op"         "$(cat "$T/drm_poll")" "Y"
+DRY_RUN=1; echo Y > "$T/drm_poll"
+drm_poll_disable >/dev/null 2>&1
+assert_eq "dry-run does not write"            "$(cat "$T/drm_poll")" "Y"
+DRY_RUN=0
+rm -f "$T/drm_poll"
+assert_rc "missing knob -> rc 1, no crash"    1 drm_poll_disable
 
 echo "== library mode =="
 assert_rc "sourcing in library mode does not dispatch" 0 bash -c 'XGM_LIBRARY_MODE=1 source bin/xgm-egpu; declare -F cmd_on >/dev/null'

@@ -62,6 +62,7 @@ ETC_MODPROBE_D=${XGM_ETC_MODPROBE_D:-/etc/modprobe.d}
 AUTOPROBE=${XGM_AUTOPROBE:-/sys/bus/pci/drivers_autoprobe}
 SYS_MODULE=${XGM_SYS_MODULE:-/sys/module}
 SYSFS_PCI=${XGM_SYSFS_PCI:-/sys/bus/pci/devices}
+DRM_POLL=${XGM_DRM_POLL:-/sys/module/drm_kms_helper/parameters/poll}
 
 # The write legitimately takes a long time: it drives a full ACPI eject and PCI
 # rescan cycle synchronously. Observed 2026-07-31 — an 'off' that "timed out" at
@@ -99,6 +100,7 @@ DRY_RUN=0
 RELEASE_LEVEL=minimal
 IGNORE_RTD3=0         # --ignore-rtd3: activate even with RTD3 armed (to reproduce the failure)
 SURVIVAL_SECS=15      # after the bind, watch the link this long. It used to die at 10s.
+NO_DRM_POLL=0         # --no-drm-poll: set drm_kms_helper.poll=0 before loading nvidia_drm
 RELOAD_NVIDIA=1       # modprobe the NVIDIA stack back after a successful switch;
                       # --no-reload leaves the eGPU enumerated but unbound
 
@@ -447,6 +449,29 @@ autoprobe_restore() {
     _AUTOPROBE_SAVED=
 }
 
+# DRM's connector hotplug poll (drivers/gpu/drm/drm_probe_helper.c):
+#   #define DRM_OUTPUT_POLL_PERIOD (10*HZ)
+# Ten seconds after a DRM device registers, and every ten seconds after, it
+# calls each connector's detect(). For nvidia-drm that goes through
+# nvidia-modeset and out to the GPU as a GSP RPC. On 2026-09-09 the bisection
+# showed: nvidia core alone survives; add nvidia_modeset+nvidia_drm and the
+# link dies at ~10s, with "Correcting number of heads" as the last line and a
+# GSP_RM_CONTROL in flight. Hypothesis: that poll's detect() is the killer.
+# Test: disable the poll BEFORE nvidia_drm registers, so it never starts.
+_DRM_POLL_SAVED=
+drm_poll_disable() {
+    [[ -w $DRM_POLL ]] || { warn "cannot write $DRM_POLL (drm_kms_helper not loaded?)"; return 1; }
+    _DRM_POLL_SAVED=$(cat "$DRM_POLL" 2>/dev/null)
+    [[ $DRY_RUN -eq 1 ]] && return 0
+    echo 0 > "$DRM_POLL" && info "  drm_kms_helper.poll=0 (connector hotplug poll disabled)"
+}
+drm_poll_restore() {
+    [[ -n $_DRM_POLL_SAVED && -w $DRM_POLL ]] || return 0
+    [[ $DRY_RUN -eq 1 ]] && return 0
+    echo "$_DRM_POLL_SAVED" > "$DRM_POLL" && info "  drm_kms_helper.poll restored to $_DRM_POLL_SAVED"
+    _DRM_POLL_SAVED=
+}
+
 cmd_preflight() {
     check_interface
     echo "RTD3 (NVIDIA dynamic power management):"
@@ -592,6 +617,7 @@ cmd_bind() {
             echo "$bdf" > /sys/bus/pci/drivers/nvidia/bind 2>/dev/null || warn "  bind write failed (already bound?)"; }
         ;;
       drm)
+        [[ $NO_DRM_POLL -eq 1 ]] && drm_poll_disable
         info "loading nvidia_modeset + nvidia_drm on top of the bound core"
         [[ $DRY_RUN -eq 1 ]] || { modprobe nvidia_modeset; modprobe nvidia_drm; }
         ;;
@@ -601,6 +627,7 @@ cmd_bind() {
             echo "$aud" > /sys/bus/pci/drivers/snd_hda_intel/bind 2>/dev/null || warn "  bind write failed"; }
         ;;
       all)
+        [[ $NO_DRM_POLL -eq 1 ]] && drm_poll_disable
         info "binding the whole stack"
         [[ $DRY_RUN -eq 1 ]] || { modprobe nvidia
             echo "$bdf" > /sys/bus/pci/drivers/nvidia/bind 2>/dev/null || true
@@ -1172,6 +1199,7 @@ reload_nvidia() {
     modprobe nvidia || warn "modprobe nvidia failed"
     modprobe nvidia_modeset  || true
     modprobe nvidia_uvm      || true
+    [[ $NO_DRM_POLL -eq 1 ]] && drm_poll_disable
     modprobe nvidia_drm      || true
     # Deliberately NOT restarting nvidia-powerd. It manages Dynamic Boost on the
     # internal dGPU, which is switched off in eGPU mode, and it is the daemon
@@ -1684,6 +1712,10 @@ Options:
                   for reproducing the 10-second link death on purpose.
   --survival N    after the bind, watch the link for N seconds and report whether
                   it survived (default 15; the old failure was at 10). 0 to skip.
+  --no-drm-poll   set drm_kms_helper.poll=0 before nvidia_drm loads. DRM polls
+                  connectors every 10s (DRM_OUTPUT_POLL_PERIOD); the bisection
+                  on 2026-09-09 put the death in the display path at that exact
+                  interval. Applies to 'on', 'bind drm' and 'bind all'.
   --link-gen N    pin the root port's target PCIe generation (1-4) before the
                   switch and again after enumeration. On this machine the link
                   cannot complete training above Gen1: '--link-gen 1' is the
@@ -1732,6 +1764,7 @@ while [[ $# -gt 0 ]]; do
         --no-reload)  RELOAD_NVIDIA=0 ;;
         --ignore-rtd3) IGNORE_RTD3=1 ;;
         --survival)   SURVIVAL_SECS=$2; shift ;;
+        --no-drm-poll) NO_DRM_POLL=1 ;;
         --aspm-performance) ASPM_PERF=1 ;;
         --link-gen)   LINK_GEN=$2; shift ;;
         --link-gen=*) LINK_GEN=${1#*=} ;;
