@@ -797,7 +797,8 @@ never took effect (§8 explains why), so that claim was never actually tested.
 >    inside the session, from the desktop. So the display engine was never
 >    the trigger, and the eGPU's own ports can be used: `desktop pin
 >    --outputs` lets kwin drive them while still rendering on the laptop's
->    card.
+>    card — **23:30: confirmed**, kwin drives the eGPU's `HDMI-A-2` next to
+>    `eDP-1`, card at Gen3 x8, 41 W.
 >
 > What the retrain-death chain leaves unexplained is only the exact policy
 > that chose Gen2 ten seconds in; it lives in the RM and is not readable from
