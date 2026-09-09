@@ -449,6 +449,7 @@ assert_eq  "desktop pin -> rc 0"                         "$rc" "0"
 PIN=$T/home/.config/plasma-workspace/env/xgm-egpu-kwin.sh
 assert_not "pin file never exports a by-path name (colons!)" "$(cat "$PIN")" "KWIN_DRM_DEVICES=.*by-path"
 assert_eq  "sourced by /bin/sh like Plasma does, it yields the resolved card" "$(/bin/sh -c '. "$1"; printf %s "$KWIN_DRM_DEVICES"' _ "$PIN")" "$T/dri/card1"
+assert_eq  "...and disables kwin's Vulkan probe (what opens /dev/nvidia* despite the pin)" "$(/bin/sh -c '. "$1"; printf %s "$KWIN_DISABLE_VULKAN"' _ "$PIN")" "1"
 assert_has "pin reports the checked value"               "$out" "kwin uses $T/dri/card1 \(amdgpu\)"
 assert_has "pin tells the rollback"                      "$out" "desktop unpin"
 out=$(sub cmd_desktop status 2>&1)
@@ -485,8 +486,10 @@ out=$(XGM_DESKTOP_HOME=$T/home2 XGM_SYSFS_PCI=$T/pci XGM_DRI_BY_PATH=$T/dri/by-p
 assert_eq  "desktop pin --dry-run -> rc 0"               "$rc" "0"
 assert_has "...says 'would write'"                      "$out" "would write"
 assert_eq  "...and writes NOTHING"                       "$(ls "$T/home2/.config/plasma-workspace/env/" 2>/dev/null | wc -l)" "0"
-out=$(bash bin/xgm-egpu logs --no-such-option 2>&1)
-assert_has "unknown option is reported, not swallowed"   "$out" "ignoring unknown option --no-such-option"
+out=$(bash bin/xgm-egpu logs --no-such-option 2>&1); rc=$?
+assert_eq  "unknown option -> refused (rc 1)"            "$rc" "1"
+out=$(bash bin/xgm-egpu logs -freeze-link 2>&1)
+assert_has "single-dash typo -> suggests the real flag"  "$out" "did you mean '--freeze-link'"
 
 echo "== relaunching what --force-kill closed =="
 BUGREPORT_DIR=$T/bugreports; mkdir -p "$BUGREPORT_DIR"
@@ -520,7 +523,11 @@ assert_has "RTD3 armed -> rtd3"                          "$(go_missing_settings)
 printf 'DynamicPowerManagement: 0\nEnablePCIeGen3: 0\n' > "$T/params"
 assert_has "Gen3 not allowed -> pcie"                    "$(go_missing_settings)" "pcie"
 printf 'Y\n' > "$T/module/nvidia_drm/parameters/modeset"
-assert_has "modeset=1 -> drm"                            "$(go_missing_settings)" "drm"
+assert_has "modeset=1 -> drm (render mode wants nokms)"  "$(go_missing_settings)" "drm"
+printf 'N\n' > "$T/module/nvidia_drm/parameters/fbdev"; printf 'DynamicPowerManagement: 0\nEnablePCIeGen3: 1\n' > "$T/params"
+assert_eq  "modeset=1 fbdev=0 satisfies display mode"    "$(go_missing_settings nofbdev | tr '\n' ' ')" ""
+printf 'N\n' > "$T/module/nvidia_drm/parameters/modeset"
+assert_has "nokms does not satisfy display mode"         "$(go_missing_settings nofbdev)" "drm"
 rm -rf "$T/module/nvidia_drm"; printf 'DynamicPowerManagement: 0\nEnablePCIeGen3: 1\n' > "$T/params"
 assert_eq  "nvidia_drm not loaded -> not counted as missing" "$(go_missing_settings | tr '\n' ' ')" ""
 rm -f "$T/params"
