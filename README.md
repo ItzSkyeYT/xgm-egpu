@@ -105,6 +105,8 @@ Useful options:
 --link-gen N     pin PCIe generation 1-4 before switching
 --no-reload      enumerate without binding NVIDIA - separates enumeration
                  faults from driver faults
+--cap-power      lock clocks + min power limit before the display engine loads.
+                 Tests the leading (power-transient) hypothesis
 --no-kms         load nvidia_drm with modeset=0: render node only. If the link
                  survives, the eGPU works for compute / PRIME offload today
 --mask-pciehp    stop pciehp turning a momentary Link Down into a teardown
