@@ -392,6 +392,12 @@ assert_eq  "no audio function -> rc 0"                   "$rc" "0"
 assert_has "...and says so"                              "$out" "nothing to fence"
 assert_eq  "audio is fenced by default"                  "$NO_AUDIO" "1"
 
+echo "== freeze-link =="
+assert_eq  "freeze is opt-in"                           "$FREEZE_LINK" "0"
+out=$(DRY_RUN=1 ROOT_PORT=0000:00:01.1 freeze_link 0000:01:00.0 2>&1); rc=$?
+assert_eq  "dry-run freeze -> rc 0"                     "$rc" "0"
+assert_has "dry-run names both knobs"                   "$out" "lgc.*LnkCtl2"
+
 echo "== pcie gen3 =="
 out=$(DRY_RUN=0 sub cmd_pcie gen3 2>&1); rc=$?
 assert_eq  "pcie gen3 -> rc 0"                          "$rc" "0"
