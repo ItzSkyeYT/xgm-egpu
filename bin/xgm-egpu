@@ -76,7 +76,7 @@ DMI=${XGM_DMI:-/sys/class/dmi/id}
 OS_RELEASE=${XGM_OS_RELEASE:-/etc/os-release}
 DRM_CLASS=${XGM_DRM_CLASS:-/sys/class/drm}
 RUN_LOG=                                          # set by run_log_start for state-changing commands
-NETCONSOLE_TARGET=${XGM_NETCONSOLE_TARGET:-192.168.1.7}   # the Pi
+NETCONSOLE_TARGET=${XGM_NETCONSOLE_TARGET:-}   # optional: a host running `nc -ul 6666` to catch the kernel's last words
 BUGREPORT_DIR=${XGM_BUGREPORT_DIR:-/var/tmp}
 
 # The write legitimately takes a long time: it drives a full ACPI eject and PCI
@@ -138,6 +138,8 @@ RESTART_DESKTOP=auto  # from a TTY with a display manager active: stop it before
                       # kill this very terminal mid-write). --keep-desktop / --restart-desktop.
 DM_STOPPED=           # which display manager this run stopped, for the exit hook
 RELAUNCH=1            # relaunch what --force-kill closed once the run ends (--no-relaunch)
+PIN_OUTPUTS=0         # desktop pin --outputs: let kwin drive the eGPU's ports too (it then holds
+                      # the eGPU while it is on, so 'off' must run from a TTY)
 GO_MODE=render        # go: render (drm nokms, sealed door) | display (drm nofbdev, KMS on) — --display
 KILLED_DIR=           # where their command lines are stashed until then
 FREEZE_LINK=0         # --freeze-link: after the bind, lock the GPU at its max clocks (stays in
@@ -267,16 +269,21 @@ boot_vga_bdf() {
 # the session could not start until the file was deleted from a TTY. The value
 # must be the resolved cardN, and it must be checked before anyone logs out.
 desktop_pin_check() {
-    local file=$1 v name drv
+    local file=$1 v name drv outputs=0
     [[ -r $file ]] || { echo "pin file missing"; return 1; }
+    grep -q '^# outputs: eGPU allowed' "$file" && outputs=1
+    [[ $(/bin/sh -c 'unset KWIN_DISABLE_VULKAN; . "$1" >/dev/null 2>&1; printf %s "$KWIN_DISABLE_VULKAN"' _ "$file" 2>/dev/null) == 1 ]] || { echo "KWIN_DISABLE_VULKAN is not 1 — kwin's Vulkan probe would open the NVIDIA driver"; return 1; }
     # unset first: a session that already has the pin exported would otherwise validate any file
     v=$(/bin/sh -c 'unset KWIN_DRM_DEVICES; . "$1" >/dev/null 2>&1; printf %s "$KWIN_DRM_DEVICES"' _ "$file" 2>/dev/null)
-    [[ -n $v ]] || { echo "sourcing $file yields an EMPTY KWIN_DRM_DEVICES (kwin would then use every GPU — harmless, but not pinned)"; return 1; }
-    [[ $v == *:* ]] && { echo "value '$v' contains ':' — kwin splits on it; the login would fail"; return 1; }
-    name=$(basename "$v")
-    [[ $name =~ ^card[0-9]+$ && -e $v ]] || { echo "value '$v' is not an existing /dev/dri/cardN"; return 1; }
-    drv=$(basename "$(readlink -f "$DRM_CLASS/$name/device/driver" 2>/dev/null)" 2>/dev/null)
-    [[ $drv == nvidia ]] && { echo "value '$v' is the NVIDIA card — that is the one to keep kwin OFF"; return 1; }
+    if [[ -z $v ]]; then
+        [[ $outputs -eq 1 ]] || { echo "sourcing $file yields an EMPTY KWIN_DRM_DEVICES (kwin would then use every GPU — harmless, but not pinned)"; return 1; }
+    else
+        [[ $v == *:* ]] && { echo "value '$v' contains ':' — kwin splits on it; the login would fail"; return 1; }
+        name=$(basename "$v")
+        [[ $name =~ ^card[0-9]+$ && -e $v ]] || { echo "value '$v' is not an existing /dev/dri/cardN"; return 1; }
+        drv=$(basename "$(readlink -f "$DRM_CLASS/$name/device/driver" 2>/dev/null)" 2>/dev/null)
+        [[ $drv == nvidia ]] && { echo "value '$v' is the NVIDIA card — that is the one to keep kwin OFF"; return 1; }
+    fi
     local r rn rdrv
     r=$(/bin/sh -c 'unset KWIN_RENDER_NODES; . "$1" >/dev/null 2>&1; printf %s "$KWIN_RENDER_NODES"' _ "$file" 2>/dev/null)
     if [[ -n $r ]]; then
@@ -285,7 +292,8 @@ desktop_pin_check() {
         rdrv=$(basename "$(readlink -f "$DRM_CLASS/$rn/device/driver" 2>/dev/null)" 2>/dev/null)
         [[ $rdrv == nvidia ]] && { echo "KWIN_RENDER_NODES '$r' is the NVIDIA render node"; return 1; }
     fi
-    echo "$v (${drv:-driver unknown})${r:+, render node $r}"
+    if [[ $outputs -eq 1 ]]; then echo "every KMS device incl. the eGPU's ports (outputs mode), rendering on ${r:-?}"
+    else echo "$v (${drv:-driver unknown})${r:+, render node $r}"; fi
 }
 
 cmd_desktop() {
@@ -325,18 +333,21 @@ cmd_desktop() {
         [[ $DRY_RUN -eq 1 ]] && { info "would write $f (resolves $bypath at each login) and validate it"; return 0; }
         mkdir -p "$(dirname "$f")" || die "cannot create $(dirname "$f")"
         cat > "$f" <<EOS
-# xgm-egpu: keep kwin on the laptop's own GPU (boot_vga $bdf) so it never opens or
-# holds the internal dGPU. KWIN_DRM_DEVICES is colon-separated, so it must hold the
-# resolved /dev/dri/cardN — a by-path name contains colons and breaks the login.
+# xgm-egpu: keep kwin's RENDERING on the laptop's own GPU (boot_vga $bdf) so it never
+# opens or holds the NVIDIA GPU.
 # KWIN_DISABLE_VULKAN: kwin's Vulkan device probe at startup opens the NVIDIA driver
 # (and keeps /dev/nvidia0 open) regardless of KWIN_DRM_DEVICES — 2026-09-09 23:00.
-# If the session ever fails to start: from a TTY,  xgm-egpu desktop unpin  (or rm this file).
 # KWIN_RENDER_NODES: kwin otherwise creates a render device on EVERY render node it
 # finds (GpuManager::scanForRenderDevices) and holds the NVIDIA one open, which pins
-# nvidia_drm and makes kwin a holder of the eGPU. Colon-separated like the other.
+# nvidia_drm and makes kwin a holder of the eGPU. Colon-separated, resolved at login.
+# KWIN_DRM_DEVICES (default pin only): which KMS devices kwin may drive outputs on.
+#   'desktop pin --outputs' leaves it unset so a monitor on the eGPU's ports works;
+#   kwin then holds the eGPU while it is on, and 'off' must run from a TTY.
+# If the session ever fails to start: from a TTY,  xgm-egpu desktop unpin  (or rm this file).
+$( [[ $PIN_OUTPUTS -eq 1 ]] && printf '# outputs: eGPU allowed\n' )
 xgm_card=\$(readlink -f "$bypath" 2>/dev/null)
 case "\$xgm_card" in
-    */card[0-9]*) export KWIN_DRM_DEVICES="\$xgm_card" ;;
+    */card[0-9]*) $( [[ $PIN_OUTPUTS -eq 1 ]] && printf ': ' )export KWIN_DRM_DEVICES="\$xgm_card" ;;
 esac
 xgm_render=\$(readlink -f "${bypath%-card}-render" 2>/dev/null)
 case "\$xgm_render" in
@@ -348,7 +359,8 @@ EOS
         [[ $EUID -eq 0 && -n $SUDO_USER ]] && chown "$SUDO_USER:$(id -gn "$SUDO_USER")" "$f" "$(dirname "$f")" 2>/dev/null
         if chk=$(desktop_pin_check "$f"); then
             ok "wrote $f"
-            ok "checked the way Plasma sources it: next login, kwin uses $chk and nothing else"
+            ok "checked the way Plasma sources it: next login, kwin uses $chk"
+            [[ $PIN_OUTPUTS -eq 1 ]] && info "outputs mode: a monitor on the eGPU's ports works, and kwin holds the eGPU while it is on — run 'off' from a TTY (Ctrl+Alt+F3)"
             info "Log out and back in for it to take effect. Confirm with:  $0 desktop status"
             info "If the session ever fails to start: Ctrl+Alt+F3, log in, and run:  $0 desktop unpin"
         else
@@ -1448,7 +1460,7 @@ freeze_link() {
 #
 # `capture` arms the kernel so the next hang becomes a PANIC WITH A BACKTRACE
 # written to EFI-backed pstore (survives the reboot), and optionally streams
-# kernel messages live to the Pi over netconsole. All runtime; no reboot to arm.
+# kernel messages live to another host over netconsole. All runtime; no reboot to arm.
 CAPTURE_SYSCTLS=(
     kernel.nmi_watchdog=1          # hard-lockup detector (perf NMI) — catches IRQs-off hangs
     kernel.hardlockup_panic=1
@@ -1495,7 +1507,7 @@ capture_arm() {
     [[ $be == "(null)" ]] && be=""
     if [[ $DRY_RUN -eq 0 && -z $be ]]; then
         warn "  pstore has NO backend registered — a panic would write nothing."
-        warn "  netconsole to the Pi is then the only capture; make sure it says armed below."
+        warn "  netconsole to another host is then the only capture; make sure it says armed below."
         rc=1
     elif [[ -n $be ]]; then
         info "  pstore backend: $be"
@@ -1504,13 +1516,14 @@ capture_arm() {
 }
 capture_netconsole() {
     local src dev
+    [[ -n $NETCONSOLE_TARGET ]] || { info "  netconsole: no target (set NETCONSOLE_TARGET=<host> in $CONFIG_FILE to stream the kernel log to another machine)"; return 0; }
     src=$(ip -4 route get "$NETCONSOLE_TARGET" 2>/dev/null | grep -oE 'src \S+' | awk '{print $2}')
     dev=$(ip -4 route get "$NETCONSOLE_TARGET" 2>/dev/null | grep -oE 'dev \S+'  | awk '{print $2}')
     [[ -n $src && -n $dev ]] || { warn "  no route to $NETCONSOLE_TARGET; skipping netconsole"; return 1; }
     [[ $DRY_RUN -eq 1 ]] && { info "  would: modprobe netconsole netconsole=6666@$src/$dev,6666@$NETCONSOLE_TARGET/"; return 0; }
     if modprobe netconsole "netconsole=6666@$src/$dev,6666@$NETCONSOLE_TARGET/" 2>/dev/null; then
         info "  netconsole -> $NETCONSOLE_TARGET:6666 via $dev (wifi netpoll is best-effort)"
-        info "  on the Pi, run:   nc -ul 6666 | tee -a ~/xgm-netconsole.log"
+        info "  on $NETCONSOLE_TARGET, run:   nc -ul 6666 | tee -a ~/xgm-netconsole.log"
     else
         warn "  netconsole refused on $dev (driver may lack netpoll); pstore still armed"
         return 1
@@ -1591,7 +1604,7 @@ collect_gpu_crash_dump() {
 # What to tell a user whose screen just froze: the machine is up.
 death_recovery_hint() {
     local who=${SUDO_USER:-$(id -un)}
-    local ip; ip=$(ip -4 addr show wlan0 2>/dev/null | grep -oE 'inet [0-9.]+' | awk '{print $2}')
+    local ip; ip=$(ip -4 route get 1.1.1.1 2>/dev/null | grep -oP 'src \K[0-9.]+' | head -1)
     warn ""
     warn "The kernel is still running; the display stack is what froze. To get"
     warn "back WITHOUT a reboot (from this TTY, or ssh ${who}@${ip:-<this-ip>}):"
@@ -3053,7 +3066,8 @@ Everyday
                                GPU, activates with --no-kms --freeze-link --force-kill,
                                then proves it (nvidia-smi at Gen3, glxinfo as you).
                                --display: the KMS variant (drm nofbdev, on --no-fbdev
-                               --freeze-link) — untested; would restore PRIME fences.
+                               --freeze-link). Survived 2026-09-09 23:09; needed for a
+                               monitor on the eGPU's ports and for PRIME fences.
   xgm-egpu off                 deactivate: unseal, restore the internal dGPU
   xgm-egpu status              EC attributes, bus, modules, what holds the GPU
   xgm-egpu detect              autodetected topology and how it was derived
@@ -3071,7 +3085,10 @@ Settings (persisted in modprobe.d + the initramfs; reload-driver or a reboot app
                                allow PCIe Gen3 (NVreg_EnablePCIeGen3=1)
   xgm-egpu gsp [status|off|on] GSP firmware off/on (proprietary driver only)
   xgm-egpu desktop [status|pin|unpin]
-                               keep kwin off the NVIDIA GPU so the session survives 'on'
+                               keep kwin off the NVIDIA GPU so the session survives 'on'.
+                               'pin --outputs': kwin may still drive a monitor on the
+                               eGPU's ports (rendering stays on the laptop's card); it
+                               then holds the eGPU, so 'off' must run from a TTY
   xgm-egpu reload-driver       unload + reload the stack so new settings load now
                                (eGPU off; --force-kill closes what holds the GPU)
 
@@ -3160,6 +3177,7 @@ while [[ $# -gt 0 ]]; do
         --keep-desktop) RESTART_DESKTOP=0 ;;
         --no-relaunch) RELAUNCH=0 ;;
         --display)    GO_MODE=display ;;
+        --outputs)    PIN_OUTPUTS=1 ;;
         --render)     GO_MODE=render ;;
         --restart-desktop) RESTART_DESKTOP=1 ;;
         --no-audio)   NO_AUDIO=1 ;;
