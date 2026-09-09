@@ -125,6 +125,9 @@ Useful options:
 --mask-pciehp    stop pciehp turning a momentary Link Down into a teardown
 --no-fbdev       require the loaded nvidia_drm to have fbdev=0 (`drm nofbdev` first).
                  Tested for real 2026-09-09 19:30: died identically. Ruled out
+--freeze-link    lock the GPU at max clocks (stays in P0) and set the PCIe autonomous-speed
+                 disable bits on both ends, so nothing asks the link to retrain; with
+                 `pcie gen3` this is the full-Gen3 attempt
 --audio          let snd_hda_intel bind the eGPU's HDMI-audio function. Off by default:
                  that codec is what every recorded death has in common
 --modeset-safe   require the `drm safe` set (fbdev=0 + nvidia_modeset HDMI-FRL/VRR off)

@@ -127,6 +127,10 @@ MODESET_SAFE=0        # --modeset-safe: nvidia_modeset disable_hdmi_frl=1 disabl
                       # REQUIRES `drm safe` applied first: resident modules ignore modprobe params.
 MASK_PCIEHP=0         # --mask-pciehp: clear the root port's hotplug interrupt enables so a
                       # momentary Link Down is not turned into a surprise-removal teardown.
+FREEZE_LINK=0         # --freeze-link: after the bind, lock the GPU at its max clocks (stays in
+                      # P0, so the idle-time PCIe generation downshift never fires) and set
+                      # Hardware Autonomous Speed/Width Disable on both ends of the link. With
+                      # `pcie gen3` applied, nothing is left that asks the link to change speed.
 NO_AUDIO=1            # keep snd_hda_intel OFF the eGPU's HDMI-audio function (01:00.1). Every
                       # death on record has the HDA codec active at the instant of Link Down and
                       # the in-flight GSP RPC is DFP_SET_ELD_AUDIO_CAPS; the survivors had no
@@ -1038,6 +1042,49 @@ cap_gpu_power() {
     info "  now: $(smi_line)"
 }
 
+# Remove every reason the link could be asked to change speed, so Gen3 holds
+# the way it does on an unbound card (2026-09-09 21:05: the death is the
+# driver retraining the link, 8.0 -> 5.0 GT/s, ~10 s after init — the moment
+# the GPU leaves P0 and the RM lowers the PCIe generation with it).
+#   1. clocks locked at max: the GPU never leaves P0, so no perf-driven switch
+#   2. LnkCtl2 bit 5 (Hardware Autonomous Speed Disable) + bit 6 (Width
+#      Disable) on the GPU and the root port — standard PCIe; whether the RM's
+#      PEX firmware honours it is unknowable from outside, so this is the
+#      belt, not the trousers
+#   3. `pcie gen3` (NVreg_EnablePCIeGen3=1), applied at driver load, so the RM
+#      does not consider Gen3 forbidden in the first place
+freeze_link() {
+    local bdf=$1 v d
+    if [[ $DRY_RUN -eq 1 ]]; then info "  would: nvidia-smi -lgc/-lmc at max; setpci LnkCtl2 |= 0x60 on $bdf and $ROOT_PORT"; return 0; fi
+    if command -v nvidia-smi >/dev/null 2>&1; then
+        nvidia-smi -i "$bdf" -pm 1 >/dev/null 2>&1 || true
+        local maxg maxm
+        read -r maxg maxm <<<"$(nvidia-smi -i "$bdf" --query-gpu=clocks.max.graphics,clocks.max.memory --format=csv,noheader,nounits 2>/dev/null | tr -d ',' | head -1)"
+        if [[ -n $maxg ]] && nvidia-smi -i "$bdf" -lgc "$maxg,$maxg" >/dev/null 2>&1; then
+            info "  graphics clock locked at ${maxg} MHz — the GPU stays in P0"
+        else
+            warn "  could not lock the graphics clock (nvidia-smi -lgc)"
+        fi
+        if [[ -n $maxm ]] && nvidia-smi -i "$bdf" -lmc "$maxm,$maxm" >/dev/null 2>&1; then
+            info "  memory clock locked at ${maxm} MHz"
+        else
+            info "  memory clock lock not supported here (fine)"
+        fi
+    else
+        warn "  nvidia-smi absent; clocks not locked"
+    fi
+    command -v setpci >/dev/null 2>&1 || { warn "  setpci absent; autonomous-speed bits not set"; return 0; }
+    for d in "$bdf" "$ROOT_PORT"; do
+        v=$(setpci -s "$d" CAP_EXP+30.w 2>/dev/null) || { warn "  cannot read LnkCtl2 on $d"; continue; }
+        if setpci -s "$d" CAP_EXP+30.w="$(printf '%04x' $(( 0x$v | 0x60 )))" 2>/dev/null; then
+            info "  $d: LnkCtl2 0x$v -> $(setpci -s "$d" CAP_EXP+30.w 2>/dev/null)  (hardware-autonomous speed/width changes disabled)"
+        else
+            warn "  $d: could not write LnkCtl2"
+        fi
+    done
+    info "  now: $(smi_line)  link=$(cat "$SYSFS_PCI/$bdf/current_link_speed" 2>/dev/null)"
+}
+
 # ---------------------------------------------------------------- hang capture
 #
 # 2026-09-09 14:48: the --cap-power run reached 7s with the card flat at 23 W,
@@ -1364,8 +1411,8 @@ cmd_pcie() {
         drm_rebuild_initramfs
         info "Apply now (eGPU off):   $0 reload-driver --force-kill      (or reboot)"
         info "Confirm with:           $0 pcie status   -> EnablePCIeGen3 1"
-        info "Then activate WITHOUT --link-gen (full Gen3 x8 if the link's own training holds):"
-        info "                        $0 on --no-kms --force-kill"
+        info "Then activate WITHOUT --link-gen, with the link frozen (full Gen3 x8 if its own training holds):"
+        info "                        $0 on --no-kms --freeze-link --force-kill"
         ;;
       default)
         need_root
@@ -2434,6 +2481,7 @@ $(printf '     %s\n' "$d")"
 
     reload_nvidia
     sleep 2
+    [[ $FREEZE_LINK -eq 1 ]] && { info "Freezing the link (--freeze-link)"; freeze_link "$bdf"; }
 
     # What actually matters after the bind: is RTD3 armed on THIS GPU?
     if [[ $RELOAD_NVIDIA -eq 1 ]]; then
@@ -2495,7 +2543,9 @@ $(printf '     %s\n' "$d")"
                 warn "driver's dynamic PCIe generation switching asks for the retrain ~10 s in,"
                 warn "and this link cannot survive one at/through Gen3 (8 GT/s needs equalization)."
                 [[ $speed_changed -eq 1 ]] && warn "This run's watch saw that speed change happen."
-                warn "Next: cap the link at Gen2 (no equalization; 4 GB/s = Thunderbolt-eGPU class):"
+                warn "Two ways out. Gen3 held: remove every reason to retrain —"
+                warn "    $0 pcie gen3; $0 reload-driver --force-kill; $0 on --no-kms --freeze-link --force-kill"
+                warn "Or cap the link at Gen2 (no equalization; 4 GB/s = Thunderbolt-eGPU class):"
                 warn "    $0 on --no-kms --link-gen 2 --force-kill"
                 die "the eGPU fell off the bus at ~${t}s."
             fi
@@ -2632,6 +2682,12 @@ Options:
   --force-kill    kill processes holding /dev/nvidia* instead of refusing
   --no-capture    do not arm the hang capture (pstore, panic-on-hang, netconsole)
                   before activating. It is armed by default on every 'on'/'bind'.
+  --freeze-link   after the bind: lock the GPU at its max clocks (it never leaves
+                  P0, so the idle-time PCIe generation downshift never fires) and
+                  set Hardware Autonomous Speed/Width Disable on both ends of the
+                  link. Pair with 'pcie gen3'. The aim is a link nothing ever asks
+                  to change speed — the state in which an unbound card holds Gen3
+                  x8 indefinitely. Costs ~30 W idle on the dock. Applies to 'on'.
   --audio         let snd_hda_intel bind the eGPU's HDMI-audio function (01:00.1).
                   OFF by default since 2026-09-09 21:30: every recorded death has
                   the HDA codec active at the instant of Link Down (ELD reads,
@@ -2755,6 +2811,7 @@ while [[ $# -gt 0 ]]; do
         --no-capture) AUTO_CAPTURE=0 ;;
         --no-seal)    SEAL_NVKMS=0 ;;
         --audio)      NO_AUDIO=0 ;;
+        --freeze-link) FREEZE_LINK=1 ;;
         --no-audio)   NO_AUDIO=1 ;;
         --mask-pciehp) MASK_PCIEHP=1 ;;
         --modeset-safe) MODESET_SAFE=1 ;;
