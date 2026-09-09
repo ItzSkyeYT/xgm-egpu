@@ -101,8 +101,11 @@ RELEASE_LEVEL=minimal
 IGNORE_RTD3=0         # --ignore-rtd3: activate even with RTD3 armed (to reproduce the failure)
 SURVIVAL_SECS=15      # after the bind, watch the link this long. It used to die at 10s.
 NO_DRM_POLL=0         # --no-drm-poll: set drm_kms_helper.poll=0 before loading nvidia_drm
-NO_FBDEV=0            # --no-fbdev: load nvidia_drm with fbdev=0 (no framebuffer console).
-                      # LEADING candidate fix 2026-09-09: the fbcon flip is the death.
+NO_FBDEV=0            # --no-fbdev: load nvidia_drm with fbdev=0. RULED OUT 2026-09-09 (still died).
+NO_KMS=0              # --no-kms: load nvidia_drm with modeset=0 (render node only, no KMS).
+                      # If this survives you have a working eGPU for compute / PRIME offload.
+MASK_PCIEHP=0         # --mask-pciehp: clear the root port's hotplug interrupt enables so a
+                      # momentary Link Down is not turned into a surprise-removal teardown.
 RELOAD_NVIDIA=1       # modprobe the NVIDIA stack back after a successful switch;
                       # --no-reload leaves the eGPU enumerated but unbound
 
@@ -654,6 +657,7 @@ cmd_bind() {
     [[ $DRY_RUN -eq 1 ]] && { ok "dry run — nothing bound"; return 0; }
 
     printf '  driver on %s: %s\n' "$bdf" "$(basename "$(readlink -f "/sys/bus/pci/devices/$bdf/driver" 2>/dev/null)" 2>/dev/null || echo none)"
+    [[ $MASK_PCIEHP -eq 1 ]] && { pciehp_mask && trap pciehp_restore EXIT; }
     info "Watching the link for ${SURVIVAL_SECS}s, and who opens the display nodes..."
     # On 2026-09-09 "Correcting number of heads" printed a SECOND time at +9s,
     # i.e. something re-allocated the NVKMS device right before the death. Log
@@ -679,6 +683,41 @@ cmd_bind() {
         dmesg 2>/dev/null | grep -iE 'Link Down|Xid|NVRM' | tail -6 | sed 's/^/    /' >&2
         return 1
     fi
+}
+
+# PCIe Slot Control (CAP_EXP+0x18): bit3 Presence Detect Changed Enable,
+# bit5 Hot-Plug Interrupt Enable, bit12 Data Link Layer State Changed Enable.
+# Clearing them stops pciehp reacting to a Link Down. Every death so far has
+# Xid 79 attributed to irq/NN-pciehp: pciehp saw the link drop and tore the
+# device down. If the drop is momentary (a retrain, a PHY power event) this
+# turns "GPU has fallen off the bus" into a hiccup. If the link genuinely
+# stays down the device just goes unresponsive instead, which the watch
+# detects anyway. Reverted on exit. Surprise-unplug is not detected while
+# masked; use `xgm-egpu off` to detach, which is a proper ACPI eject.
+PCIEHP_MASK_BITS=0x1028
+_SLOTCTL_SAVED=
+pciehp_mask() {
+    need_root_port
+    command -v setpci >/dev/null 2>&1 || { warn "setpci not installed (pciutils)"; return 1; }
+    local v; v=$(setpci -s "$ROOT_PORT" CAP_EXP+18.w 2>/dev/null) || { warn "cannot read Slot Control on $ROOT_PORT"; return 1; }
+    _SLOTCTL_SAVED=$v
+    local new; new=$(printf '%04x' $(( 0x$v & ~PCIEHP_MASK_BITS )))
+    [[ $DRY_RUN -eq 1 ]] && { info "  would set Slot Control $v -> $new"; return 0; }
+    setpci -s "$ROOT_PORT" CAP_EXP+18.w="$new" && info "  pciehp masked on $ROOT_PORT (Slot Control $v -> $new)"
+}
+pciehp_restore() {
+    [[ -n $_SLOTCTL_SAVED ]] || return 0
+    [[ $DRY_RUN -eq 1 ]] && return 0
+    setpci -s "$ROOT_PORT" CAP_EXP+18.w="$_SLOTCTL_SAVED" 2>/dev/null && info "  pciehp restored on $ROOT_PORT ($_SLOTCTL_SAVED)"
+    _SLOTCTL_SAVED=
+}
+
+# One line of GPU state, for the survival watch. Empty if nvidia-smi cannot
+# talk to the card (unbound, or gone).
+smi_line() {
+    command -v nvidia-smi >/dev/null 2>&1 || return 0
+    nvidia-smi --query-gpu=pstate,clocks.sm,clocks.mem,power.draw,pcie.link.gen.current,temperature.gpu \
+        --format=csv,noheader,nounits 2>/dev/null | head -1 | grep -E '^P[0-9]' || true
 }
 
 # ---------------------------------------------------------------- preconditions
@@ -1224,8 +1263,11 @@ reload_nvidia() {
     modprobe nvidia_modeset  || true
     modprobe nvidia_uvm      || true
     [[ $NO_DRM_POLL -eq 1 ]] && drm_poll_disable
-    if [[ $NO_FBDEV -eq 1 ]]; then
-        info "  loading nvidia_drm with fbdev=0 (no framebuffer console — the suspected killer)"
+    if [[ $NO_KMS -eq 1 ]]; then
+        info "  loading nvidia_drm with modeset=0 (render node only — no KMS at all)"
+        modprobe nvidia_drm modeset=0 || warn "modprobe nvidia_drm failed"
+    elif [[ $NO_FBDEV -eq 1 ]]; then
+        info "  loading nvidia_drm with fbdev=0 (no framebuffer console)"
         modprobe nvidia_drm modeset=1 fbdev=0 || warn "modprobe nvidia_drm failed"
     else
         modprobe nvidia_drm  || true
@@ -1623,12 +1665,18 @@ $(printf '     %s\n' "$d")"
     # the cause on 2026-09-09, so this is still an open failure either way.
     if true; then
         if (( SURVIVAL_SECS > 0 )); then
+            [[ $MASK_PCIEHP -eq 1 ]] && { pciehp_mask && trap 'pciehp_restore; autoprobe_restore' EXIT; }
             info "Watching the link for ${SURVIVAL_SECS}s (the old failure was at 10s)..."
-            local t alive=1
+            local t alive=1 prev='' cur
             for ((t=1; t<=SURVIVAL_SECS; t++)); do
                 sleep 1
                 device_alive "$bdf" || { alive=0; break; }
-                (( t % 5 == 0 )) && info "  ${t}s: still up"
+                cur=$(smi_line)
+                if [[ -n $cur && $cur != "$prev" ]]; then
+                    info "  ${t}s: pstate,sm,mem,W,gen,C = $cur"; prev=$cur
+                elif (( t % 5 == 0 )); then
+                    info "  ${t}s: still up"
+                fi
             done
             if (( alive )); then
                 ok "LINK SURVIVED ${SURVIVAL_SECS}s past driver init."
@@ -1747,10 +1795,16 @@ Options:
                   for reproducing the 10-second link death on purpose.
   --survival N    after the bind, watch the link for N seconds and report whether
                   it survived (default 15; the old failure was at 10). 0 to skip.
-  --no-fbdev      load nvidia_drm with fbdev=0: keeps KMS, drops the framebuffer
-                  console. THE leading candidate fix (2026-09-09): every death is
-                  preceded by the 'fb1: nvidia-drmdrmfb' console and is itself a
-                  'Flip event timeout', a known fbdev-hotplug bug. Applies to 'on'.
+  --no-kms        load nvidia_drm with modeset=0: a render node and nothing else.
+                  No KMS, no fbdev, no display engine bring-up via DRM. If the
+                  link survives, the eGPU WORKS for CUDA / Vulkan / PRIME offload
+                  onto the laptop screen. Applies to 'on'.
+  --mask-pciehp   clear the root port's hotplug interrupt enables for the watch.
+                  Every death has Xid 79 raised from irq/NN-pciehp: if the link
+                  drop is momentary, this stops pciehp tearing the device down
+                  and the eGPU survives it. Restored on exit. 'on' and 'bind'.
+  --no-fbdev      load nvidia_drm with fbdev=0. RULED OUT 2026-09-09: died at
+                  ~9s regardless. Kept for the record.
   --no-drm-poll   set drm_kms_helper.poll=0 before nvidia_drm loads. RULED OUT
                   2026-09-09 by source: nvidia-drm calls drm_kms_helper_poll_disable
                   itself right after init, and marks every non-VGA connector
@@ -1806,6 +1860,8 @@ while [[ $# -gt 0 ]]; do
         --survival)   SURVIVAL_SECS=$2; shift ;;
         --no-drm-poll) NO_DRM_POLL=1 ;;
         --no-fbdev)   NO_FBDEV=1 ;;
+        --no-kms)     NO_KMS=1 ;;
+        --mask-pciehp) MASK_PCIEHP=1 ;;
         --aspm-performance) ASPM_PERF=1 ;;
         --link-gen)   LINK_GEN=$2; shift ;;
         --link-gen=*) LINK_GEN=${1#*=} ;;

@@ -358,13 +358,37 @@ never took effect (§8 explains why), so that claim was never actually tested.
 > | `bind drm-nofbdev` | + nvidia_drm `modeset=1 fbdev=0` | **survives if fbdev is the cause** |
 > | `bind drm` | + nvidia_drm (fbdev on) | DIES (established) |
 >
-> If `drm-nofbdev` survives and `drm` dies, fbdev is confirmed and the fix is
-> `nvidia_drm.fbdev=0` — `xgm-egpu on --no-fbdev`, persisted as
-> `options nvidia_drm modeset=1 fbdev=0` in modprobe.d.
+> **fbdev tested and ruled out, 2026-09-09.** `xgm-egpu on --no-fbdev` (nvidia_drm
+> `modeset=1 fbdev=0`, RTD3 confirmed off on the card) **died at ~9s**, Xid 79
+> from `irq/33-pciehp`, identical to every other run. The `fb1` line and the
+> flip timeout were symptoms of the display path being up, not the trigger.
 >
-> Stated as a hypothesis on purpose: earlier the same day RTD3 was called the
-> root cause on evidence that looked this good, and was wrong. The difference is
-> that this one has a one-command test that isolates it.
+> **Three mechanisms now ruled out by hardware** (RTD3, fbdev) **or source**
+> (DRM poll, the heads message). The layer result stands: nvidia core alone
+> survives indefinitely; nvidia_modeset + nvidia_drm dies at ~10s, with or
+> without a monitor, with or without fbdev.
+>
+> **Next tests — built to produce a working configuration, not just a datum:**
+>
+> - `xgm-egpu on --no-kms`: nvidia_drm `modeset=0`. A render node and nothing
+>   else — no KMS, no display-engine bring-up through DRM. If this survives,
+>   **the eGPU is usable today** for CUDA, Vulkan and PRIME render offload onto
+>   the laptop panel; only driving a monitor from the eGPU's own ports is lost.
+> - `xgm-egpu on --mask-pciehp`: clears Hot-Plug Interrupt Enable, DLL State
+>   Changed Enable and Presence Detect Changed Enable in the root port's Slot
+>   Control (`CAP_EXP+0x18`, mask `0x1028`) for the duration of the watch.
+>   Every death has Xid 79 raised from the pciehp IRQ thread — pciehp saw a
+>   Link Down and tore the device down. If the drop is *momentary* (a retrain,
+>   a PHY power event) this turns a fatal surprise-removal into a hiccup and
+>   the device survives. If the link genuinely stays down the card simply goes
+>   unresponsive, which the watch reports. Either answer is decisive.
+> - `xgm-egpu bind modeset` / `bind drm-nokms`: split nvidia_modeset from
+>   nvidia_drm, and "DRM device exists" from "KMS active".
+>
+> The survival watch now also samples `nvidia-smi` pstate / SM clock / memory
+> clock / power / link gen every second, since the internal 1650 does the same
+> periodic display probing and lives — whatever differs on the eGPU should be
+> visible in its state right before the drop.
 
 ### The RTD3 finding itself (real, worth keeping, not the cause)
 
