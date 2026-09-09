@@ -506,6 +506,21 @@ out=$(DRY_RUN=1 relaunch_killed 2>&1)
 assert_has "--no-relaunch skips it and says so"          "$out" "no-relaunch"
 RELAUNCH=1; KILLED_DIR=
 
+echo "== go: which persisted settings the loaded driver lacks =="
+mkdir -p "$T/module/nvidia_drm/parameters"; printf 'N\n' > "$T/module/nvidia_drm/parameters/modeset"; printf 'Y\n' > "$T/module/nvidia_drm/parameters/fbdev"
+printf 'DynamicPowerManagement: 0\nEnablePCIeGen3: 1\n' > "$T/params"
+assert_eq  "all three present -> nothing missing"        "$(go_missing_settings | tr '\n' ' ')" ""
+printf 'DynamicPowerManagement: 2\nEnablePCIeGen3: 1\n' > "$T/params"
+assert_has "RTD3 armed -> rtd3"                          "$(go_missing_settings)" "rtd3"
+printf 'DynamicPowerManagement: 0\nEnablePCIeGen3: 0\n' > "$T/params"
+assert_has "Gen3 not allowed -> pcie"                    "$(go_missing_settings)" "pcie"
+printf 'Y\n' > "$T/module/nvidia_drm/parameters/modeset"
+assert_has "modeset=1 -> drm"                            "$(go_missing_settings)" "drm"
+rm -rf "$T/module/nvidia_drm"; printf 'DynamicPowerManagement: 0\nEnablePCIeGen3: 1\n' > "$T/params"
+assert_eq  "nvidia_drm not loaded -> not counted as missing" "$(go_missing_settings | tr '\n' ' ')" ""
+rm -f "$T/params"
+assert_eq  "driver not loaded -> nothing known missing"  "$(go_missing_settings | tr '\n' ' ')" ""
+
 echo "== library mode =="
 assert_rc "sourcing in library mode does not dispatch" 0 bash -c 'XGM_LIBRARY_MODE=1 source bin/xgm-egpu; declare -F cmd_on >/dev/null'
 assert_rc "script still parses"               0 bash -n bin/xgm-egpu

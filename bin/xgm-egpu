@@ -325,6 +325,109 @@ EOS
     esac
 }
 
+# ---------------------------------------------------------------- go: the one-shot
+#
+# Everything that worked on 2026-09-09 21:58 (from tty3; the display manager
+# was handed back afterwards), in order, with the checks whose absence cost
+# reboots:
+#   1. the three persisted settings must be in the LOADED driver (RTD3 off,
+#      nvidia_drm modeset=0, EnablePCIeGen3=1). Whatever is missing is written
+#      and the driver reloaded — first run only, idempotent afterwards.
+#   2. refuse from inside a desktop whose compositor holds the internal GPU:
+#      --force-kill would end the session. 'desktop pin' or a TTY are the ways.
+#   3. on --no-kms --freeze-link --force-kill
+#   4. prove it: the eGPU answers nvidia-smi at Gen3, and glxinfo run AS THE
+#      DESKTOP USER inside the session names the eGPU (PRIME offload works).
+nvidia_pcie_gen3_value() { grep -oP 'EnablePCIeGen3: \K[0-9]+' "$NV_PARAMS" 2>/dev/null; }
+# Which of the three persisted settings the LOADED driver lacks (empty = none).
+go_missing_settings() {
+    local v d
+    v=$(nvidia_dpm_value); [[ -n $v && $v != 0 ]] && echo rtd3
+    d=$(drm_layer_mode); [[ $d != nokms && $d != not-loaded ]] && echo drm
+    v=$(nvidia_pcie_gen3_value); [[ -n $v && $v != 1 ]] && echo pcie
+    return 0
+}
+# Compositor processes with /dev/nvidia* open: killing them ends the session.
+compositor_holders() {
+    local pid f
+    for pid in $(pgrep -x kwin_wayland; pgrep -x kwin_x11; pgrep -x Xorg; pgrep -x gnome-shell); do
+        for f in /proc/"$pid"/fd/*; do
+            [[ $(readlink "$f" 2>/dev/null) == /dev/nvidia* ]] && { printf '%s(%s) ' "$pid" "$(cat "/proc/$pid/comm" 2>/dev/null)"; break; }
+        done
+    done
+}
+# The desktop user's session environment (from their shell/compositor), for
+# running a check inside the session as them.
+desktop_user_env() {
+    local user=$1 pid
+    pid=$(pgrep -u "$user" -x plasmashell | head -1); [[ -n $pid ]] || pid=$(pgrep -u "$user" -x kwin_wayland | head -1)
+    [[ -n $pid ]] || return 1
+    tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep -E '^(DISPLAY|WAYLAND_DISPLAY|XDG_RUNTIME_DIR|XAUTHORITY|HOME|PATH|XDG_SESSION_TYPE)='
+}
+cmd_go() {
+    need_root; check_interface
+    trap '' HUP
+    local missing reload=0 m
+    echo "== 1/4 persisted settings (RTD3 off, nvidia_drm modeset=0, PCIe Gen3 allowed)"
+    missing=$(go_missing_settings)
+    [[ -f $ETC_MODPROBE_D/nvidia.conf ]] || missing="$missing rtd3"
+    { [[ -f $DRM_CONF ]] && grep -q 'modeset=0' "$DRM_CONF"; } || missing="$missing drm"
+    [[ -f $PCIE_CONF ]] || missing="$missing pcie"
+    # shellcheck disable=SC2086
+    for m in $(printf '%s\n' $missing | sort -u); do
+        case $m in
+          rtd3) info "RTD3 is not disarmed persistently -> install-rules"; cmd_install_rules; reload=1 ;;
+          drm)  info "nvidia_drm is not render-only persistently -> drm nokms"; cmd_drm nokms; reload=1 ;;
+          pcie) info "Gen3 is not allowed persistently -> pcie gen3"; cmd_pcie gen3; reload=1 ;;
+        esac
+    done
+    if [[ $reload -eq 1 ]]; then
+        [[ $(read_attr "$ATTR_ENABLE") == 1 ]] && die "settings were written but the eGPU is on; run '$0 off', then '$0 go' again (it reloads the driver)"
+        info "reloading the driver so the new settings are in the LOADED module (first run only)"
+        FORCE_KILL=1 cmd_reload_driver
+        missing=$(go_missing_settings)
+        [[ -z $missing ]] || die "still missing in the loaded driver after a reload: $missing — reboot, then '$0 go'"
+    fi
+    ok "loaded driver: RTD3 off, nvidia_drm modeset=0, EnablePCIeGen3=1"
+
+    echo "== 2/4 the desktop"
+    local holders; holders=$(compositor_holders)
+    if [[ -n $holders ]] && in_graphical_session; then
+        die "your compositor holds the internal GPU open: $holders
+     --force-kill would end this session. Either:
+         xgm-egpu desktop pin     then log out and back in (kwin never opens NVIDIA again), or
+         Ctrl+Alt+F3, log in there, and run '$0 go' from the TTY (the display
+         manager is stopped and started again for you)."
+    fi
+    [[ -n $holders ]] && info "compositor holds the GPU ($holders) — from a TTY the display manager is stopped for the run"
+    in_graphical_session && info "running from the desktop: anything else holding the GPU is closed and started again afterwards"
+
+    echo "== 3/4 activate"
+    NO_KMS=1; FREEZE_LINK=1; FORCE_KILL=1
+    cmd_on || die "activation failed — read the run above, then:  $0 logs show"
+
+    echo "== 4/4 prove it"
+    local bdf name gen width
+    bdf=$(egpu_bdf || true)
+    { [[ -n $bdf ]] && device_alive "$bdf"; } || die "no live eGPU on the bus after activation"
+    IFS='|' read -r name gen width <<<"$(nvidia-smi -i "$bdf" --query-gpu=name,pcie.link.gen.current,pcie.link.width.current --format=csv,noheader 2>/dev/null | sed 's/, /|/g')"
+    [[ -n $name ]] || die "nvidia-smi cannot read the eGPU at $bdf"
+    ok "nvidia-smi: $name, PCIe Gen${gen:-?} x${width:-?}"
+    local user=${SUDO_USER:-} envs=() renderer
+    if [[ -n $user ]] && command -v glxinfo >/dev/null 2>&1 && mapfile -t envs < <(desktop_user_env "$user") && [[ ${#envs[@]} -gt 0 ]]; then
+        renderer=$(runuser -u "$user" -- env -i "${envs[@]}" __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia __VK_LAYER_NV_optimus=NVIDIA_only timeout 20 glxinfo -B 2>/dev/null | grep -oP 'OpenGL renderer string: \K.*')
+        if [[ -n $renderer && $renderer == *"${name#NVIDIA }"* ]]; then
+            ok "PRIME render offload inside $user's session: $renderer"
+        else
+            warn "glxinfo as $user did not name the eGPU (got: ${renderer:-nothing}) — from your terminal: prime-run glxinfo -B"
+        fi
+    else
+        info "no desktop session to test render offload in (or glxinfo missing); from your terminal: prime-run glxinfo -B"
+    fi
+    ok "READY. Games: Steam launch options  prime-run %command%   (native Wayland games: SDL_VIDEODRIVER=x11)"
+    ok "Done for the day:  $0 off"
+}
+
 # ---------------------------------------------------------------- persistent run logs
 #
 # Terminal scrollback dies with a power-cycle and /tmp is tmpfs. Every
@@ -2824,6 +2927,14 @@ usage() {
     cat <<'EOF'
 xgm-egpu — XG Mobile eGPU control for the ROG Flow X13 (GV301QH)
 
+  xgm-egpu go                  THE ONE-SHOT. Checks the three persisted settings in
+                               the loaded driver (writes + reloads what is missing,
+                               first run only), refuses if your compositor holds the
+                               internal GPU, runs 'on --no-kms --freeze-link
+                               --force-kill', then proves it: nvidia-smi at Gen3 and
+                               glxinfo run as you inside your session naming the eGPU.
+                               Proven from a TTY (2026-09-09 21:58); from the desktop
+                               it works when kwin holds nothing, which it checks.
   xgm-egpu status              show attributes, bus, modules, blockers
   xgm-egpu detect              show the autodetected topology and how it was
                                derived — run this first on a new machine, and
@@ -3031,7 +3142,7 @@ CMD=${1:-status}; shift || true
 if [[ $CMD == --* ]]; then
     die "'$CMD' is an option, not a command. Options go AFTER the command:
      $0 on $CMD ${*:-}
-     (commands: status detect preflight gsp drm pcie desktop logs reload-driver on off bind watch link link-speed ec install-rules)"
+     (commands: go status detect preflight gsp drm pcie desktop logs reload-driver on off bind watch link link-speed ec install-rules)"
 fi
 # Options are accepted ANYWHERE on the line. The old loop stopped at the first
 # positional word, so `desktop pin --dry-run` silently ran for real (2026-09-09).
@@ -3084,7 +3195,7 @@ case "$CMD" in
 esac
 
 case "$CMD" in
-    on|off|bind|reload-driver|link-speed|install-rules|gsp|drm|pcie|capture) run_log_start "$CMD" "$XGM_ARGV" ;;
+    go|on|off|bind|reload-driver|link-speed|install-rules|gsp|drm|pcie|capture) run_log_start "$CMD" "$XGM_ARGV" ;;
 esac
 
 case "$CMD" in
@@ -3100,6 +3211,7 @@ case "$CMD" in
     bind)       cmd_bind "${1:-core}" ;;
     reload-driver) cmd_reload_driver ;;
     watch)      cmd_watch "${1:-40}" "${2:-/tmp/xgm-watch.log}" ;;
+    go)         cmd_go ;;
     on)         cmd_on ;;
     off)        cmd_off ;;
     link)       cmd_link "${1:-}" ;;
