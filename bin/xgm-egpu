@@ -2230,6 +2230,20 @@ cmd_on() {
     [[ $(read_attr "$ATTR_CONNECTED") == 1 ]] || die "egpu_connected is not 1 — the EC does not see the board. Not writing."
     if [[ $(read_attr "$ATTR_ENABLE") == 1 ]]; then
         ok "egpu_enable is already 1"
+        # After a death the EC still says 1 while the card is gone from the bus
+        # (config space reads all-ones: 'current_link_speed' empty, capability
+        # "16.0 GT/s x255"). On 2026-09-09 21:19 that produced a retrain warning
+        # about a link that did not exist. Say what is actually going on.
+        local ebdf; ebdf=$(egpu_bdf || true)
+        if [[ -z $ebdf ]] || ! device_alive "$ebdf" || [[ -z $(cat "$SYSFS_PCI/$ebdf/current_link_speed" 2>/dev/null) ]]; then
+            die "...but the eGPU is NOT alive on the bus: the EC state is left over from a run
+     that died. Recover first, then re-run this exact command:
+         1. unplug the dock
+         2. $0 off                       (restores the internal dGPU)
+         3. $0 reload-driver --force-kill  (clean driver state; if it cannot
+            unload, reboot — the dead GPU can pin a refcount)
+         4. plug the dock back in and lock it"
+        fi
         # Honour --link-gen even here: asking for a generation on an already-active
         # eGPU is a clear request to change it, and silently dropping the flag
         # leaves the caller believing a pin was applied when it was not.
