@@ -101,6 +101,8 @@ RELEASE_LEVEL=minimal
 IGNORE_RTD3=0         # --ignore-rtd3: activate even with RTD3 armed (to reproduce the failure)
 SURVIVAL_SECS=15      # after the bind, watch the link this long. It used to die at 10s.
 NO_DRM_POLL=0         # --no-drm-poll: set drm_kms_helper.poll=0 before loading nvidia_drm
+NO_FBDEV=0            # --no-fbdev: load nvidia_drm with fbdev=0 (no framebuffer console).
+                      # LEADING candidate fix 2026-09-09: the fbcon flip is the death.
 RELOAD_NVIDIA=1       # modprobe the NVIDIA stack back after a successful switch;
                       # --no-reload leaves the eGPU enumerated but unbound
 
@@ -616,6 +618,18 @@ cmd_bind() {
         [[ $DRY_RUN -eq 1 ]] || { modprobe nvidia 2>/dev/null || true
             echo "$bdf" > /sys/bus/pci/drivers/nvidia/bind 2>/dev/null || warn "  bind write failed (already bound?)"; }
         ;;
+      modeset)
+        info "loading nvidia_modeset ONLY (no nvidia_drm: no DRM device, no fbdev, no DRM clients)"
+        [[ $DRY_RUN -eq 1 ]] || modprobe nvidia_modeset
+        ;;
+      drm-nokms)
+        info "loading nvidia_modeset + nvidia_drm with modeset=0 (render node only, no KMS)"
+        [[ $DRY_RUN -eq 1 ]] || { modprobe nvidia_modeset; modprobe nvidia_drm modeset=0; }
+        ;;
+      drm-nofbdev)
+        info "loading nvidia_modeset + nvidia_drm modeset=1 fbdev=0 (KMS, but no framebuffer console)"
+        [[ $DRY_RUN -eq 1 ]] || { modprobe nvidia_modeset; modprobe nvidia_drm modeset=1 fbdev=0; }
+        ;;
       drm)
         [[ $NO_DRM_POLL -eq 1 ]] && drm_poll_disable
         info "loading nvidia_modeset + nvidia_drm on top of the bound core"
@@ -635,17 +649,27 @@ cmd_bind() {
             modprobe snd_hda_intel 2>/dev/null || true
             echo "$aud" > /sys/bus/pci/drivers/snd_hda_intel/bind 2>/dev/null || true; }
         ;;
-      *) die "unknown bind target '$what' (core|drm|audio|all)" ;;
+      *) die "unknown bind target '$what' (core|modeset|drm-nokms|drm-nofbdev|drm|audio|all)" ;;
     esac
     [[ $DRY_RUN -eq 1 ]] && { ok "dry run — nothing bound"; return 0; }
 
     printf '  driver on %s: %s\n' "$bdf" "$(basename "$(readlink -f "/sys/bus/pci/devices/$bdf/driver" 2>/dev/null)" 2>/dev/null || echo none)"
-    info "Watching the link for ${SURVIVAL_SECS}s..."
-    local t alive=1
+    info "Watching the link for ${SURVIVAL_SECS}s, and who opens the display nodes..."
+    # On 2026-09-09 "Correcting number of heads" printed a SECOND time at +9s,
+    # i.e. something re-allocated the NVKMS device right before the death. Log
+    # every process holding /dev/nvidia-modeset or a DRM node each second so a
+    # late client (plymouth, a udev helper, a compositor) shows up by name.
+    local t alive=1 prev='' cur
     for ((t=1; t<=SURVIVAL_SECS; t++)); do
         sleep 1
         device_alive "$bdf" || { alive=0; break; }
-        (( t % 5 == 0 )) && info "  ${t}s: still up"
+        cur=$(fuser /dev/nvidia-modeset /dev/dri/card* /dev/dri/renderD* 2>/dev/null | tr -s ' ' | xargs -r -n1 ps -o comm= -p 2>/dev/null | sort -u | tr '\n' ' ')
+        if [[ $cur != "$prev" ]]; then
+            info "  ${t}s: display-node holders: ${cur:-none}"
+            prev=$cur
+        elif (( t % 5 == 0 )); then
+            info "  ${t}s: still up"
+        fi
     done
     if (( alive )); then
         ok "LINK SURVIVED ${SURVIVAL_SECS}s with '$what' bound."
@@ -1200,7 +1224,12 @@ reload_nvidia() {
     modprobe nvidia_modeset  || true
     modprobe nvidia_uvm      || true
     [[ $NO_DRM_POLL -eq 1 ]] && drm_poll_disable
-    modprobe nvidia_drm      || true
+    if [[ $NO_FBDEV -eq 1 ]]; then
+        info "  loading nvidia_drm with fbdev=0 (no framebuffer console — the suspected killer)"
+        modprobe nvidia_drm modeset=1 fbdev=0 || warn "modprobe nvidia_drm failed"
+    else
+        modprobe nvidia_drm  || true
+    fi
     # Deliberately NOT restarting nvidia-powerd. It manages Dynamic Boost on the
     # internal dGPU, which is switched off in eGPU mode, and it is the daemon
     # whose 15 open fds stalled the very first activation for 856 seconds.
@@ -1678,11 +1707,17 @@ xgm-egpu — XG Mobile eGPU control for the ROG Flow X13 (GV301QH)
                                value takes effect NOW, no reboot, no initramfs.
                                Refuses if anything holds the GPU. eGPU must be off.
   xgm-egpu on                  release the internal dGPU, then activate
-  xgm-egpu bind <core|drm|audio|all>
-                               bind ONE layer of the driver stack to an already
-                               enumerated eGPU and watch whether the link dies.
-                               Use after 'on --no-reload' to find which layer
-                               kills it. Unbound, the link holds Gen3 x8.
+  xgm-egpu bind <target>       bind ONE layer of the driver stack to an already
+                               enumerated eGPU (after 'on --no-reload') and watch
+                               whether the link dies, logging who opens the
+                               display nodes. Established 2026-09-09:
+                                 core         nvidia only            SURVIVES
+                                 modeset      + nvidia_modeset only  ?  <- run this
+                                 drm-nokms    + nvidia_drm modeset=0 ?
+                                 drm-nofbdev  + nvidia_drm fbdev=0   ?
+                                 drm          + nvidia_drm (full)    DIES ~10s
+                                 audio        snd_hda_intel on HDMI  ?
+                                 all          everything
   xgm-egpu watch [SECS] [FILE] sample power state every 0.5s after 'on' —
                                shows exactly what changes when a link dies
   xgm-egpu off                 deactivate and restore the internal dGPU
@@ -1712,10 +1747,15 @@ Options:
                   for reproducing the 10-second link death on purpose.
   --survival N    after the bind, watch the link for N seconds and report whether
                   it survived (default 15; the old failure was at 10). 0 to skip.
-  --no-drm-poll   set drm_kms_helper.poll=0 before nvidia_drm loads. DRM polls
-                  connectors every 10s (DRM_OUTPUT_POLL_PERIOD); the bisection
-                  on 2026-09-09 put the death in the display path at that exact
-                  interval. Applies to 'on', 'bind drm' and 'bind all'.
+  --no-fbdev      load nvidia_drm with fbdev=0: keeps KMS, drops the framebuffer
+                  console. THE leading candidate fix (2026-09-09): every death is
+                  preceded by the 'fb1: nvidia-drmdrmfb' console and is itself a
+                  'Flip event timeout', a known fbdev-hotplug bug. Applies to 'on'.
+  --no-drm-poll   set drm_kms_helper.poll=0 before nvidia_drm loads. RULED OUT
+                  2026-09-09 by source: nvidia-drm calls drm_kms_helper_poll_disable
+                  itself right after init, and marks every non-VGA connector
+                  POLL_HPD, so the 10s DRM poll never runs for it. Kept only so
+                  the record shows it was tested in code, not on hardware.
   --link-gen N    pin the root port's target PCIe generation (1-4) before the
                   switch and again after enumeration. On this machine the link
                   cannot complete training above Gen1: '--link-gen 1' is the
@@ -1765,6 +1805,7 @@ while [[ $# -gt 0 ]]; do
         --ignore-rtd3) IGNORE_RTD3=1 ;;
         --survival)   SURVIVAL_SECS=$2; shift ;;
         --no-drm-poll) NO_DRM_POLL=1 ;;
+        --no-fbdev)   NO_FBDEV=1 ;;
         --aspm-performance) ASPM_PERF=1 ;;
         --link-gen)   LINK_GEN=$2; shift ;;
         --link-gen=*) LINK_GEN=${1#*=} ;;

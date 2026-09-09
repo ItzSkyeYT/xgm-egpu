@@ -311,42 +311,60 @@ never took effect (§8 explains why), so that claim was never actually tested.
 > the EC handshake and the lane switch are all fine** — see the connector
 > section below, which this independently confirms for the third time.
 >
-> **Bisected, 2026-09-09.** `xgm-egpu bind core` (nvidia only, display path
-> unloaded): **survived**, Gen3 x8, P0, `nvidia-smi` reading the card, AER
-> zero. Then `xgm-egpu bind drm` (nvidia_modeset + nvidia_drm on top):
-> **died at ~11s.**
+> **Bisected to the display path, then to fbdev — 2026-09-09.**
+>
+> `xgm-egpu bind core` (nvidia only, display path unloaded): **survived**, Gen3
+> x8, P0, `nvidia-smi` reading the card, AER zero. `xgm-egpu bind drm`
+> (nvidia_modeset + nvidia_drm): **died at ~11s.** So GSP init and the core
+> driver are fine; the display path kills it.
+>
+> **Two mechanism guesses ruled out from source, before testing them:**
+>
+> - *DRM connector poll* (`DRM_OUTPUT_POLL_PERIOD`, 10*HZ). No: nvidia-drm calls
+>   `drm_kms_helper_poll_disable()` immediately after init (nvidia-drm-drv.c
+>   :426) and marks every non-VGA connector `DRM_CONNECTOR_POLL_HPD`
+>   (:689), so that poll never runs for it. `--no-drm-poll` exists only to
+>   record that this was checked in code.
+> - *"Correcting number of heads (0x00)"* at +9s. No: the **internal GTX 1650**
+>   prints the same line, twice, ~10s apart, and works perfectly. It is normal
+>   NVKMS head probing, not the trigger.
+>
+> **Leading hypothesis: the framebuffer console (`nvidia_drm.fbdev`).** Every
+> death is immediately preceded by
 >
 > ```
-> 13:10:00  Initialized nvidia-drm
-> 13:10:09  nvidia-modeset: Correcting number of heads for current head configuration
->           <link gone; GSP_RM_CONTROL in flight; Xid 154>
+> nvidia 0000:01:00.0: [drm] fb1: nvidia-drmdrmfb frame buffer device
 > ```
 >
-> So GSP init is fine, the core driver is fine, and **the display path kills
-> it.** Not yet known: *what* in the display path.
+> and the death itself is
 >
-> **Hypothesis under test — DRM connector polling.** `drm_probe_helper.c`:
->
-> ```c
-> #define DRM_OUTPUT_POLL_PERIOD (10*HZ)
-> module_param_named(poll, drm_kms_helper_poll, bool, 0600);
+> ```
+> [drm:nv_drm_atomic_commit] *ERROR* [nvidia-drm] Flip event timeout on head 0
 > ```
 >
-> Ten seconds after a DRM device registers, `output_poll_execute` calls every
-> connector's `detect()`. For nvidia-drm that goes through nvidia-modeset and
-> out to the GPU as a GSP RPC — the "Correcting number of heads" line at +9s
-> and the in-flight `GSP_RM_CONTROL` in every dump fit that. The interval
-> matches to the second, and the poll exists only once `nvidia_drm` is loaded,
-> which is exactly what the bisection found.
+> which is the fbcon flip failing. When `fbdev=1`, nvidia-drm grabs NVKMS
+> modeset ownership and installs a framebuffer console (nvidia-drm-drv.c :770);
+> `fbdev=0` skips that block entirely. Community reports tie
+> `nvidia_drm.fbdev=1` specifically to "flip event timeouts during display
+> hotplugging," with `fbcon=map:0` / disabling fbdev as the workaround.
 >
-> The knob is runtime-writable. `xgm-egpu bind drm --no-drm-poll` sets
-> `drm_kms_helper.poll=0` *before* loading nvidia_drm so the poll never starts.
-> If the link survives with the display path loaded and the poll off, that is
-> the cause. If it dies anyway, the display path is still implicated but the
-> mechanism is something else in `detect()`/modeset init. **Not yet run.**
+> **The test ladder** (each rung is one `xgm-egpu bind` after `on --no-reload`):
 >
-> This is stated as a hypothesis on purpose. Earlier the same day RTD3 was
-> called the root cause on equally good-looking evidence and was wrong.
+> | rung | what loads | prediction |
+> |---|---|---|
+> | `bind core` | nvidia only | SURVIVES (established) |
+> | `bind modeset` | + nvidia_modeset, no DRM | survives (control — allocates nothing) |
+> | `bind drm-nokms` | + nvidia_drm `modeset=0` | survives (no KMS, no fbcon) |
+> | `bind drm-nofbdev` | + nvidia_drm `modeset=1 fbdev=0` | **survives if fbdev is the cause** |
+> | `bind drm` | + nvidia_drm (fbdev on) | DIES (established) |
+>
+> If `drm-nofbdev` survives and `drm` dies, fbdev is confirmed and the fix is
+> `nvidia_drm.fbdev=0` — `xgm-egpu on --no-fbdev`, persisted as
+> `options nvidia_drm modeset=1 fbdev=0` in modprobe.d.
+>
+> Stated as a hypothesis on purpose: earlier the same day RTD3 was called the
+> root cause on evidence that looked this good, and was wrong. The difference is
+> that this one has a one-command test that isolates it.
 
 ### The RTD3 finding itself (real, worth keeping, not the cause)
 

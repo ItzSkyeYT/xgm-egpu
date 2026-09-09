@@ -22,7 +22,7 @@ meet them undocumented.**
 | Link trains at PCIe Gen3 x8 | **Works** - earlier "Gen1 cap" was an idle-state reading, see [Findings](FINDINGS.md#pcie-link-speed) |
 | Link survives **unbound** | **Works** - Gen3 x8 indefinitely, zero AER. The hardware is fine |
 | Link survives with `nvidia` core bound | **Works** - Gen3 x8, P0, `nvidia-smi` reads it |
-| Link survives with `nvidia_drm` loaded | **Open.** Dies at ~10s; bisected to the display path. DRM's 10s connector poll is the hypothesis under test (`--no-drm-poll`). See [Findings §8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause) |
+| Link survives with `nvidia_drm` loaded | **Open, strong lead.** Dies at ~10s, bisected to the display path; every death is preceded by the `fb1` framebuffer console and is a *Flip event timeout*. Test/fix: `on --no-fbdev`. See [Findings §8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause) |
 
 The reference machine is the most marginal configuration that exists: a DIY dock
 with substituted connectors, on the oldest Flow model. If you have an official
@@ -105,7 +105,9 @@ Useful options:
 --link-gen N     pin PCIe generation 1-4 before switching
 --no-reload      enumerate without binding NVIDIA - separates enumeration
                  faults from driver faults
---no-drm-poll    disable DRM's 10s connector poll before nvidia_drm loads
+--no-fbdev       load nvidia_drm with fbdev=0 (no framebuffer console).
+                 The leading candidate fix for the 10s death
+--no-drm-poll    disable DRM's 10s connector poll (ruled out; kept for the record)
 --timeout N      default 180s
 --root-port BDF  override the autodetected PCIe root port
 --internal-dgpu BDF
