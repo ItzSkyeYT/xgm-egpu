@@ -14,6 +14,8 @@ assert_eq() { [[ "$2" == "$3" ]] && pass "$1" || fail "$1" "expected [$3] got [$
 assert_rc() { local label=$1 want=$2; shift 2; "$@" >/dev/null 2>&1; local rc=$?; [[ $rc -eq $want ]] && pass "$label" || fail "$label" "expected rc=$want got rc=$rc"; }
 assert_has() { grep -qE -- "$3" <<<"$2" && pass "$1" || fail "$1" "missing /$3/ in: $2"; }
 assert_not() { grep -qE -- "$3" <<<"$2" && fail "$1" "unexpected /$3/ in: $2" || pass "$1"; }
+# for functions that may call die (which exits): run them in a subshell
+sub() { ( "$@" ); }
 
 # Load the tool with every path pointed into the fixture tree.
 load() {
@@ -146,15 +148,15 @@ mkdir -p "$T/module/nvidia/holders"; echo 5 > "$T/module/nvidia/refcnt"
 touch "$T/module/nvidia/holders/a" "$T/module/nvidia/holders/b" "$T/module/nvidia/holders/c"
 # stub the root/interface/attr checks so only the refcount guard is exercised
 need_root() { :; }; check_interface() { :; }; read_attr() { echo 0; }; nv_holders() { echo "4242 fakeproc"; }
-out=$(DRY_RUN=1 cmd_reload_driver 2>&1); rc=$?
+out=$(DRY_RUN=1 sub cmd_reload_driver 2>&1); rc=$?
 assert_eq  "refuses with extra refs (rc 1)"               "$rc" "1"
 assert_has "names the holder"                             "$out" "4242 fakeproc"
 echo 3 > "$T/module/nvidia/refcnt"; nv_holders() { :; }
-out=$(DRY_RUN=1 cmd_reload_driver 2>&1); rc=$?
+out=$(DRY_RUN=1 sub cmd_reload_driver 2>&1); rc=$?
 assert_eq  "proceeds (dry-run) when refs == holders"      "$rc" "0"
 assert_has "dry-run says what it would unload"            "$out" "would unload nvidia_drm nvidia_modeset nvidia_uvm nvidia"
 read_attr() { echo 1; }
-out=$(DRY_RUN=1 cmd_reload_driver 2>&1); rc=$?
+out=$(DRY_RUN=1 sub cmd_reload_driver 2>&1); rc=$?
 assert_eq  "refuses while egpu_enable=1"                  "$rc" "1"
 assert_has "explains eGPU must be off"                    "$out" "eGPU OFF"
 
@@ -173,6 +175,23 @@ assert_eq "dry-run does not write"            "$(cat "$T/drm_poll")" "Y"
 DRY_RUN=0
 rm -f "$T/drm_poll"
 assert_rc "missing knob -> rc 1, no crash"    1 drm_poll_disable
+
+echo "== pciehp Slot Control mask arithmetic =="
+# bit3 PDCE=0x8, bit5 HPIE=0x20, bit12 DLLSCE=0x1000 -> mask 0x1028
+assert_eq "mask constant is 0x1028"           "$(printf '0x%x' "$PCIEHP_MASK_BITS")" "0x1028"
+assert_eq "clears HPIE/DLLSCE/PDCE, keeps the rest" "$(printf '%04x' $(( 0x1fff & ~PCIEHP_MASK_BITS )))" "0fd7"
+assert_eq "already-clear value is unchanged"  "$(printf '%04x' $(( 0x0fd7 & ~PCIEHP_MASK_BITS )))" "0fd7"
+assert_eq "typical live value 0x10?? loses only bit12" "$(printf '%04x' $(( 0x1038 & ~PCIEHP_MASK_BITS )))" "0010"
+echo "--- mask/restore refuse cleanly without setpci / root port ---"
+ROOT_PORT=""; DRY_RUN=1
+assert_rc "pciehp_mask dies without a root port"  1 sub pciehp_mask
+ROOT_PORT=0000:00:01.1
+_SLOTCTL_SAVED=""
+assert_rc "pciehp_restore with nothing saved is a no-op (rc 0)" 0 pciehp_restore
+DRY_RUN=0
+
+echo "== smi_line =="
+assert_eq "no nvidia-smi on PATH -> empty, rc 0" "$(PATH=/nonexistent smi_line; echo "rc=$?")" "rc=0"
 
 echo "== library mode =="
 assert_rc "sourcing in library mode does not dispatch" 0 bash -c 'XGM_LIBRARY_MODE=1 source bin/xgm-egpu; declare -F cmd_on >/dev/null'
