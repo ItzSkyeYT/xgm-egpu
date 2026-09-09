@@ -745,6 +745,58 @@ never took effect (§8 explains why), so that claim was never actually tested.
 >
 > The watch now prints a loud line the second the sampled link speed changes.
 >
+> ### RESOLVED, 2026-09-09 21:31: it was the driver retraining the link
+>
+> With the display engine fully excluded (`modeset=0` **and** the NVKMS door
+> sealed) the card still died at ~10 s, so the whole display-path thread
+> above was a red herring, however well it fitted. The watch's link samples
+> gave the real event: every death is preceded by the link going
+> **8.0 → 5.0 GT/s** while the GPU sits in a flat P0 — the driver retraining
+> the link down, about ten seconds after init, which is when the RM's
+> post-init perf state decays and it lowers the PCIe generation with it (the
+> internal 1650 sits at Gen2 for the same reason). A retrain at 8 GT/s needs
+> equalization, which these substituted connectors do not complete (the
+> kernel's `Cannot train link` at enumeration was the same fact, read the
+> other way). An unbound card, or the core module alone, never asks for a
+> retrain, which is why both held Gen3 x8 indefinitely.
+>
+> The fix removes every reason to retrain, and two runs (21:31 from a TTY,
+> 21:58 from the desktop) held Gen3 x8, P0, 40 W, zero AER, with
+> `nvidia-smi` and PRIME render offload working:
+>
+> 1. `pcie gen3` — `NVreg_EnablePCIeGen3=1`, so the RM does not treat Gen3 as
+>    forbidden on an unrecognised platform and pull the link down for policy.
+> 2. `--freeze-link` — `nvidia-smi -lgc/-lmc` at the card's maximum so it never
+>    leaves P0 (the perf-driven switch never fires), and the Hardware
+>    Autonomous Speed/Width Disable bits (`LnkCtl2 |= 0x60`) on the GPU and
+>    the root port. Log of the working run:
+>
+>    ```
+>    link now: 8.0 GT/s PCIe x8
+>    graphics clock locked at 2115 MHz — the GPU stays in P0
+>    memory clock locked at 7501 MHz
+>    0000:01:00.0: LnkCtl2 0x0003 -> 0023  (hardware-autonomous speed/width changes disabled)
+>    0000:00:01.1: LnkCtl2 0x0003 -> 0023
+>    15s: pstate,sm,mem,W,gen,C = P0, 1995, 7501, 40.81, 3, 36
+>    LINK SURVIVED 15s past driver init.
+>    ```
+> 3. `drm nokms` with the sealed `/dev/nvidia-modeset`, RTD3 off, runtime PM
+>    pinned — the configuration the fix was tested in. Whether the full
+>    display path (`modeset=1`) also survives now that nothing retrains the
+>    link is the obvious next experiment and is **untested**; on this
+>    machine nobody needs the eGPU's ports.
+>
+> What the retrain-death chain leaves unexplained is only the exact policy
+> that chose Gen2 ten seconds in; it lives in the RM and is not readable from
+> here. Everything else — the flat P0 at death, the clean drop with zero AER,
+> core-only surviving, `--link-gen 1` surviving for minutes, `--cap-power`
+> dying (it never touched the link), fbdev/modeset/door making no difference
+> — is what a policy-driven speed change on a link that cannot equalise at
+> 8 GT/s looks like. Also fixed along the way, because they bit: the
+> compositor holding the internal dGPU (`desktop pin`), `--force-kill`
+> closing the user's apps (they are relaunched), a display manager left
+> stopped (TTY handoff), and evidence lost to reboots (`logs`).
+>
 > **9. RM does not consider this an external GPU.** `RmCheckForExternalGpu`
 > (`osinit.c`) sets `PDB_PROP_GPU_IS_EXTERNAL_GPU` only for an Intel
 > Thunderbolt 3 bridge *and* a surprise-hotplug-capable slot; the XGM root
