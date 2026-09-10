@@ -558,6 +558,13 @@ DOCK="osy Lite v0.6.1"
 out=$(sub cmd_report 2>&1)
 assert_has "DOCK= from the config fills the dock column" "$out" "\| osy Lite v0.6.1 \|"
 unset DOCK
+# a live, enabled eGPU with no verdict in the latest log still reports "works (active now)"
+mkdir -p "$T/pci/0000:01:00.0" "$T/fw"; printf '0x10de\n' > "$T/pci/0000:01:00.0/vendor"; printf '0x2487\n' > "$T/pci/0000:01:00.0/device"; printf '0x030000\n' > "$T/pci/0000:01:00.0/class"; printf '16.0 GT/s PCIe\n' > "$T/pci/0000:01:00.0/current_link_speed"; printf '4\n' > "$T/pci/0000:01:00.0/current_link_width"
+printf '# command: xgm-egpu on\nnothing conclusive\n' > "$T/log/20260909-200400-on.log"
+INTERNAL_DEVID=0x1f9d; read_attr() { echo 1; }
+out=$(sub cmd_report 2>&1)
+assert_has "live enabled card -> works (active now)"     "$out" "\| works \(active now\) \| 16.0 GT/s PCIe x4 \|"
+unset -f read_attr; rm -f "$T/log/20260909-200400-on.log"; rm -rf "$T/pci/0000:01:00.0"; INTERNAL_DEVID=
 
 echo "== in_graphical_session walks the ancestors for a display variable =="
 # the negative case needs a process tree with NO graphical ancestor: a fresh PID namespace gives one

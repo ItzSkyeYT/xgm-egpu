@@ -25,7 +25,7 @@ screen. `off` must run from a TTY in that mode, because kwin holds the card.
 |---|---|---|---|---|---|
 | ROG Flow X13 GV301QH (2021, AMD 5900HS) | DIY osy Lite v0.6.1, ALC04-S40EIA-00 instead of I-PEX CABLINE-VS | RTX 3060 (GA104, 10de:2487) | **works**, PCIe Gen3 x8, zero AER | render offload to the laptop screen (`go`); full display path with a monitor on the eGPU's HDMI (`go --display` + `desktop pin --outputs`) | `install-rules` (RTD3 off), `drm nokms` or `drm nofbdev`, `pcie gen3`, `--freeze-link`; ~40 W idle |
 | ROG Ally RC71L | DIY osy | RTX 3080 | in progress | | `pci=realloc=on pci=hpmmiosize=128M` on the kernel line for the BAR window |
-| *(reported on Discord, details pending)* | | RTX 5070 (Blackwell) | works | desktop mode; a gamescope Gaming Mode session keeps the image on the internal panel | see [HARDWARE.md](HARDWARE.md) |
+| ROG Ally RC71L (BIOS 342) | *(dock not reported yet)* | RTX 5070 (Blackwell) | **works**, PCIe Gen4 x4, NVIDIA 610.57 | desktop mode on CachyOS Handheld; Gaming Mode needs the [gamescope variables](#gaming-mode-gamescope-sessions-bazzite-chimeraos-steamos-style) | reported on the osy Discord, 2026-09-10; no internal dGPU, so no eject |
 | *your machine* | | | | | `xgm-egpu report` prints a row - see [HARDWARE.md](HARDWARE.md) |
 
 Full details, dock revisions and the per-model notes from the osy community
