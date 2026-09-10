@@ -15,6 +15,7 @@ on the eGPU's ports).
 |---|---|---|---|---|---|---|---|---|
 | ROG Flow X13 GV301QH (BIOS 415) | DIY osy Lite v0.6.1, ALC04-S40EIA-00 instead of I-PEX CABLINE-VS | RTX 3060 (GA104, 10de:2487) | CachyOS, 7.2.3-1-cachyos, NVIDIA 580.178.04 | works | 8.0 GT/s x8 | render + display; monitor on the eGPU HDMI via `desktop pin --outputs` | 2026-09-09 | `go`; needs `pcie gen3` + `--freeze-link`, dies ~10 s after bind without them ([FINDINGS §8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause)). ~40 W idle |
 | ROG Ally (RC71L) | DIY osy | RTX 3080 | CachyOS | in progress | | | 2026-09 | BAR0 / bridge window: `pci=realloc=on pci=hpmmiosize=128M` on the kernel line |
+| *(host not yet reported)* | *(not yet reported)* | RTX 5070 (Blackwell) | *(not yet reported)* | works | | desktop mode | 2026-09-10 | Reported on the osy Discord by armenazizbek. In a gamescope "Gaming Mode" session the eGPU's monitor goes dark and the image stays on the internal panel: gamescope composites on one GPU and drives only that GPU's outputs (KWin's desktop does multi-GPU). Details and a `report` row welcome |
 
 ## Dock revisions and connectors
 
