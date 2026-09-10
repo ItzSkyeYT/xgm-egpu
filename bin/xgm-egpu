@@ -506,6 +506,8 @@ cmd_report() {
     case $(drm_layer_mode) in nokms) mode=render ;; full|nofbdev) mode=display ;; *) mode="?" ;; esac
     lastlog=$(ls "$LOG_DIR"/*-on.log "$LOG_DIR"/*-go.log 2>/dev/null | sort | tail -1)
     result="(fill in: works / dies at Ns / no enumerate / blocked at ...)"
+    # a card that is on the bus and answering right now is a result in itself
+    [[ -n $bdf ]] && device_alive "$bdf" && [[ $(read_attr "$ATTR_ENABLE" 2>/dev/null) == 1 ]] && result="works (active now)"
     if [[ -n $lastlog ]]; then
         grep -q 'LINK SURVIVED' "$lastlog" && result=works
         grep -qE 'link DIED' "$lastlog" && result="dies ($(grep -oE 'link DIED at ~[0-9]+s' "$lastlog" | tail -1 | grep -oE '[0-9]+s'))"
@@ -518,7 +520,7 @@ cmd_report() {
     printf '  host            %s / %s / BIOS %s (%s)\n' "$host" "$board" "$bios" "$(cat "$DMI/sys_vendor" 2>/dev/null)"
     printf '  root port       %s   internal dGPU %s (%s)\n' "${ROOT_PORT:-?}" "${INTERNAL_DGPU:-none}" "${INTERNAL_DEVID:-}"
     printf '  eGPU            %s at %s\n' "$gpu" "${bdf:-<not on the bus>}"
-    printf '  loaded driver   RTD3=%s  drm=%s  EnablePCIeGen3=%s  GSP=%s\n' "$(nvidia_dpm_value)" "$(drm_layer_mode)" "$(nvidia_pcie_gen3_value)" "$(grep -oP 'EnableGpuFirmware: \K[0-9]+' "$NV_PARAMS" 2>/dev/null)"
+    printf '  loaded driver   RTD3=%s  drm=%s  EnablePCIeGen3=%s  GSP=%s%s\n' "$(nvidia_dpm_value)" "$(drm_layer_mode)" "$(nvidia_pcie_gen3_value)" "$(grep -oP 'EnableGpuFirmware: \K[0-9]+' "$NV_PARAMS" 2>/dev/null)" "$([[ $EUID -ne 0 ]] && printf '   (run with sudo for the DRM layer)')"
     printf '  last run        %s\n' "${lastlog:-none}"
     printf '  egpu_connected  %s   egpu_enable %s\n' "$(read_attr "$ATTR_CONNECTED" 2>/dev/null)" "$(read_attr "$ATTR_ENABLE" 2>/dev/null)"
 }
@@ -653,7 +655,7 @@ pci_parent() {
 # Every PCI display-class device (0x03xxxx: VGA, 3D controller, display).
 display_devices() {
     local d c
-    for d in /sys/bus/pci/devices/*/; do
+    for d in "$SYSFS_PCI"/*/; do
         c=$(cat "$d/class" 2>/dev/null) || continue
         [[ $c == 0x03* ]] && basename "$d"
     done
@@ -662,7 +664,7 @@ display_devices() {
 # The pcieport bridge whose secondary bus is $1 (decimal).
 port_for_bus() {
     local want=$1 d drv
-    for d in /sys/bus/pci/devices/*/; do
+    for d in "$SYSFS_PCI"/*/; do
         drv=$(basename "$(readlink -f "$d/driver" 2>/dev/null)" 2>/dev/null)
         [[ $drv == pcieport ]] || continue
         [[ $(cat "$d/secondary_bus_number" 2>/dev/null) == "$want" ]] || continue
@@ -2600,7 +2602,7 @@ egpu_bdf() {
     # enumerate at 0000:01:00.0 — the slot the internal dGPU just vacated. Audio
     # functions (class 0403) are skipped so we return the GPU, not its HDMI codec.
     local d ven dev cls
-    for d in /sys/bus/pci/devices/*/; do
+    for d in "$SYSFS_PCI"/*/; do
         ven=$(cat "$d/vendor" 2>/dev/null) || continue
         [[ $ven == 0x10de ]] || continue
         dev=$(cat "$d/device" 2>/dev/null)
