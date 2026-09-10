@@ -114,6 +114,25 @@ start it again when the run ends, success or not, so you land on a login
 screen rather than a dead console (`--keep-desktop` skips that). `go` checks
 for a compositor holding the GPU before it touches anything.
 
+## Gaming Mode (gamescope sessions: Bazzite, ChimeraOS, SteamOS-style)
+
+A gamescope session composites on one GPU and drives only that GPU's
+outputs, so with the eGPU active the image stays on the internal panel and
+a monitor on the eGPU's ports goes dark. gamescope opens the DRM device of
+whichever GPU it composites on, and the session script reads two variables
+from `~/.config/environment.d/*.conf`:
+
+```sh
+# ~/.config/environment.d/egpu.conf
+VULKAN_ADAPTER=10de:2487        # the eGPU's vendor:device id, from: lspci -nn | grep -i nvidia
+OUTPUT_CONNECTOR=HDMI-A-2,*     # the eGPU's connector first, from: ls /sys/class/drm (while it is on)
+```
+
+Bring the eGPU up in display mode first (`xgm-egpu go --display`; gamescope
+needs the KMS node), then switch to Gaming Mode. gamescope then holds the
+eGPU, so `off` must run from a TTY. Untested here (the reference machine
+runs KDE); the symptom was reported by an RTX 5070 user on the osy Discord.
+
 ## Commands
 
 Everyday: `go`, `off`, `status`, `detect`, `preflight`, `logs`, `report`,
