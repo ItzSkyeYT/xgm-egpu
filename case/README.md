@@ -123,63 +123,32 @@ two-piece lid; the posts need 182 mm of Z.
 Print settings: PETG (PLA softens next to a hot GPU and creeps under the PSU), 0.2 mm layers, 3 to 4
 perimeters, 25 to 40 % infill, no supports anywhere. Panels print flat with their outer face down.
 
-## Test batch, then the rest
+## Printing
 
-Print in this order; every stage proves something before you spend the filament on the next, and
-everything except the two coupons ends up in the finished box.
+Everything to take to a printer is in [`print-pack/`](print-pack/), one folder per stage, with its own
+[README](print-pack/README.md): settings, a picture of each stage, what it checks, and a pass checklist.
+In short:
 
-**Stage 1, tolerances (one plate, about 30 g, under an hour): `coupon` (two identical pieces in one
-file), `coupon_rear`.** Test the two coupons against each other: one's jigsaw tab pressed down into the
-other's notch (floor and lid pieces join like this); one laid on the other so its square peg goes through
-the other's square hole (posts and lid seat like this); one's tab pushed edge-first into the other's long
-thin slot (the 3 mm wall panels sit in the posts like this). Each should go together by hand and stay
-put: not forced, not loose. `coupon_rear` is the bottom of the real rear wall, board side: slide it down
-over the laptop cable at the rubber boot (the notch must drop over the boot without pinching it, which is
-exactly how the real wall goes in), push a USB-C plug through the small hole and an HDMI plug into the
-bottom of the big window. If a fit is wrong, say which one: one number changes and only the coupon
-reprints.
+1. **Tests**: `coupon` (two pieces) and `coupon_rear`, about 20 g. Your printer's fits, and the real
+   plugs in the real openings.
+2. **Board and card**: `floor_rr`, `floor_fr`, `bracket_holder`, `cradle` and the shims. The board on
+   its five pegs and five clips, the card on the holder and the cradle.
+3. **Structure sample**: one `post_corner`, one `post_mid`, `panel_rear_r`. Full-height posts, a wall
+   in its slots, and the wall's notch over the laptop cable.
+4. **The rest.**
 
-**Stage 2, board fit (about 95 g): `floor_rr`, `bracket_holder`, `shim_05`, `shim_10`, `shim_15`.**
-Bare board onto the five pegs: it should sit flat on the bosses with the four clips snapped over its
-edges. Holder's three pegs down through the board's small holes. Card in: foot in the board's slot,
-the tab resting on the holder's arm or floating a hair above it (shim). If the tab is well off the
-arm, re-measure `tab_above_board`.
-
-**Stage 3, card support (about 80 g): `floor_fr`, `cradle`.** Join the two quarters (jigsaw tabs),
-card in, far end on the cradle; it must rest without lifting the card out of the slot. Off by more
-than a millimetre: `card_bottom_clear`, and only the cradle reprints.
-
-**Stage 4, structure sample (about 115 g): one `post_corner`, one `post_mid`, `panel_rear_r`.**
-Posts into the floor sockets, the panel down into the slots, and this is where your printer's Z gets
-checked against 180 mm posts.
-
-**Stage 5, everything else:** `floor_rl`, `floor_fl`, 3 more `post_corner`, 3 more `post_mid`,
-`panel_rear_l`, `panel_far_l`, `panel_far_r`, `panel_left_r`, `panel_left_f`, `panel_right_r`,
-`panel_right_f`, and the lid: `lid_l` + `lid_r` on a 235 mm bed, otherwise `lid_rl`, `lid_rr`,
-`lid_fl`, `lid_fr`.
-
-## Order of work
-
-1. `coupon`, tune fits.
-2. `floor_rr`. Drop the bare board onto its five pegs. It should sit flat on the bosses with the edge
-   clips over its edges and the pegs standing about 1 mm proud. If a peg misses, the board isn't the
-   board this was drawn for; stop here.
-3. `bracket_holder`. Its three pegs go down through the board's three small holes into the floor.
-   Plug the card in: the bracket's foot drops into the board's slot and the tab should land on the
-   holder's arm, or float just above it (shim). If the tab lands well off the arm, re-measure
-   `tab_above_board`.
-4. `cradle`, `floor_fr`. Set both floor pieces together and check that the card's far end rests on the
-   cradle without lifting the card out of the slot. Re-measure `card_bottom_clear` if it doesn't.
-5. Everything else.
+Only the two coupons are throwaway. `./make-print-pack.sh` rebuilds the folder after any change to the
+model.
 
 ## Assembly
 
 1. Join the four floor quarters (press the jigsaw tabs down into their slots).
 2. Push the eight posts into the square holes in the floor. Corner posts have two slots at 90°, mid
    posts two slots in line.
-3. Board on its pegs; press down until the four edge clips snap over the edges. Bracket holder into
+3. Board on its pegs; press down until the five edge clips snap over the edges. Bracket holder into
    its three holes.
-4. PSU on its side, fan toward the −Y wall, IEC inlet toward the far wall, slid forward against the stops.
+4. PSU on its side, fan toward the outer wall on the PSU side, IEC inlet toward the far wall, slid
+   forward against the stops.
 5. Card into the slot: foot in the board's slot, tab on the holder's arm, far end on the cradle. Then
    the 24-pin (its bundle leaves the plug, bends inside the bay and reaches the modular face; the spare
    length lies in the bay as one loop), the 8-pin over the top of the card into the same bay, and the
