@@ -13,4 +13,4 @@ if [ ${#parts[@]} -eq 0 ]; then
 fi
 mkdir -p stl
 printf '%s\n' "${parts[@]}" | xargs -P "$jobs" -I{} sh -c \
-  'start=$(date +%s); openscad -o "stl/{}.stl" -D "part=\"{}\"" xgm-lite-frame.scad >"stl/{}.log" 2>&1; echo "{}: $(( $(date +%s) - start )) s, $(grep -c "facet normal" "stl/{}.stl" 2>/dev/null || echo 0) facets"'
+  'start=$(date +%s); openscad -o "stl/{}.stl" -D "part=\"{}\"" xgm-lite-frame.scad >"stl/{}.log" 2>&1; python3 normalize_stl.py "stl/{}.stl" >/dev/null; echo "{}: $(( $(date +%s) - start )) s, $(grep -c "facet normal" "stl/{}.stl" 2>/dev/null || echo 0) facets"'
