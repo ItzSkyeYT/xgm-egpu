@@ -6,35 +6,35 @@ All numbers in mm, read from the rendered STLs in `stl/` (as laid out for printi
 
 | | X (length) | Y (width) | Z (height) |
 |---|---|---|---|
-| outside, over the posts | 270.7 | 231 | 183.9 |
-| inside the panels | 260.7 | 221 | 177.9 |
+| outside, over the posts | 270.7 | 244 | 183.9 |
+| inside the panels | 260.7 | 234 | 177.9 |
 
 ## Printed parts, as exported for printing (bed footprint X × Y, height Z)
 
 | Part | Qty | X | Y | Z | What it is |
 |---|---|---|---|---|---|
 | `floor_rl` | 1 | 150.5 | 106.5 | 9.0 | floor quarter, rear / PSU side: cable bay floor with tie slots |
-| `floor_rr` | 1 | 150.5 | 131.0 | 13.4 | floor quarter, rear / board side: 5 board pegs, 3 clips, holder sockets, foot relief |
+| `floor_rr` | 1 | 150.5 | 144.0 | 13.4 | floor quarter, rear / board side: 5 board pegs, 3 clips, holder sockets, foot relief |
 | `floor_fl` | 1 | 126.7 | 106.5 | 6.0 | floor quarter, far / PSU side: PSU stops |
-| `floor_fr` | 1 | 126.7 | 131.0 | 13.4 | floor quarter, far / board side: cradle sockets, clip |
-| `lid_l` | 1 | 150.5 | 231.0 | 75.3 | lid, rear half: lip, 4 pegs, card ribs, bracket guides |
-| `lid_r` | 1 | 126.7 | 231.0 | 7.0 | lid, far half: lip, 4 pegs |
+| `floor_fr` | 1 | 126.7 | 144.0 | 13.4 | floor quarter, far / board side: cradle sockets, clip |
+| `lid_l` | 1 | 150.5 | 244.0 | 75.3 | lid, rear half: lip, 4 pegs, card ribs, bracket guides |
+| `lid_r` | 1 | 126.7 | 244.0 | 7.0 | lid, far half: lip, 4 pegs |
 | `lid_rl` | 1 | 150.5 | 106.5 | 7.0 | lid quarter (small-bed alternative) |
-| `lid_rr` | 1 | 150.5 | 131.0 | 75.3 | lid quarter (small-bed alternative) |
+| `lid_rr` | 1 | 150.5 | 144.0 | 75.3 | lid quarter (small-bed alternative) |
 | `lid_fl` | 1 | 126.7 | 106.5 | 7.0 | lid quarter (small-bed alternative) |
-| `lid_fr` | 1 | 126.7 | 131.0 | 7.0 | lid quarter (small-bed alternative) |
+| `lid_fr` | 1 | 126.7 | 144.0 | 7.0 | lid quarter (small-bed alternative) |
 | `post_corner` | 4 | 15.0 | 15.0 | 180.3 | corner post: two panel slots at 90°, peg below, socket on top |
 | `post_mid` | 4 | 15.0 | 14.0 | 180.3 | mid post: two panel slots in line, peg below, socket on top |
 | `panel_rear_l` | 1 | 177.4 | 99.4 | 3.0 | rear wall, bay side: vents |
-| `panel_rear_r` | 1 | 177.4 | 110.4 | 3.0 | rear wall, board side: USB-C, port window, cable exit, vents |
+| `panel_rear_r` | 1 | 177.4 | 123.4 | 3.0 | rear wall, board side: USB-C, port window, cable exit, vents |
 | `panel_far_l` | 1 | 177.4 | 99.4 | 3.0 | far wall, PSU side: PSU opening (IEC, switch, grille) |
-| `panel_far_r` | 1 | 177.4 | 110.4 | 3.0 | far wall, board side: GPU exhaust vents |
+| `panel_far_r` | 1 | 177.4 | 123.4 | 3.0 | far wall, board side: GPU exhaust vents |
 | `panel_left_r` | 1 | 143.4 | 177.4 | 3.0 | -Y wall, rear part: bay vents / PSU intake |
 | `panel_left_f` | 1 | 106.1 | 177.4 | 3.0 | -Y wall, far part: PSU intake grille |
 | `panel_right_r` | 1 | 143.4 | 177.4 | 3.0 | +Y wall, rear part: GPU intake grille |
 | `panel_right_f` | 1 | 106.1 | 177.4 | 3.0 | +Y wall, far part: GPU intake grille |
 | `cradle` | 1 | 54.6 | 49.2 | 18.0 | support under the card's far end |
-| `bracket_holder` | 1 | 119.9 | 47.0 | 9.0 | stands in the board's 3 holes, arm under the bracket tab |
+| `bracket_holder` | 1 | 119.9 | 46.5 | 9.0 | stands in the board's 3 holes, arm under the bracket tab |
 | `shim_05` | as needed | 5.5 | 24.0 | 0.5 | 0.5 mm shim for the holder arm |
 | `shim_10` | as needed | 5.5 | 24.0 | 1.0 | 1.0 mm shim |
 | `shim_15` | as needed | 5.5 | 24.0 | 1.5 | 1.5 mm shim |
@@ -44,34 +44,34 @@ All numbers in mm, read from the rendered STLs in `stl/` (as laid out for printi
 
 | Part | X | Y | Z |
 |---|---|---|---|
-| board | 0.0 … 220.0 | -9.7 … 65.0 | 7.0 … 23.6 |
-| bracket_holder | 3.0 … 12.0 | 15.0 … 62.0 | -2.4 … 117.5 |
-| card | 3.5 … 253.7 | 15.4 … 59.6 | 4.8 … 135.9 |
-| cradle | 235.7 … 253.7 | 13.9 … 63.1 | -2.4 … 52.2 |
-| floor_fl | 135.0 … 261.7 | -150.0 … -43.5 | -3.0 … 3.0 |
-| floor_fr | 135.0 … 261.7 | -50.0 … 81.0 | -3.0 … 10.4 |
-| floor_rl | -9.0 … 141.5 | -150.0 … -43.5 | -3.0 … 6.0 |
-| floor_rr | -9.0 … 141.5 | -50.0 … 81.0 | -3.0 … 10.4 |
-| lid_l | -9.0 … 141.5 | -150.0 … 81.0 | 105.6 … 180.9 |
-| lid_r | 135.0 … 261.7 | -150.0 … 81.0 | 173.9 … 180.9 |
-| panel_far_l | 256.7 … 259.7 | -141.7 … -42.3 | 0.0 … 177.4 |
-| panel_far_r | 256.7 … 259.7 | -37.7 … 72.7 | 0.0 … 177.4 |
-| panel_left_f | 147.3 … 253.4 | -148.0 … -145.0 | 0.0 … 177.4 |
-| panel_left_r | -0.7 … 142.7 | -148.0 … -145.0 | 0.0 … 177.4 |
-| panel_rear_l | -7.0 … -4.0 | -141.7 … -42.3 | 0.0 … 177.4 |
-| panel_rear_r | -7.0 … -4.0 | -37.7 … 72.7 | 0.0 … 177.4 |
-| panel_right_f | 147.3 … 253.4 | 76.0 … 79.0 | 0.0 … 177.4 |
-| panel_right_r | -0.7 … 142.7 | 76.0 … 79.0 | 0.0 … 177.4 |
-| post_corner_fl | 246.7 … 261.7 | -150.0 … -135.0 | -2.4 … 177.9 |
-| post_corner_fr | 246.7 … 261.7 | 66.0 … 81.0 | -2.4 … 177.9 |
-| post_corner_rl | -9.0 … 6.0 | -150.0 … -135.0 | -2.4 … 177.9 |
-| post_corner_rr | -9.0 … 6.0 | 66.0 … 81.0 | -2.4 … 177.9 |
-| post_mid_far | 246.7 … 261.7 | -47.0 … -33.0 | -2.4 … 177.9 |
-| post_mid_left | 138.0 … 152.0 | -150.0 … -135.0 | -2.4 … 177.9 |
-| post_mid_rear | -9.0 … 6.0 | -47.0 … -33.0 | -2.4 … 177.9 |
-| post_mid_right | 138.0 … 152.0 | 66.0 … 81.0 | -2.4 … 177.9 |
-| psu | 85.7 … 245.7 | -134.0 … -48.0 | 0.1 … 150.0 |
-| zones | -17.0 … 284.7 | -134.0 … 59.6 | 4.0 … 177.8 |
+| board | 0.0 … 220.0 | -65.0 … 9.7 | 7.0 … 23.6 |
+| bracket_holder | 3.0 … 12.0 | -61.5 … -15.0 | -2.4 … 117.5 |
+| card | 3.5 … 253.7 | -59.6 … -15.4 | -1.1 … 133.9 |
+| cradle | 235.7 … 253.7 | -63.1 … -13.9 | -2.4 … 52.2 |
+| floor_fl | 135.0 … 261.7 | 43.5 … 150.0 | -3.0 … 3.0 |
+| floor_fr | 135.0 … 261.7 | -94.0 … 50.0 | -3.0 … 10.4 |
+| floor_rl | -9.0 … 141.5 | 43.5 … 150.0 | -3.0 … 6.0 |
+| floor_rr | -9.0 … 141.5 | -94.0 … 50.0 | -3.0 … 10.4 |
+| lid_l | -9.0 … 141.5 | -94.0 … 150.0 | 105.6 … 180.9 |
+| lid_r | 135.0 … 261.7 | -94.0 … 150.0 | 173.9 … 180.9 |
+| panel_far_l | 256.7 … 259.7 | 42.3 … 141.7 | 0.0 … 177.4 |
+| panel_far_r | 256.7 … 259.7 | -85.7 … 37.7 | 0.0 … 177.4 |
+| panel_left_f | 147.3 … 253.4 | 145.0 … 148.0 | 0.0 … 177.4 |
+| panel_left_r | -0.7 … 142.7 | 145.0 … 148.0 | 0.0 … 177.4 |
+| panel_rear_l | -7.0 … -4.0 | 42.3 … 141.7 | 0.0 … 177.4 |
+| panel_rear_r | -7.0 … -4.0 | -85.7 … 37.7 | 0.0 … 177.4 |
+| panel_right_f | 147.3 … 253.4 | -92.0 … -89.0 | 0.0 … 177.4 |
+| panel_right_r | -0.7 … 142.7 | -92.0 … -89.0 | 0.0 … 177.4 |
+| post_corner_fl | 246.7 … 261.7 | 135.0 … 150.0 | -2.4 … 177.9 |
+| post_corner_fr | 246.7 … 261.7 | -94.0 … -79.0 | -2.4 … 177.9 |
+| post_corner_rl | -9.0 … 6.0 | 135.0 … 150.0 | -2.4 … 177.9 |
+| post_corner_rr | -9.0 … 6.0 | -94.0 … -79.0 | -2.4 … 177.9 |
+| post_mid_far | 246.7 … 261.7 | 33.0 … 47.0 | -2.4 … 177.9 |
+| post_mid_left | 138.0 … 152.0 | 135.0 … 150.0 | -2.4 … 177.9 |
+| post_mid_rear | -9.0 … 6.0 | 33.0 … 47.0 | -2.4 … 177.9 |
+| post_mid_right | 138.0 … 152.0 | -94.0 … -79.0 | -2.4 … 177.9 |
+| psu | 85.7 … 245.7 | 48.0 … 134.0 | 0.1 … 150.0 |
+| zones | -17.0 … 284.7 | -78.0 … 134.0 | 3.5 … 177.8 |
 
 ## Measured inputs (from the real parts)
 

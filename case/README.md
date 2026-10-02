@@ -14,7 +14,7 @@ The defaults are the parts it was drawn around:
 | GPU | Inno3D RTX 3060 Twin X2 OC: 240 × 120 mm, 42.2 mm thick (measured), one 8-pin on top | `gpu_len`, `gpu_h`, `gpu_w` |
 | PSU | ATX, 160 × 150 × 86 mm (Corsair RM850x and friends) | `psu_l`, `psu_w`, `psu_h` |
 
-Outside dimensions with the measured parts: **271 × 231 × 184 mm**. The PSU lies on its side along
+Outside dimensions with the measured parts: **271 × 244 × 184 mm**. The PSU lies on its side along
 one long wall with its fan against a grille, IEC inlet in the far wall and modular face toward the
 rear; the board and the card take the other side with the GPU's fans facing the opposite wall; between
 them runs a 48 mm channel for the 24-pin plug, and the space between the rear wall and the PSU's
@@ -43,8 +43,17 @@ its arm, which is how a PC chassis carries a card's front end.
 - The lid sits 42 mm above the card so a straight 8-pin plug and a stiff sleeved cable fit without
   an adapter.
 - The IEC power cord comes in at the far end; the laptop cable leaves at the rear.
-- The laptop cable: its taped micro-coax harness runs along the board's 24-pin edge, and the thick
-  cable with its strain-relief boot leaves through an opening low in the rear wall beside the board.
+- The laptop cable: its taped micro-coax harness runs along the board's fan-side edge, in the 24 mm
+  gap between board and intake wall, and the thick cable with its boot leaves through an opening low
+  in the rear wall at that corner.
+
+## Orientation
+
+KiCad's screen has Y pointing down, so a model built straight from its coordinates with Z up is a
+mirror image of the real board. The design frame inside the .scad keeps KiCad's numbers as they are,
+and `MIRROR = true` mirrors every export in Y to match reality; the paper plan is drawn as seen from
+above with the component side up. If you read the source, remember that "+Y" there is the real board's
+fan side. The clue was the rear photo: 24-pin and USB-C on the left, fans on the right.
 
 ## Measured, not assumed
 
@@ -158,7 +167,7 @@ box is lifted by its floor, not by the lid.
 
 All geometry derives from the parameters at the top of the .scad. A longer card lengthens the box; a
 thicker card widens the cradle and moves the GPU intake grille; a 140 mm PSU lengthens the cable bay.
-`psu_wall_gap`, `atx_plug_clear` and `plug8_clear` are the three clearances that set the outside
+`psu_wall_gap`, `atx_plug_clear`, `gap_y` and `plug8_clear` are the clearances that set the outside
 size. `psu_iec_at_far = false` turns the PSU back round (IEC at the rear, bay at the far end), which
 only makes sense with flat cables that can bend inside a 65 mm channel.
 

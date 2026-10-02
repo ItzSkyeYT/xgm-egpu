@@ -12,6 +12,7 @@
 
 part = "assembly";
 vents = true;          // false speeds up test renders
+MIRROR = true;         // KiCad's Y points down on screen; the design frame below keeps that, so every export is mirrored in Y to match the real board
 
 /* ---------- Parts you own (measure where marked; everything else comes from the KiCad file / spec sheets) ---------- */
 board_l = 220;  board_w = 65;  board_t = 1.6;             // XG Mobile Station Lite PCB
@@ -54,11 +55,11 @@ pin_fit = 0.3;        // board pegs vs the O3.2 holes (on diameter)
 tab_fit = 0.2;        // jigsaw tabs between floor / lid pieces (per side)
 standoff = 7;         // board underside above the floor (the bracket foot reaches 9.7 below the board top: it ends inside the floor's slot)
 boss_d = 7;
-gap_y = 11;           // board +Y edge -> wall (room for the edge clips and the corner post)
+gap_y = 24;           // board +Y (fan-side) edge -> wall: the laptop-cable harness and its boot run along this edge
 x_mid = 145;  y_mid = -40;      // mid posts (panels split here)
 x_seam = 135; y_seam = -50;     // floor and lid pieces split here (jigsaw tabs)
 lid_split_y = false;            // true: lid in 4 pieces for small beds
-xg_exit_y = [-32, -2];          // laptop cable leaves through the rear wall here (its harness runs along the board's Y=0 edge)
+xg_exit_y = [board_w-5, board_w+15];   // laptop cable leaves through the rear wall here, beside the board's fan-side edge
 vent_w = 3;  vent_pitch = 6;  vent_h = 20;  vent_row = 24;
 $fn = 40;  eps = 0.01;
 
@@ -117,13 +118,41 @@ module ghost_card() {
   color("silver", 0.7) box(xb, xb+bracket_t, bracket_y0, bracket_y1, card_z0-7.9, tab_z);
   color("silver", 0.7) box(xb-10.2, xb, bracket_y0, bracket_y1, tab_z, tab_z+0.9);
 }
+module ghost_card_detail() {   // the Inno3D Twin X2 OC as it actually looks; the plain box above stays the collision envelope
+  pcb_x0 = xb + 1.9;  pcb_x1 = xb + 190;
+  pcb_z0 = zb + card_seat + 3.2;  pcb_z1 = pcb_z0 + 111;
+  sh_x0 = xb + 6;  sh_z0 = card_bot;  sh_z1 = card_top - 3;
+  fan_z = (sh_z0 + sh_z1) / 2 + 2;
+  color("darkgreen") box(pcb_x0, pcb_x1, pcie_y-0.8, pcie_y+0.8, pcb_z0, pcb_z1);                       // PCB
+  color("goldenrod") box(pcie_x0+1, pcie_x1-1, pcie_y-0.8, pcie_y+0.8, card_z0, pcb_z0+eps);           // gold fingers
+  color("black") box(pcb_x0+3, pcb_x1-2, card_y0, pcie_y-0.8, pcb_z0+3, pcb_z1-3);                     // backplate
+  color("dimgray") difference() {                                                                       // shroud + heatsink
+    box(sh_x0, card_x1, pcie_y+0.8, card_y1, sh_z0, sh_z1);
+    for (fx = [xb+70, xb+170]) translate([fx, card_y1+0.01, fan_z]) rotate([90,0,0]) cylinder(d = 88, h = 7);
+  }
+  color("black") for (fx = [xb+70, xb+170]) translate([fx, card_y1-6.9, fan_z]) rotate([-90,0,0]) {   // fan hubs and blades
+    cylinder(d = 36, h = 5);
+    for (a = [0:40:359]) rotate([0,0,a]) translate([14,-3,0]) cube([30, 6, 1.2]);
+  }
+  color("silver") difference() {                                                                        // bracket with its ports
+    box(xb, xb+bracket_t, bracket_y0, bracket_y1, zb-foot_below_board, tab_z+0.9);
+    for (i = [0:2]) box(xb-1, xb+2, bracket_y0+1.2, bracket_y0+17.2, tab_z-9-6.5-i*16, tab_z-9-i*16);  // 3x DisplayPort
+    box(xb-1, xb+2, bracket_y0+2, bracket_y0+16.5, tab_z-9-6.5-3*16-4, tab_z-9-3*16-4);              // HDMI
+    for (zz = [zb+12 : 7 : tab_z-62]) for (yy = [bracket_y0+3 : 5 : bracket_y1-5]) box(xb-1, xb+2, yy, yy+3, zz, zz+4);   // vent mesh, roughly
+  }
+  color("silver") difference() {                                                                        // top tab with its screw hole
+    box(xb-10.2, xb+bracket_t, bracket_y0+1.5, bracket_y0+14, tab_z, tab_z+0.9);
+    translate([xb-5.5, bracket_y0+7.5, tab_z-1]) cylinder(d = 4.3, h = 3);
+  }
+  color("black") box(xb+150, xb+168, pcie_y-0.8, pcie_y+8.5, pcb_z1-2, pcb_z1+7);                     // 8-pin socket
+}
 module ghost_psu() { color("black", 0.35) box(psu_x0, psu_x1, psu_y0, psu_y1, 0.05, psu_w); }
 module ghost_zones() {   // volumes that must stay free for plugs and cables
   color("orange", 0.25) {
     box(atx_hdr_x[0]-2, atx_hdr_x[1]+2, -atx_bend_reach, 0, zb-1, zb+28);              // 24-pin plug + the whole bend (reaches into the bay)
     box(card_x1-110, card_x1, card_y0, card_y1, card_top, card_top+plug8_clear-0.1);    // 8-pin plug + cable bend
-    box(15, xg_conn_x[1], -12, 0, zb-1, zb+7);                                           // taped micro-coax harness along the Y=0 edge
-    box(xo0-10, 30, -25, -3, 4, 24);                                                     // the cable's strain-relief boot, leaving through the rear wall
+    box(30, xg_conn_x[1]+2, board_w+0.5, board_w+11, zb-1, zb+7);                        // taped micro-coax harness along the fan-side edge
+    box(xo0-10, 37, board_w-2, board_w+13, 3.5, 21);                                     // the cable's strain-relief boot (O15.1 x 37), leaving through the rear wall
     if (psu_iec_at_far) box(bay_x0, psu_x0+1, -atx_bend_reach-10, psu_y1-8, 7, 34);     // bundles running from the bend to the modular face (above the 6 mm PSU stop)
     else                box(atx_hdr_x[0], psu_x1+10, psu_y1+5, psu_y1+33, 3.5, 34);
     box(xi0, xb-1, bracket_y0+0.5, bracket_y1-0.5, zb+6.5, tab_z-5.5);                  // DP/HDMI plugs reaching the bracket (top port ~9 mm under the tab)
@@ -132,7 +161,7 @@ module ghost_zones() {   // volumes that must stay free for plugs and cables
     else                { box(psu_x1, psu_x1+30, psu_y0, psu_y1, 10, psu_w-5); box(xo0-25, psu_x0, psu_y0+3, psu_y1-3, 6, psu_w-6); }
   }
 }
-module ghosts()      { ghost_board(); ghost_card(); ghost_psu(); ghost_zones(); }
+module ghosts()      { ghost_board(); ghost_card_detail(); ghost_psu(); ghost_zones(); }
 module ghosts_hard() { ghost_board(); ghost_card(); ghost_psu(); ghost_zones(); }
 
 /* ================= posts ================= */
@@ -220,8 +249,8 @@ module floor_full() {
         cylinder(d = boss_d, h = standoff - 0.05);
         cylinder(d = hole_d - pin_fit, h = standoff + board_t + 1.0);
       }
-      board_clip(52, +1);  board_clip(186, +1);      // +Y edge
-      board_clip(186, -1);                           // Y=0 edge: the only free stretch (header, inputs and the harness take the rest)
+      board_clip(150, +1); board_clip(186, +1);      // fan-side edge, beyond the harness (x < 138)
+      board_clip(100, -1); board_clip(186, -1);      // 24-pin edge: the two gaps between header and power inputs
       board_clip_rear(34);                           // rear edge, between the USB-C and the corner
       // PSU stops: in front of the modular face (bottom edge only) and along the plug-zone side
       if (psu_iec_at_far) box(psu_x0-3.5, psu_x0-0.5, psu_y0+6, psu_y1-6, 0, 6);
@@ -289,7 +318,7 @@ module rear_cutters() {
   box(xo0-1, xi0+1, usbc_y[0]-3.5, usbc_y[1]+3.5, zb-3, zb+9);                      // USB-C
   box(xo0-1, xi0+1, bracket_y0-1.5, bracket_y1+1.5, zb+6, tab_z-4.5);               // opening for the card's display ports, up to just under the tab
   box(xo0-1, xi0+1, xg_exit_y[0], xg_exit_y[1], 3.5, 27);                             // laptop cable and its strain-relief boot
-  vents_yz(xo0, xi0, 38, yi1-4, 14, zi1-9);
+  vents_yz(xo0, xi0, 38, yi1-4, 30, zi1-9);
   vents_yz(xo0, xi0, 2, 38, tab_z-2, zi1-9);
   vents_yz(xo0, xi0, psu_y1+6, -4, 30, zi1-9);                                      // over the 24-pin plug zone
 }
@@ -338,10 +367,10 @@ arm_x1 = xb - 1.7;                                          // the arm reaches t
 arm_h  = 4.5;                                               // thin: the top display port starts only ~9 mm under the tab
 module bracket_holder() {
   z0 = zb + 0.3;
-  box(hx0, hx1, 17.2, 62, z0, z0+4.5);                                // base beam over the three pegs, below the lowest port
-  box(hx0, hx1, 40, 62, z0, tab_z-0.1);                               // column beside the ports
-  box(hx0, hx1, 37, 62, tab_z-30, tab_z-0.1);                         // wider head
-  box(hx0, arm_x1, bracket_y0-0.4, 62, tab_z-0.1-arm_h, tab_z-0.1);  // arm: its top face is the seat for the bracket's tab (shim up to touch)
+  box(hx0, hx1, 17.2, 61.5, z0, z0+4.5);                              // base beam over the three pegs, below the lowest port
+  box(hx0, hx1, 40, 61.5, z0, tab_z-0.1);                             // column beside the ports (the laptop cable's boot passes 1.5 mm beyond it)
+  box(hx0, hx1, 37, 61.5, tab_z-30, tab_z-0.1);                       // wider head
+  box(hx0, arm_x1, bracket_y0-0.4, 61.5, tab_z-0.1-arm_h, tab_z-0.1);  // arm: its top face is the seat for the bracket's tab (shim up to touch)
   for (y = holder_holes_y) box(holder_hole_x-1.3, holder_hole_x+1.3, y-1.8, y+1.8, -(floor_t-0.6), z0+eps);   // pegs through the board into the floor
 }
 module shim(t = 1.0) { difference() { box(0, 5.5, 0, 24, 0, t); } }   // lies on the holder's arm if the tab floats
@@ -390,70 +419,79 @@ module coupon() {
 module ln(x0, y0, x1, y1, w = 0.4) { hull() { translate([x0, y0]) circle(d = w, $fn = 8); translate([x1, y1]) circle(d = w, $fn = 8); } }
 module rect_o(x0, x1, y0, y1, w = 0.4) { ln(x0,y0,x1,y0,w); ln(x1,y0,x1,y1,w); ln(x1,y1,x0,y1,w); ln(x0,y1,x0,y0,w); }
 module ring(x, y, d, w = 0.4) { translate([x, y]) difference() { circle(d = d + w, $fn = 48); circle(d = d - w, $fn = 48); } }
-module lbl(x, y, t, sz = 3.2, rot = 0) { translate([x, y]) rotate(rot) text(t, size = sz, font = "Liberation Sans"); }
 module cross(x, y, r = 6) { ln(x-r, y, x+r, y, 0.3); ln(x, y-r, x, y+r, 0.3); ring(x, y, r, 0.3); }
-
-module plan2d() {
-  // frame of the floor, wall inner faces, posts
+function my(y) = MIRROR ? -y : y;                    // design-frame Y -> paper Y
+// a label anchored at a design-frame point; the glyphs are never mirrored
+module lbl(x, y, t, sz = 3.2, rot = 0) {
+  if (rot == 0)        translate([x, my(y) - (MIRROR ? sz : 0)]) text(t, size = sz, font = "Liberation Sans");
+  else if (MIRROR)     translate([x + sz, my(y)]) rotate(-90) text(t, size = sz, font = "Liberation Sans");
+  else                 translate([x, y]) rotate(90) text(t, size = sz, font = "Liberation Sans");
+}
+module plan_shapes() {
   rect_o(xp0, xp1, yp0, yp1, 0.6);
   rect_o(xi0, xi1, yi0, yi1, 0.25);
   for (p = post_centers()) rect_o(p[0]-7, p[0]+7, p[1]-7, p[1]+7, 0.3);
-  // board with holes, foot slot, holder holes
   difference() { offset(r = 10) offset(delta = -10) square([board_l, board_w]); offset(delta = -0.5) offset(r = 10) offset(delta = -10) square([board_l, board_w]); }
   for (h = holes) ring(h[0], h[1], hole_d);
   rect_o(foot_slot_x-1.5, foot_slot_x+1.5, 17, board_w, 0.3);
   for (y = holder_holes_y) rect_o(holder_hole_x-1.5, holder_hole_x+1.5, y-2, y+2, 0.3);
-  rect_o(atx_hdr_x[0], atx_hdr_x[1], -9.7, 12.8, 0.3);                      // 24-pin header incl. its overhang
-  rect_o(pcie_x0, pcie_x1, 17, 25.8, 0.3);                                  // PCIe slot
-  // card, bracket, cradle, holder
+  rect_o(0, 8, usbc_y[0], usbc_y[1], 0.3);
+  rect_o(atx_hdr_x[0], atx_hdr_x[1], -9.7, 12.8, 0.3);
+  rect_o(pcie_x0, pcie_x1, 17, 25.8, 0.3);
+  rect_o(xg_conn_x[0], 106.2, 42.1, 49.3, 0.3); rect_o(107.5, xg_conn_x[1], 42.1, 49.3, 0.3);
   rect_o(xb, card_x1, card_y0, card_y1, 0.5);
   ln(xb, bracket_y0, xb, bracket_y1, 1.2);
   rect_o(card_x1-18, card_x1, card_y0-3.5, card_y1+3.5, 0.3);
-  rect_o(hx0, hx1, 11, 62, 0.3);
-  // PSU, plug zone, saddles
+  rect_o(hx0, hx1, 11, 61.5, 0.3);
   rect_o(psu_x0, psu_x1, psu_y0, psu_y1, 0.5);
-  rect_o(atx_hdr_x[0]-2, atx_hdr_x[1]+2, -atx_plug_clear, 0, 0.25);
-  if (!psu_iec_at_far) for (x = [110, 190]) rect_o(x, x+14, psu_y1+1, psu_y1+37, 0.3);
-  // openings in the rear wall, drawn as thick ticks on the wall line
+  rect_o(atx_hdr_x[0]-2, atx_hdr_x[1]+2, -atx_bend_reach, 0, 0.25);
+  rect_o(30, xg_conn_x[1]+2, board_w+0.5, board_w+11, 0.25);
+  rect_o(xo0-10, 37, board_w-2, board_w+13, 0.25);
   ln(xo0, usbc_y[0]-3.5, xo0, usbc_y[1]+3.5, 1.5);
   ln(xo0, bracket_y0-1.5, xo0, bracket_y1+1.5, 1.5);
   ln(xo0, xg_exit_y[0], xo0, xg_exit_y[1], 1.5);
   if (psu_iec_at_far) ln(xo1, psu_y0+3, xo1, psu_y1-3, 1.5); else ln(xo0, psu_y0+3, xo0, psu_y1-3, 1.5);
-  // labels
-  lbl(xb+30, card_y0+16, "GPU footprint (fans face +Y, this way ->)", 3.2);
-  lbl(xb+30, card_y0+6, str("bracket plane x = ", xb, "   card ", gpu_len, " x ", gpu_w), 2.8);
-  lbl(60, 40, "board 220 x 65, five pegs", 3);
-  lbl(psu_x0+10, psu_y0+40, str("PSU on its side  ", psu_l, " x ", psu_w, " x ", psu_h, "  (fan -> -Y wall, IEC -> rear)"), 3.2);
+}
+module plan_labels() {
+  lbl(xb+30, card_y0+14, "GPU footprint, fans face this edge", 3.2);
+  lbl(xb+30, card_y0+5, str("bracket at x = ", xb, "   card ", gpu_len, " x ", gpu_w), 2.8);
+  lbl(60, 36, "board 220 x 65, five pegs", 3);
+  lbl(xg_conn_x[0], board_w+13, "laptop-cable harness along this edge, boot at the rear corner", 2.6);
+  lbl(psu_x0+10, psu_y0+40, str("PSU on its side  ", psu_l, " x ", psu_w, " x ", psu_h, "  (fan -> outer wall)"), 3.2);
   lbl(psu_x0+10, psu_y0+30, psu_iec_at_far ? "<- modular face      IEC inlet at the far wall ->" : "modular face ->", 3);
   lbl((bay_x0+bay_x1)/2-6, psu_y0+70, "cable bay", 3.2, 90);
-  lbl(100, -40, "cable channel: 24-pin + 8-pin lie here as one loop", 3);
   lbl(atx_hdr_x[0]+2, -22, "24-pin plug + bend", 2.6);
+  lbl(atx_hdr_x[0]+2, -75, "sleeved bundle reaches 87 from the edge", 2.6);
   lbl(card_x1-16, card_y1+6, "cradle", 2.6);
   lbl(hx1+2, 50, "holder", 2.6, 90);
   lbl(xo0+2, -60, psu_iec_at_far ? "rear wall: vents over the bay" : "rear wall: PSU opening", 2.6, 90);
-  lbl(xo0+2, -31, "cable exit", 2.6, 90);
   lbl(xo0+2, 14, "ports", 2.6, 90);
   lbl(xo0-9, 2, "USB-C", 2.6, 90);
+  lbl(xo0+2, board_w-4, "cable exit", 2.6, 90);
   lbl(xi1-6, 10, "far wall: GPU exhaust grille", 2.6, 90);
-  lbl(xi0+20, yi1-7, "+Y wall: GPU intake grille", 3);
-  lbl(xi0+20, yi0+2.5, "-Y wall: PSU intake grille", 3);
-  lbl(xp0, yp1+6, str("xgm-lite-frame  floor plan 1:1   outside ", xp1-xp0, " x ", yp1-yp0, " mm   (board origin = its rear/24-pin corner)"), 3.6);
-  // scale bar
-  ln(xp0, yp0-8, xp0+100, yp0-8, 0.8); ln(xp0, yp0-11, xp0, yp0-5, 0.6); ln(xp0+100, yp0-11, xp0+100, yp0-5, 0.6);
-  lbl(xp0+38, yp0-16, "100 mm", 3.2);
+  lbl(xi0+20, yi1-7, "wall on the fan side: GPU intake grille", 3);
+  lbl(xi0+20, yi0+2.5, "wall on the PSU side: PSU intake grille", 3);
+}
+PY0 = MIRROR ? -yp1 : yp0;  PY1 = MIRROR ? -yp0 : yp1;   // the plan's Y extent on paper
+module plan2d() {
+  mirror([0, MIRROR ? 1 : 0]) plan_shapes();
+  plan_labels();
+  translate([xp0, PY1+6]) text(str("xgm-lite-frame  floor plan 1:1   outside ", xp1-xp0, " x ", yp1-yp0, " mm   (as seen from above, component side up)"), size = 3.6, font = "Liberation Sans");
+  ln(xp0, PY0-8, xp0+100, PY0-8, 0.8); ln(xp0, PY0-11, xp0, PY0-5, 0.6); ln(xp0+100, PY0-11, xp0+100, PY0-5, 0.6);
+  translate([xp0+38, PY0-16]) text("100 mm", size = 3.2, font = "Liberation Sans");
 }
 // pages: A3 portrait (297 x 420) with the whole plan, or two A4 landscape tiles (297 x 210) with an overlap band and crosses
+cross_y = (PY0 + PY1) / 2;
 module page(x0, y0, w, h) {
   intersection() { plan2d(); translate([x0, y0]) square([w, h]); }
   rect_o(x0, x0+w, y0, y0+h, 0.3);
-  // alignment crosses in the overlap band y 35..60 (both A4 tiles carry them)
-  for (x = [40, 140, 240]) if (y0 < 47.5 && y0+h > 47.5) cross(x, 47.5);
+  for (x = [40, 140, 240]) if (y0 < cross_y && y0+h > cross_y) cross(x, cross_y);
 }
 // frames are 2 mm smaller than the paper: the SVG exporter pads the page by 1 mm, and "actual size" must stay 1:1
 a4x = xp0 - (295 - (xp1-xp0))/2;
-module plan_a3()  { translate([-a4x, -(yp0-26)]) page(a4x, yp0-26, 295, 418); }
-module plan_a4a() { translate([-a4x, -(yp0-9)])  page(a4x, yp0-9, 295, 208); }
-module plan_a4b() { translate([-a4x, -35])       page(a4x, 35, 295, 208); }
+module plan_a3()  { translate([-a4x, -(PY0-26)]) page(a4x, PY0-26, 295, 418); }
+module plan_a4a() { translate([-a4x, -(PY0-9)])  page(a4x, PY0-9, 295, 208); }
+module plan_a4b() { translate([-a4x, -(PY1+9-208)]) page(a4x, PY1+9-208, 295, 208); }
 
 /* ================= views ================= */
 module structure() { floor_full(); posts(); panels(); lid_full(); cradle(); bracket_holder(); }
@@ -464,11 +502,17 @@ module collision() { intersection() { structure(); ghosts_hard(); } }
 /* ================= part selector (parts are laid out for printing) ================= */
 module flat_yz(x0) { rotate([0, 90, 0]) translate([-x0 - wall, 0, 0]) children(); }   // YZ panel -> lying flat, exterior face down
 module flat_xz(y0) { rotate([-90, 0, 0]) translate([0, -y0 - wall, 0]) children(); }
+module M() { mirror([0, MIRROR ? 1 : 0, 0]) children(); }                              // design frame -> real world
 
+if (part == "plan_a3")        plan_a3();
+else if (part == "plan_a4a")  plan_a4a();
+else if (part == "plan_a4b")  plan_a4b();
+else M() selected();
+
+module selected() {
 if (part == "assembly")   assembly();
 else if (part == "structure") structure();          // every printed part in place, one mesh, for 3D viewers
 else if (part == "ghosts")    ghosts_hard();         // board, card, PSU and cable zones, for 3D viewers
-else if (part == "plan_a3")   plan_a3();
 // ---- every part in its assembled position, one per file, for viewers (render-assembled.sh) ----
 else if (part == "asm_floor_rl") floor_rl();
 else if (part == "asm_floor_rr") floor_rr();
@@ -495,11 +539,9 @@ else if (part == "asm_panel_right_f") panel_right_f();
 else if (part == "asm_cradle") cradle();
 else if (part == "asm_bracket_holder") bracket_holder();
 else if (part == "asm_board") ghost_board();
-else if (part == "asm_card") ghost_card();
+else if (part == "asm_card") ghost_card_detail();
 else if (part == "asm_psu") ghost_psu();
 else if (part == "asm_zones") ghost_zones();
-else if (part == "plan_a4a")  plan_a4a();
-else if (part == "plan_a4b")  plan_a4b();
 else if (part == "inside") inside();
 else if (part == "collision") collision();
 else if (part == "floor_rl") translate([0,0,floor_t]) floor_rl();
@@ -529,3 +571,4 @@ else if (part == "shim_05") shim(0.5);
 else if (part == "shim_10") shim(1.0);
 else if (part == "shim_15") shim(1.5);
 else echo(str("unknown part: ", part));
+}
