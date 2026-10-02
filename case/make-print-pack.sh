@@ -21,7 +21,8 @@ cp img/outside.png img/inside.png img/rear.png "$dest/reference/"
 cat > "$dest/READ-ME-FIRST.txt" <<'TXT'
 XGM LITE FRAME - print pack
 ===========================
-Material: PETG (PLA sags next to a warm GPU and creeps under the PSU).
+Material: PETG (PLA sags next to a warm GPU and creeps under the PSU). In the slicer, pick a PETG
+filament profile, not the default PLA.
 Settings: 0.2 mm layers, 3-4 walls, 25-40 % infill, NO supports anywhere.
 Orientation: every STL is already laid out for the bed. Panels print flat, lid pieces upside down
 (as exported), posts upright (socket on the bed, peg up), cradle and holder on their side (as exported).
@@ -31,12 +32,17 @@ If the bed is under 250 mm, print the four lid quarters instead of lid_l / lid_r
 Print the folders in order. Each stage proves something before the next; only the two coupons are
 throwaway, everything else goes into the finished box.
 
-1-tests  (one plate, ~25 g, < 1 h)
-  coupon.stl        jigsaw tab -> slot, 6 mm peg -> socket, snap the thin bar off and push it into the
-                    panel slot. All by hand, all staying put.
-  coupon_rear.stl   slice of the real rear wall: laptop-cable boot through the big opening, USB-C plug
-                    through the small one, an HDMI plug through the bottom of the port window.
-  FAIL -> note which one binds or rattles; one tolerance number changes, reprint the coupon only.
+1-tests  (one plate, ~30 g, < 1 h)
+  coupon.stl        TWO identical pieces in one file; test them against each other:
+                    - one's jigsaw tab pressed down into the other's notch   (how floor and lid pieces join)
+                    - one laid on the other, square peg through square hole  (how posts and lid seat)
+                    - one's tab pushed edge-first into the long thin slot    (how the 3 mm walls sit in the posts)
+                    Each must go together by hand and stay put: not forced, not loose.
+  coupon_rear.stl   the bottom of the real rear wall, board side:
+                    - slide it down over the laptop cable at the rubber boot: the notch must drop over the
+                      boot without pinching it (the real wall goes in exactly like this)
+                    - push a USB-C plug through the small hole and an HDMI plug into the big window
+  FAIL -> note which one binds or rattles; one number changes, only the coupon reprints.
 
 2-board-fit  (~95 g)
   floor_rr.stl, bracket_holder.stl, shim_05/10/15.stl

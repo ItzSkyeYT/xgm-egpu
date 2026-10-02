@@ -317,7 +317,7 @@ module rear_cutters() {
   else box(xo0-1, xi0+1, psu_y0+3, psu_y1-3, 3, psu_w-3);                           // PSU rear face (IEC, switch, grille)
   box(xo0-1, xi0+1, usbc_y[0]-3.5, usbc_y[1]+3.5, zb-3, zb+9);                      // USB-C
   box(xo0-1, xi0+1, bracket_y0-1.5, bracket_y1+1.5, zb+6, tab_z-4.5);               // opening for the card's display ports, up to just under the tab
-  box(xo0-1, xi0+1, xg_exit_y[0], xg_exit_y[1], 3.5, 27);                             // laptop cable and its strain-relief boot
+  // (the laptop-cable notch is cut in panel_rear_r itself: it must reach the bottom edge, outside the safe area)
   vents_yz(xo0, xi0, 38, yi1-4, 30, zi1-9);
   vents_yz(xo0, xi0, 2, 38, tab_z-2, zi1-9);
   vents_yz(xo0, xi0, psu_y1+6, -4, 30, zi1-9);                                      // over the 24-pin plug zone
@@ -335,7 +335,12 @@ module right_cutters() {                                                        
 }
 
 module panel_rear_l()  { panel_yz(xo0, xi0, yi0+core-slot_d+0.3, y_mid-2.3) rear_cutters(); }
-module panel_rear_r()  { panel_yz(xo0, xi0, y_mid+2.3, yi1-core+slot_d-0.3) rear_cutters(); }
+module panel_rear_r()  {
+  difference() {
+    panel_yz(xo0, xi0, y_mid+2.3, yi1-core+slot_d-0.3) rear_cutters();
+    box(xo0-1, xi0+1, xg_exit_y[0], xg_exit_y[1], -1, 27);   // laptop-cable notch, open at the bottom: the panel drops over the routed cable
+  }
+}
 module panel_far_l()   { panel_yz(xi1, xo1, yi0+core-slot_d+0.3, y_mid-2.3) far_cutters(); }
 module panel_far_r()   { panel_yz(xi1, xo1, y_mid+2.3, yi1-core+slot_d-0.3) far_cutters(); }
 module panel_left_r()  { panel_xz(xi0+core-slot_d+0.3, x_mid-2.3, yo0, yi0) left_cutters(); }
@@ -568,7 +573,7 @@ else if (part == "panel_left_f")  flat_xz(yo0) panel_left_f();
 else if (part == "panel_right_r") flat_xz(yi1) panel_right_r();
 else if (part == "panel_right_f") flat_xz(yi1) panel_right_f();
 else if (part == "cradle") rotate([0,90,0]) translate([-card_x1, 0, 0]) cradle();   // on its side: the pegs become short horizontal stubs
-else if (part == "coupon") coupon();
+else if (part == "coupon") { coupon(); translate([0, 45, 0]) coupon(); }   // two: tab, peg and slot are tested against the other piece
 else if (part == "coupon_rear") flat_yz(xo0) coupon_rear();
 else if (part == "bracket_holder") rotate([0,90,0]) translate([-hx1, 0, 0]) bracket_holder();   // on its side, pegs horizontal
 else if (part == "shim_05") shim(0.5);

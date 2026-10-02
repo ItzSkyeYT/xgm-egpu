@@ -44,8 +44,9 @@ its arm, which is how a PC chassis carries a card's front end.
   an adapter.
 - The IEC power cord comes in at the far end; the laptop cable leaves at the rear.
 - The laptop cable: its taped micro-coax harness runs along the board's fan-side edge, in the 24 mm
-  gap between board and intake wall, and the thick cable with its boot leaves through an opening low
-  in the rear wall at that corner.
+  gap between board and intake wall, and the thick cable with its boot leaves through a notch at the
+  bottom of the rear wall at that corner. The notch is open at the bottom, so the rear panel drops over
+  the cable: the laptop plug never has to pass through a hole and nothing gets unplugged.
 
 ## Orientation
 
@@ -112,8 +113,8 @@ Exact sizes of every part, where each one sits, and the feature dimensions are i
 | `bracket_holder` | 1 | 116 × 51 × 6 | on its side, as exported | stands in the board's three holes; the bracket tab rests on its arm |
 | `shim_05`, `shim_10`, `shim_15` | as needed | 24 × 6 | flat | 0.5 / 1.0 / 1.5 mm shims for the holder's arm |
 | `cradle` | 1 | 55 × 49 × 18 | on its side, as exported | supports the card's far end; height from `card_bottom_clear` |
-| `coupon` | 1 | 60 × 37 × 9 | flat | fit test |
-| `coupon_rear` | 1 | 58 × 89 × 3 | flat | slice of the rear wall: cable exit, USB-C hole, bottom of the port window |
+| `coupon` | 1 file, 2 pieces | 60 × 82 × 9 | flat | fit test: the two pieces are tested against each other |
+| `coupon_rear` | 1 | 58 × 89 × 3 | flat | bottom of the rear wall: laptop-cable notch, USB-C hole, bottom of the port window |
 | `_assembly_structure`, `_assembly_ghosts` | — | — | not for printing | the whole thing, for viewers |
 
 Roughly 1.1 to 1.3 kg of PETG depending on infill. Every part fits a 180 × 180 mm bed except the
@@ -127,12 +128,16 @@ perimeters, 25 to 40 % infill, no supports anywhere. Panels print flat with thei
 Print in this order; every stage proves something before you spend the filament on the next, and
 everything except the two coupons ends up in the finished box.
 
-**Stage 1, tolerances (one plate, about 25 g, under an hour): `coupon`, `coupon_rear`.**
-The coupon's jigsaw tab goes into its slot, the 6 mm peg into its socket and a 3 mm strip of the
-coupon (snap the thin bar off) into the panel slot, all by hand, all staying put. `coupon_rear` is a
-slice of the real rear wall: push the laptop cable's rubber boot through the big opening, the USB-C
-plug through the small one, and an HDMI plug through the bottom of the port window. If a fit is wrong,
-change `tab_fit`, `peg_fit` or `slot_fit`, or tell me which hole binds, and reprint only the coupon.
+**Stage 1, tolerances (one plate, about 30 g, under an hour): `coupon` (two identical pieces in one
+file), `coupon_rear`.** Test the two coupons against each other: one's jigsaw tab pressed down into the
+other's notch (floor and lid pieces join like this); one laid on the other so its square peg goes through
+the other's square hole (posts and lid seat like this); one's tab pushed edge-first into the other's long
+thin slot (the 3 mm wall panels sit in the posts like this). Each should go together by hand and stay
+put: not forced, not loose. `coupon_rear` is the bottom of the real rear wall, board side: slide it down
+over the laptop cable at the rubber boot (the notch must drop over the boot without pinching it, which is
+exactly how the real wall goes in), push a USB-C plug through the small hole and an HDMI plug into the
+bottom of the big window. If a fit is wrong, say which one: one number changes and only the coupon
+reprints.
 
 **Stage 2, board fit (about 95 g): `floor_rr`, `bracket_holder`, `shim_05`, `shim_10`, `shim_15`.**
 Bare board onto the five pegs: it should sit flat on the bosses with the four clips snapped over its
@@ -178,9 +183,10 @@ checked against 180 mm posts.
 5. Card into the slot: foot in the board's slot, tab on the holder's arm, far end on the cradle. Then
    the 24-pin (its bundle leaves the plug, bends inside the bay and reaches the modular face; the spare
    length lies in the bay as one loop), the 8-pin over the top of the card into the same bay, and the
-   laptop cable's boot out through the opening low in the rear wall.
+   laptop cable laid over the floor edge at the fan-side rear corner, boot at the wall line.
 6. Slide the eight panels down into the post slots. The panel with the big opening is the far wall on
-   the PSU side.
+   the PSU side. The board-side rear panel goes down over the laptop cable: its bottom notch straddles
+   the boot.
 7. Lid: the pegs drop into the posts, the two ribs straddle the card's top edge and the two guides
    straddle the top of the bracket.
 

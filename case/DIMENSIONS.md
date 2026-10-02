@@ -38,7 +38,7 @@ All numbers in mm, read from the rendered STLs in `stl/` (as laid out for printi
 | `shim_05` | as needed | 5.5 | 24.0 | 0.5 | 0.5 mm shim for the holder arm |
 | `shim_10` | as needed | 5.5 | 24.0 | 1.0 | 1.0 mm shim |
 | `shim_15` | as needed | 5.5 | 24.0 | 1.5 | 1.5 mm shim |
-| `coupon` | 1 | 60.0 | 36.5 | 9.0 | fit test |
+| `coupon` | 1 | 60.0 | 81.5 | 9.0 | fit test |
 
 ## Where each part sits (assembled; X along the board from its rear edge, Y across from the 24-pin edge, Z up from the floor's top surface)
 
