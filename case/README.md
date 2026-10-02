@@ -113,6 +113,7 @@ Exact sizes of every part, where each one sits, and the feature dimensions are i
 | `shim_05`, `shim_10`, `shim_15` | as needed | 24 × 6 | flat | 0.5 / 1.0 / 1.5 mm shims for the holder's arm |
 | `cradle` | 1 | 55 × 49 × 18 | on its side, as exported | supports the card's far end; height from `card_bottom_clear` |
 | `coupon` | 1 | 60 × 37 × 9 | flat | fit test |
+| `coupon_rear` | 1 | 58 × 89 × 3 | flat | slice of the rear wall: cable exit, USB-C hole, bottom of the port window |
 | `_assembly_structure`, `_assembly_ghosts` | — | — | not for printing | the whole thing, for viewers |
 
 Roughly 1.1 to 1.3 kg of PETG depending on infill. Every part fits a 180 × 180 mm bed except the
@@ -120,6 +121,37 @@ two-piece lid; the posts need 182 mm of Z.
 
 Print settings: PETG (PLA softens next to a hot GPU and creeps under the PSU), 0.2 mm layers, 3 to 4
 perimeters, 25 to 40 % infill, no supports anywhere. Panels print flat with their outer face down.
+
+## Test batch, then the rest
+
+Print in this order; every stage proves something before you spend the filament on the next, and
+everything except the two coupons ends up in the finished box.
+
+**Stage 1, tolerances (one plate, about 25 g, under an hour): `coupon`, `coupon_rear`.**
+The coupon's jigsaw tab goes into its slot, the 6 mm peg into its socket and a 3 mm strip of the
+coupon (snap the thin bar off) into the panel slot, all by hand, all staying put. `coupon_rear` is a
+slice of the real rear wall: push the laptop cable's rubber boot through the big opening, the USB-C
+plug through the small one, and an HDMI plug through the bottom of the port window. If a fit is wrong,
+change `tab_fit`, `peg_fit` or `slot_fit`, or tell me which hole binds, and reprint only the coupon.
+
+**Stage 2, board fit (about 95 g): `floor_rr`, `bracket_holder`, `shim_05`, `shim_10`, `shim_15`.**
+Bare board onto the five pegs: it should sit flat on the bosses with the four clips snapped over its
+edges. Holder's three pegs down through the board's small holes. Card in: foot in the board's slot,
+the tab resting on the holder's arm or floating a hair above it (shim). If the tab is well off the
+arm, re-measure `tab_above_board`.
+
+**Stage 3, card support (about 80 g): `floor_fr`, `cradle`.** Join the two quarters (jigsaw tabs),
+card in, far end on the cradle; it must rest without lifting the card out of the slot. Off by more
+than a millimetre: `card_bottom_clear`, and only the cradle reprints.
+
+**Stage 4, structure sample (about 115 g): one `post_corner`, one `post_mid`, `panel_rear_r`.**
+Posts into the floor sockets, the panel down into the slots, and this is where your printer's Z gets
+checked against 180 mm posts.
+
+**Stage 5, everything else:** `floor_rl`, `floor_fl`, 3 more `post_corner`, 3 more `post_mid`,
+`panel_rear_l`, `panel_far_l`, `panel_far_r`, `panel_left_r`, `panel_left_f`, `panel_right_r`,
+`panel_right_f`, and the lid: `lid_l` + `lid_r` on a 235 mm bed, otherwise `lid_rl`, `lid_rr`,
+`lid_fl`, `lid_fr`.
 
 ## Order of work
 

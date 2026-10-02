@@ -493,6 +493,9 @@ module plan_a3()  { translate([-a4x, -(PY0-26)]) page(a4x, PY0-26, 295, 418); }
 module plan_a4a() { translate([-a4x, -(PY0-9)])  page(a4x, PY0-9, 295, 208); }
 module plan_a4b() { translate([-a4x, -(PY1+9-208)]) page(a4x, PY1+9-208, 295, 208); }
 
+// a slice of the real rear wall: the laptop-cable exit, the USB-C hole and the bottom of the port window (HDMI)
+module coupon_rear() { intersection() { panel_rear_r(); box(xo0-1, xi0+1, -3, board_w+22, 0, 58); } }
+
 /* ================= views ================= */
 module structure() { floor_full(); posts(); panels(); lid_full(); cradle(); bracket_holder(); }
 module assembly()  { structure(); ghosts(); }
@@ -566,6 +569,7 @@ else if (part == "panel_right_r") flat_xz(yi1) panel_right_r();
 else if (part == "panel_right_f") flat_xz(yi1) panel_right_f();
 else if (part == "cradle") rotate([0,90,0]) translate([-card_x1, 0, 0]) cradle();   // on its side: the pegs become short horizontal stubs
 else if (part == "coupon") coupon();
+else if (part == "coupon_rear") flat_yz(xo0) coupon_rear();
 else if (part == "bracket_holder") rotate([0,90,0]) translate([-hx1, 0, 0]) bracket_holder();   // on its side, pegs horizontal
 else if (part == "shim_05") shim(0.5);
 else if (part == "shim_10") shim(1.0);
