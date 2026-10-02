@@ -1,24 +1,3 @@
-#!/usr/bin/env bash
-# Build a self-contained folder to take to a printer: one subfolder per stage, with quantities and pass checks.
-# Usage: ./make-print-pack.sh [destination]   (default: ./print-pack, inside the repo)
-set -eu
-cd "$(dirname "$0")"
-dest="${1:-}"
-if [ -z "$dest" ]; then dest="$(pwd)/print-pack"; fi
-rm -rf "$dest"; mkdir -p "$dest"
-put() { local dir="$1"; shift; mkdir -p "$dest/$dir"; for p in "$@"; do cp "stl/$p.stl" "$dest/$dir/"; done; }
-
-put "1-tests"              coupon coupon_rear
-put "2-board-fit"          floor_rr bracket_holder shim_05 shim_10 shim_15
-put "3-card-support"       floor_fr cradle
-put "4-structure-sample"   post_corner post_mid panel_rear_r
-put "5-final"              floor_rl floor_fl post_corner post_mid panel_rear_l panel_far_l panel_far_r panel_left_r panel_left_f panel_right_r panel_right_f lid_l lid_r
-put "5-final/lid-quarters-if-bed-under-235mm" lid_rl lid_rr lid_fl lid_fr
-mkdir -p "$dest/reference"
-cp xgm-lite-frame-assembled.3mf plan/floor-plan-A3.pdf plan/floor-plan-A4-2pages.pdf DIMENSIONS.md README.md "$dest/reference/"
-cp img/outside.png img/inside.png img/rear.png "$dest/reference/"
-
-cat > "$dest/READ-ME-FIRST.txt" <<'TXT'
 XGM LITE FRAME - print pack
 ===========================
 Material: PETG (PLA sags next to a warm GPU and creeps under the PSU).
@@ -66,5 +45,3 @@ reference/
                                  hide parts to look inside). NOT for printing.
   floor-plan-A3.pdf / -A4-2pages.pdf   1:1 paper plan, print at 100 %, lay the real parts on it.
   README.md, DIMENSIONS.md       full notes and every size.  outside/inside/rear.png: renders.
-TXT
-find "$dest" -type f | wc -l | sed "s|^|files: |"; echo "pack at $dest"
