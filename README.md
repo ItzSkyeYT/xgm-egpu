@@ -157,6 +157,14 @@ and no internal dGPU; then one line in `/etc/xgm-egpu.conf` (`ROOT_PORT=`)
 or `--root-port` settles it. [docs/PORTING.md](docs/PORTING.md) explains the
 derivation. Detection getting a machine wrong is a bug worth an issue.
 
+## A case for it
+
+[`case/`](case/) holds a parametric, print-only enclosure for the Lite board, a desktop GPU and an
+ATX power supply: no screws, inserts, glue or adapters, ventilated for the GPU and the PSU separately,
+drawn in OpenSCAD with the board geometry taken from osy's KiCad file. The defaults fit an Inno3D RTX
+3060 Twin X2 OC and a 160 mm Corsair RM-class PSU; change three numbers for another card or PSU. STLs,
+preview renders, a collision test and the print/assembly order are in [`case/README.md`](case/README.md).
+
 ## Contributing
 
 The most valuable contribution is a row in [HARDWARE.md](HARDWARE.md). Run
