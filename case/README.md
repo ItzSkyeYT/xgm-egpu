@@ -62,6 +62,29 @@ socket, and a 3 mm panel slot. Everything should push together by hand and hold.
 `tab_fit`, `peg_fit`, `slot_fit` (all in mm) and print it again. Fits vary between printers; this is
 the cheap place to find out.
 
+## Check the fit on paper first
+
+`plan/floor-plan-A3.pdf` (one A3 page) and `plan/floor-plan-A4-2pages.pdf` (two A4 landscape pages,
+tape them together along the alignment crosses) are the floor plan at 1:1: the frame, the posts, the
+board with its holes, the card's footprint and bracket plane, the PSU, the cable channel with its two
+saddles, the cradle, the holder, and the openings in the rear wall. Print at **actual size / 100 %**,
+then check the 100 mm bar with a ruler. Lay the board, the card and the PSU on it, plug the 24-pin in
+and see where the bundle wants to go. This costs nothing and catches the mistakes a render can't:
+a cable that is stiffer than I think, a plug that sticks out further, a PSU that isn't the one on the
+label. Re-export after changing parameters: `openscad -o plan/plan_a3.svg -D 'part="plan_a3"'
+xgm-lite-frame.scad`, then `rsvg-convert -f pdf`.
+
+## Viewing the model in 3D
+
+- OpenSCAD itself (installed): `openscad xgm-lite-frame.scad`, press F5. Drag to orbit, scroll to
+  zoom. In *Window → Customizer* set `part` to `assembly` (everything plus the real parts' volumes:
+  board green, card grey, PSU black, plug and cable zones orange), `inside` (lid and intake wall
+  removed), or any single part. Turn `vents` off for a faster preview.
+- Any STL viewer or slicer: `stl/_assembly_structure.stl` is every printed part in place as one mesh,
+  `stl/_assembly_ghosts.stl` is the board, card, PSU and cable zones. Drop both files into
+  3dviewer.net or your slicer and they load as two differently coloured objects. On a phone,
+  3dviewer.net works too.
+
 ## Parts
 
 Rendered STLs are in `stl/`. Re-render after changing parameters with `./render.sh` (all parts) or
@@ -79,6 +102,7 @@ Rendered STLs are in `stl/`. Re-render after changing parameters with `./render.
 | `shim_05`, `shim_10`, `shim_15` | as needed | 24 × 6 | flat | 0.5 / 1.0 / 1.5 mm shims for the holder's arm |
 | `cradle` | 1 | 40 × 49 × 18 | on its side, as exported | supports the card's far end; height from `card_bottom_clear` |
 | `coupon` | 1 | 60 × 37 × 9 | flat | fit test |
+| `_assembly_structure`, `_assembly_ghosts` | — | — | not for printing | the whole thing, for viewers |
 
 Total about 1050 cm³ of geometry, roughly 1.1 to 1.3 kg of PETG depending on infill. Every part fits
 a 180 × 180 mm bed except the two-piece lid; the posts need 178 mm of Z.

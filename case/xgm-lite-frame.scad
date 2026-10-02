@@ -376,6 +376,75 @@ module coupon() {
   }
 }
 
+/* ================= 1:1 paper plan (2D, for SVG/PDF export) ================= */
+module ln(x0, y0, x1, y1, w = 0.4) { hull() { translate([x0, y0]) circle(d = w, $fn = 8); translate([x1, y1]) circle(d = w, $fn = 8); } }
+module rect_o(x0, x1, y0, y1, w = 0.4) { ln(x0,y0,x1,y0,w); ln(x1,y0,x1,y1,w); ln(x1,y1,x0,y1,w); ln(x0,y1,x0,y0,w); }
+module ring(x, y, d, w = 0.4) { translate([x, y]) difference() { circle(d = d + w, $fn = 48); circle(d = d - w, $fn = 48); } }
+module lbl(x, y, t, sz = 3.2, rot = 0) { translate([x, y]) rotate(rot) text(t, size = sz, font = "Liberation Sans"); }
+module cross(x, y, r = 6) { ln(x-r, y, x+r, y, 0.3); ln(x, y-r, x, y+r, 0.3); ring(x, y, r, 0.3); }
+
+module plan2d() {
+  // frame of the floor, wall inner faces, posts
+  rect_o(xp0, xp1, yp0, yp1, 0.6);
+  rect_o(xi0, xi1, yi0, yi1, 0.25);
+  for (p = post_centers()) rect_o(p[0]-7, p[0]+7, p[1]-7, p[1]+7, 0.3);
+  // board with holes, foot slot, holder holes
+  difference() { offset(r = 10) offset(delta = -10) square([board_l, board_w]); offset(delta = -0.5) offset(r = 10) offset(delta = -10) square([board_l, board_w]); }
+  for (h = holes) ring(h[0], h[1], hole_d);
+  rect_o(foot_slot_x-1.5, foot_slot_x+1.5, 17, board_w, 0.3);
+  for (y = holder_holes_y) rect_o(holder_hole_x-1.5, holder_hole_x+1.5, y-2, y+2, 0.3);
+  rect_o(atx_hdr_x[0], atx_hdr_x[1], -9.7, 12.8, 0.3);                      // 24-pin header incl. its overhang
+  rect_o(pcie_x0, pcie_x1, 17, 25.8, 0.3);                                  // PCIe slot
+  // card, bracket, cradle, holder
+  rect_o(xb, card_x1, card_y0, card_y1, 0.5);
+  ln(xb, bracket_y0, xb, bracket_y1, 1.2);
+  rect_o(card_x1-18, card_x1, card_y0-3.5, card_y1+3.5, 0.3);
+  rect_o(hx0, hx1, 11, 62, 0.3);
+  // PSU, plug zone, saddles
+  rect_o(psu_x0, psu_x1, psu_y0, psu_y1, 0.5);
+  rect_o(atx_hdr_x[0]-2, atx_hdr_x[1]+2, -atx_plug_clear, 0, 0.25);
+  for (x = [110, 190]) rect_o(x, x+14, psu_y1+1, psu_y1+37, 0.3);
+  // openings in the rear wall, drawn as thick ticks on the wall line
+  ln(xo0, usbc_y[0]-3.5, xo0, usbc_y[1]+3.5, 1.5);
+  ln(xo0, bracket_y0-1.5, xo0, bracket_y1+1.5, 1.5);
+  ln(xo0, xg_exit_y[0], xo0, xg_exit_y[1], 1.5);
+  ln(xo0, psu_y0+3, xo0, psu_y1-3, 1.5);
+  // labels
+  lbl(xb+30, card_y0+16, "GPU footprint (fans face +Y, this way ->)", 3.2);
+  lbl(xb+30, card_y0+6, str("bracket plane x = ", xb, "   card ", gpu_len, " x ", gpu_w), 2.8);
+  lbl(60, 40, "board 220 x 65, five pegs", 3);
+  lbl(psu_x0+10, psu_y0+40, str("PSU on its side  ", psu_l, " x ", psu_w, " x ", psu_h, "  (fan -> -Y wall, IEC -> rear)"), 3.2);
+  lbl(psu_x0+10, psu_y0+30, "modular face ->", 3);
+  lbl(psu_x1+8, psu_y0+70, "cable bay", 3.2, 90);
+  lbl(100, -40, "cable channel: 24-pin + 8-pin lie here as one loop", 3);
+  lbl(atx_hdr_x[0]+2, -22, "24-pin plug + bend", 2.6);
+  lbl(card_x1-16, card_y1+6, "cradle", 2.6);
+  lbl(hx1+2, 50, "holder", 2.6, 90);
+  lbl(xo0+2, -60, "rear wall: PSU opening", 2.6, 90);
+  lbl(xo0+2, -31, "cable exit", 2.6, 90);
+  lbl(xo0+2, 14, "ports", 2.6, 90);
+  lbl(xo0-9, 2, "USB-C", 2.6, 90);
+  lbl(xi1-6, 10, "far wall: GPU exhaust grille", 2.6, 90);
+  lbl(xi0+20, yi1-7, "+Y wall: GPU intake grille", 3);
+  lbl(xi0+20, yi0+2.5, "-Y wall: PSU intake grille", 3);
+  lbl(xp0, yp1+6, str("xgm-lite-frame  floor plan 1:1   outside ", xp1-xp0, " x ", yp1-yp0, " mm   (board origin = its rear/24-pin corner)"), 3.6);
+  // scale bar
+  ln(xp0, yp0-8, xp0+100, yp0-8, 0.8); ln(xp0, yp0-11, xp0, yp0-5, 0.6); ln(xp0+100, yp0-11, xp0+100, yp0-5, 0.6);
+  lbl(xp0+38, yp0-16, "100 mm", 3.2);
+}
+// pages: A3 portrait (297 x 420) with the whole plan, or two A4 landscape tiles (297 x 210) with an overlap band and crosses
+module page(x0, y0, w, h) {
+  intersection() { plan2d(); translate([x0, y0]) square([w, h]); }
+  rect_o(x0, x0+w, y0, y0+h, 0.3);
+  // alignment crosses in the overlap band y 35..60 (both A4 tiles carry them)
+  for (x = [40, 140, 240]) if (y0 < 47.5 && y0+h > 47.5) cross(x, 47.5);
+}
+// frames are 2 mm smaller than the paper: the SVG exporter pads the page by 1 mm, and "actual size" must stay 1:1
+a4x = xp0 - (295 - (xp1-xp0))/2;
+module plan_a3()  { translate([-a4x, -(yp0-26)]) page(a4x, yp0-26, 295, 418); }
+module plan_a4a() { translate([-a4x, -(yp0-9)])  page(a4x, yp0-9, 295, 208); }
+module plan_a4b() { translate([-a4x, -35])       page(a4x, 35, 295, 208); }
+
 /* ================= views ================= */
 module structure() { floor_full(); posts(); panels(); lid_full(); cradle(); bracket_holder(); }
 module assembly()  { structure(); ghosts(); }
@@ -387,6 +456,11 @@ module flat_yz(x0) { rotate([0, 90, 0]) translate([-x0 - wall, 0, 0]) children()
 module flat_xz(y0) { rotate([-90, 0, 0]) translate([0, -y0 - wall, 0]) children(); }
 
 if (part == "assembly")   assembly();
+else if (part == "structure") structure();          // every printed part in place, one mesh, for 3D viewers
+else if (part == "ghosts")    ghosts_hard();         // board, card, PSU and cable zones, for 3D viewers
+else if (part == "plan_a3")   plan_a3();
+else if (part == "plan_a4a")  plan_a4a();
+else if (part == "plan_a4b")  plan_a4b();
 else if (part == "inside") inside();
 else if (part == "collision") collision();
 else if (part == "floor_rl") translate([0,0,floor_t]) floor_rl();
