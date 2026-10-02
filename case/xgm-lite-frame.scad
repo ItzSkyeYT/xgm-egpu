@@ -26,7 +26,7 @@ usbc_y = [5.5, 14.4];                                      // USB-C receptacle o
 atx_hdr_x = [30.5, 85.2];                                  // right-angle 24-pin header (overhangs the Y=0 edge by 9.7)
 xg_conn_x = [77.5, 136.2];                                 // the two micro-coax connectors of the laptop cable, Y 42..49
 
-gpu_len = 240;  gpu_h = 120;  gpu_w = 42;                  // Inno3D RTX 3060 Twin X2 OC: length, height, 2-slot width
+gpu_len = 240;  gpu_h = 120;  gpu_w = 42.2;                // Inno3D RTX 3060 Twin X2 OC: length, height (Inno3D), thickness measured at the bracket end
 gpu_backplate = 2.5;                                       // backplate + gap on the solder side of the PCB
 bracket_to_a1 = pcie_a1_x - foot_slot_x;                   // 47.45: bracket plane = the board's foot slot (CEM Fig 9-1 gives 47.8)
 bracket_w = 18.42;  bracket_t = 0.86;

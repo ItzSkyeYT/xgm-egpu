@@ -88,8 +88,8 @@ All numbers in mm, read from the rendered STLs in `stl/` (as laid out for printi
 | board pegs | Ø2.9 × 7.6 on Ø7.0 × 4.95 bosses; board underside at 5.0, top surface at 6.6 |
 | board clips | 1.2 thick beams, 16 long, lip 1.2 over the board at 6.9 … 8.1 |
 | bracket holder | 5.5 thick (x 3.0 … 8.5), arm 11 … 62 wide, seat at 113.2 above the floor (`tab_above_board` 106.7 + 6.6 − 0.1); pegs 2.6 × 3.6 |
-| cradle | inner width 43.0 (card 42 + 1), rest at 12.8 above the floor (`card_bottom_clear` 6.5 + 6.6 − 0.3), walls to 37.8 |
-| card envelope | x 13.7 … 253.7, y 17.4 … 59.4, bottom 13.1, top 131.6; 42.0 of air above it |
+| cradle | inner width 43.2 (card 42.2 + 1), rest at 12.8 above the floor (`card_bottom_clear` 6.5 + 6.6 − 0.3), walls to 37.8 |
+| card envelope | x 13.7 … 253.7, y 17.4 … 59.6, bottom 13.1, top 131.6; 42.0 of air above it |
 | PSU envelope | x 7.0 … 167.0, y −151.0 … −65.0, z 0 … 150; 11.0 recess behind the rear wall for the IEC plug |
 | rear-wall openings | PSU face 80 × 144; USB-C 21 × 12 at z 3.6 … 15.6; display ports 21.4 × 86.4 at z 12.6 … 99; cable exit 30 × 23.5 at z 3.5 … 27 |
 | vents | 3.0 wide slots, 20 long, 6.0 pitch, rows every 24 |

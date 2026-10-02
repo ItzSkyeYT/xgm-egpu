@@ -11,7 +11,7 @@ The defaults are the parts it was drawn around:
 | Part | Default | Parameter(s) |
 |---|---|---|
 | Board | XG Mobile Station Lite, 220 × 65 mm, five Ø3.2 holes, geometry read from osy's KiCad file | `board_*`, `holes`, `pcie_*` |
-| GPU | Inno3D RTX 3060 Twin X2 OC: 240 × 120 mm, 2-slot (42 mm), one 8-pin on top | `gpu_len`, `gpu_h`, `gpu_w` |
+| GPU | Inno3D RTX 3060 Twin X2 OC: 240 × 120 mm, 42.2 mm thick (measured), one 8-pin on top | `gpu_len`, `gpu_h`, `gpu_w` |
 | PSU | ATX, 160 × 150 × 86 mm (Corsair RM850x and friends) | `psu_l`, `psu_w`, `psu_h` |
 
 Outside dimensions with the defaults: **271 × 248 × 180 mm**. The PSU lies on its side along one
