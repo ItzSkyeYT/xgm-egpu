@@ -13,7 +13,7 @@ put "2-board-fit"          floor_rr bracket_holder shim_05 shim_10 shim_15
 put "3-card-support"       floor_fr cradle
 put "4-structure-sample"   post_corner post_mid panel_rear_r
 put "5-final"              floor_rl floor_fl post_corner post_mid panel_rear_l panel_far_l panel_far_r panel_left_r panel_left_f panel_right_r panel_right_f lid_l lid_r
-put "5-final/lid-quarters-if-bed-under-235mm" lid_rl lid_rr lid_fl lid_fr
+put "5-final/lid-quarters-if-bed-under-250mm" lid_rl lid_rr lid_fl lid_fr
 mkdir -p "$dest/reference"
 cp xgm-lite-frame-assembled.3mf plan/floor-plan-A3.pdf plan/floor-plan-A4-2pages.pdf DIMENSIONS.md README.md "$dest/reference/"
 cp img/outside.png img/inside.png img/rear.png "$dest/reference/"
@@ -25,8 +25,8 @@ Material: PETG (PLA sags next to a warm GPU and creeps under the PSU).
 Settings: 0.2 mm layers, 3-4 walls, 25-40 % infill, NO supports anywhere.
 Orientation: every STL is already laid out for the bed. Panels print flat, lid pieces upside down
 (as exported), posts upright (socket on the bed, peg up), cradle and holder on their side (as exported).
-Bed needed: 180 x 180 mm for everything except the two-piece lid (235 mm); Z needed: 182 mm (posts).
-If the bed is under 235 mm, print the four lid quarters instead of lid_l / lid_r.
+Bed needed: 180 x 180 mm for everything except the two-piece lid (250 mm); Z needed: 182 mm (posts).
+If the bed is under 250 mm, print the four lid quarters instead of lid_l / lid_r.
 
 Print the folders in order. Each stage proves something before the next; only the two coupons are
 throwaway, everything else goes into the finished box.
@@ -59,7 +59,7 @@ throwaway, everything else goes into the finished box.
   post_corner                     x3 MORE (4 total)
   post_mid                        x3 MORE (4 total)
   panel_rear_l, panel_far_l, panel_far_r, panel_left_r, panel_left_f, panel_right_r, panel_right_f   x1 each
-  lid_l + lid_r (235 mm bed)  OR  lid-quarters-if-bed-under-235mm/ (all four)
+  lid_l + lid_r (250 mm bed)  OR  lid-quarters-if-bed-under-250mm/ (all four)
 
 reference/
   xgm-lite-frame-assembled.3mf   the whole case assembled, every part a separate object (open in Orca,
