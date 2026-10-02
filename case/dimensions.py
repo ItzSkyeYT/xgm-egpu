@@ -7,7 +7,7 @@ def bbox(f):
         if 'vertex' in line:
             a=line.split(); xs.append(float(a[1])); ys.append(float(a[2])); zs.append(float(a[3]))
     return (min(xs),max(xs),min(ys),max(ys),min(zs),max(zs))
-echo=subprocess.run(['openscad','-o','/dev/null','-D','part="none"','xgm-lite-frame.scad'],capture_output=True,text=True).stderr
+echo=subprocess.run(['openscad','-o','out/_dims.stl','-D','part="none"','xgm-lite-frame.scad'],capture_output=True,text=True).stderr
 nums=lambda key: re.search(key+r'[^"]*',echo).group(0)
 inside=re.search(r'interior ([\d.]+) x ([\d.]+) x ([\d.]+) mm; outside ([\d.]+) x ([\d.]+) x ([\d.]+)',echo).groups()
 qty={'post_corner':4,'post_mid':4,'shim_05':'as needed','shim_10':'as needed','shim_15':'as needed'}
