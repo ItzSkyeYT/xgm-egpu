@@ -162,8 +162,10 @@ derivation. Detection getting a machine wrong is a bug worth an issue.
 [`case/`](case/) holds a parametric, print-only enclosure for the Lite board, a desktop GPU and an
 ATX power supply: no screws, inserts, glue or adapters, ventilated for the GPU and the PSU separately,
 drawn in OpenSCAD with the board geometry taken from osy's KiCad file. The defaults fit an Inno3D RTX
-3060 Twin X2 OC and a 160 mm Corsair RM-class PSU; change three numbers for another card or PSU. STLs,
-preview renders, a collision test and the print/assembly order are in [`case/README.md`](case/README.md).
+3060 Twin X2 OC and a 160 mm Corsair RM-class PSU; change three numbers for another card or PSU. It
+uses the board's own bracket-foot slot and holder holes, so the card's front is carried the way a PC
+chassis carries it. STLs, preview renders, a collision test and the print/assembly order are in
+[`case/README.md`](case/README.md).
 
 ## Contributing
 

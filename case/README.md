@@ -14,37 +14,48 @@ The defaults are the parts it was drawn around:
 | GPU | Inno3D RTX 3060 Twin X2 OC: 240 × 120 mm, 2-slot (42 mm), one 8-pin on top | `gpu_len`, `gpu_h`, `gpu_w` |
 | PSU | ATX, 160 × 150 × 86 mm (Corsair RM850x and friends) | `psu_l`, `psu_w`, `psu_h` |
 
-Outside dimensions with the defaults: **300 × 228 × 177 mm**. The PSU lies on its side along one
-long wall with its fan against a grille, the board and the card take the other half, the GPU's fans
-face the opposite side wall, and the 130 mm behind the PSU is the cable bay for the modular cables.
+Outside dimensions with the defaults: **271 × 248 × 180 mm**. The PSU lies on its side along one
+long wall with its fan against a grille; the board and the card take the other side with the GPU's
+fans facing the opposite wall; between them runs a 65 mm cable channel the full length of the box,
+and the space behind the PSU is the cable bay. A 600 mm sleeved 24-pin cable lies in the channel and
+the bay as one big loop, held by two printed saddles, instead of being folded.
 
-![outside](img/outside.png)
-![intake side](img/outside-intake-side.png)
-![inside, lid and intake wall removed](img/inside.png)
+Two details of the Lite board that the case relies on, both visible in osy's KiCad file: the 3 mm
+slot across the board at x = 13.7 mm is the chassis slot for the GPU bracket's foot (so the bracket
+plane sits there, 47.5 mm in front of the PCIe contact A1, as the PCIe CEM spec says it should), and
+the three 3 × 4 mm holes at x = 7.2 mm are for a bracket holder. This case prints that holder: it
+stands in the three holes, passes through them into the floor, and the bracket's top tab rests on
+its arm, which is how a PC chassis carries a card's front end.
+
+![outside: PSU intake side and lid](img/outside.png)
+![rear wall: PSU grille, laptop-cable exit, USB-C, display ports](img/rear.png)
+![inside, lid and GPU-intake wall removed](img/inside.png)
 
 ## Airflow
 
 - GPU intake: the whole +Y wall in front of the card's fans is slotted.
 - GPU exhaust: slots in the lid above the card and in the far end wall; the card's own bracket vents
-  exhaust through the display-port tunnel in the rear wall, as in a PC.
+  exhaust through the display-port opening in the rear wall, 18 mm behind the ports, as in a PC.
 - PSU intake: the −Y wall in front of the PSU fan is slotted; PSU exhaust leaves through its own rear
   grille, which sits in an opening in the rear wall. The two intakes are on opposite sides of the box.
-- The lid sits 38 mm above the card so a straight 8-pin plug and its cable fit without an adapter.
+- The lid sits 42 mm above the card so a straight 8-pin plug and a stiff sleeved cable fit without
+  an adapter.
+- The laptop cable: its taped micro-coax harness runs along the board's 24-pin edge, and the thick
+  cable with its strain-relief boot leaves through an opening low in the rear wall beside the board.
 
-## Before you print anything: three measurements
+## Before you print anything: two measurements
 
-The model was drawn from datasheets and the spec. Three numbers depend on your exact card, connector
-and PSU, and each one moves printed geometry. Measure them, put them in the file, re-render.
+The model was drawn from the KiCad file, datasheets and the spec. Two heights depend on how your card
+seats in your connector; both are cheap to measure with the card plugged in and both only move small
+parts.
 
-| Measure | Parameter | Default | What moves if you don't |
+| Measure (card plugged in) | Parameter | Default | What it sets |
 |---|---|---|---|
-| Bracket outer face → centre of the first gold finger | `bracket_to_a1` | 15.0 | the whole card along the box: cradle, far wall, lid guides |
-| Board surface → lowest point of the card near its far end (card plugged in) | `card_bottom_clear` | 6.5 | the cradle height (too high: the card won't seat; too low: it does nothing) |
-| PSU length, rear face → modular face | `psu_l` | 160 | the PSU stop and the size of the cable bay |
+| Board surface → underside of the bracket's top tab | `tab_above_board` | 106.7 | the height of the holder's arm. It is printed 0.1 mm low on purpose; `shim_05/10/15` go on the arm if the tab floats |
+| Board surface → lowest point of the card near its far end | `card_bottom_clear` | 6.5 | the cradle height (too high: the card won't seat; too low: it does nothing) |
 
-Also check, with the card plugged in, that the bracket's bottom foot does not press on the board.
-That is a property of the Lite board's slot position, not of this case, but a card that is resting
-on its bracket foot is not fully seated and should not be run.
+The bracket's foot should be in the board's slot at x 12.2..15.2 mm. If it is not, the card is not
+in the slot the board was designed for.
 
 Then print `coupon` first (5 g, twenty minutes). It has a jigsaw tab and slot, a 6 mm peg and
 socket, and a 3 mm panel slot. Everything should push together by hand and hold. If not, adjust
@@ -58,17 +69,19 @@ Rendered STLs are in `stl/`. Re-render after changing parameters with `./render.
 
 | Part | Qty | Size (mm) | Prints | Notes |
 |---|---|---|---|---|
-| `floor_rl`, `floor_rr`, `floor_fl`, `floor_fr` | 1 each | ≤ 159 × 131 × 12 | flat, as exported | the four floor quarters; jigsaw tabs join them. `floor_rr` carries the board pegs and the bracket-side clips |
-| `lid_l`, `lid_r` | 1 each | 160 × 228 × 71 | upside down, as exported | two-piece lid (needs a 230 mm bed). For small beds set `lid_split_y = true` and print `lid_rl`, `lid_rr`, `lid_fl`, `lid_fr` (≤ 159 × 131) |
-| `post_corner` | 4 | 15 × 15 × 174 | upright, as exported (socket on the bed, peg up) | identical; mirrors are the same part |
-| `post_mid` | 4 | 15 × 14 × 174 | upright | one per wall, where the panels split |
-| `panel_rear_l`, `panel_rear_r`, `panel_far_l`, `panel_far_r` | 1 each | ≤ 171 × 110 × 3 | flat | rear wall carries the PSU opening, the USB-C hole and the display-port tunnel |
-| `panel_left_r`, `panel_left_f`, `panel_right_r`, `panel_right_f` | 1 each | ≤ 141 × 171 × 3 | flat | left = PSU intake grille; right = GPU intake grille with the laptop-cable slot |
+| `floor_rl`, `floor_rr`, `floor_fl`, `floor_fr` | 1 each | ≤ 151 × 131 × 25 | flat, as exported | the four floor quarters; jigsaw tabs join them. `floor_rr` carries the board pegs, the clips, the foot relief and the holder sockets; `floor_rl` the two cable saddles |
+| `lid_l`, `lid_r` | 1 each | ≤ 151 × 248 × 75 | upside down, as exported | two-piece lid (needs a 250 mm bed). For smaller beds print `lid_rl`, `lid_rr`, `lid_fl`, `lid_fr` instead (≤ 151 × 131) |
+| `post_corner` | 4 | 15 × 15 × 176 | upright, as exported (socket on the bed, peg up) | identical; mirrors are the same part |
+| `post_mid` | 4 | 15 × 14 × 176 | upright | one per wall, where the panels split |
+| `panel_rear_l`, `panel_rear_r`, `panel_far_l`, `panel_far_r` | 1 each | ≤ 173 × 117 × 3 | flat | the rear wall carries the PSU opening, the USB-C hole, the display-port opening and the laptop-cable exit |
+| `panel_left_r`, `panel_left_f`, `panel_right_r`, `panel_right_f` | 1 each | ≤ 144 × 173 × 3 | flat | left = PSU intake grille; right = GPU intake grille |
+| `bracket_holder` | 1 | 116 × 51 × 6 | on its side, as exported | stands in the board's three holes; the bracket tab rests on its arm |
+| `shim_05`, `shim_10`, `shim_15` | as needed | 24 × 6 | flat | 0.5 / 1.0 / 1.5 mm shims for the holder's arm |
 | `cradle` | 1 | 40 × 49 × 18 | on its side, as exported | supports the card's far end; height from `card_bottom_clear` |
 | `coupon` | 1 | 60 × 37 × 9 | flat | fit test |
 
-Total about 1040 cm³ of geometry, roughly 1.1 to 1.3 kg of PETG depending on infill. Every part fits
-a 180 × 180 mm bed except the two-piece lid; the posts need 175 mm of Z.
+Total about 1050 cm³ of geometry, roughly 1.1 to 1.3 kg of PETG depending on infill. Every part fits
+a 180 × 180 mm bed except the two-piece lid; the posts need 178 mm of Z.
 
 Print settings: PETG (PLA softens next to a hot GPU and creeps under the PSU), 0.2 mm layers, 3 to 4
 perimeters, 25 to 40 % infill, no supports anywhere. Panels print flat with their outer face down.
@@ -79,20 +92,26 @@ perimeters, 25 to 40 % infill, no supports anywhere. Panels print flat with thei
 2. `floor_rr`. Drop the bare board onto its five pegs. It should sit flat on the bosses with the edge
    clips over its edges and the pegs standing about 1 mm proud. If a peg misses, the board isn't the
    board this was drawn for; stop here.
-3. `cradle`, `floor_fr`. Plug the card into the board, set both floor pieces together, and check that
-   the card's far end rests on the cradle without lifting the card out of the slot. Re-measure
-   `card_bottom_clear` if it doesn't.
-4. Everything else.
+3. `bracket_holder`. Its three pegs go down through the board's three small holes into the floor.
+   Plug the card in: the bracket's foot drops into the board's slot and the tab should land on the
+   holder's arm, or float just above it (shim). If the tab lands well off the arm, re-measure
+   `tab_above_board`.
+4. `cradle`, `floor_fr`. Set both floor pieces together and check that the card's far end rests on the
+   cradle without lifting the card out of the slot. Re-measure `card_bottom_clear` if it doesn't.
+5. Everything else.
 
 ## Assembly
 
 1. Join the four floor quarters (press the jigsaw tabs down into their slots).
 2. Push the eight posts into the square holes in the floor. Corner posts have two slots at 90°, mid
    posts two slots in line.
-3. Board on its pegs; press down until the four edge clips snap over the edges.
+3. Board on its pegs; press down until the four edge clips snap over the edges. Bracket holder into
+   its three holes.
 4. PSU on its side, fan toward the −Y wall, IEC inlet toward the rear wall, slid back against the stops.
-5. Card into the slot, far end onto the cradle. Then the 24-pin, the 8-pin over the top of the card,
-   and the laptop cable out through its slot (side slot next to the connectors, or the rear one).
+5. Card into the slot: foot in the board's slot, tab on the holder's arm, far end on the cradle. Then
+   the 24-pin (its bundle goes forward 40 mm, turns, and lies in the channel and the bay as one loop,
+   through the two saddles), the 8-pin over the top of the card into the same loop, and the laptop
+   cable's boot out through the opening low in the rear wall.
 6. Slide the eight panels down into the post slots. Rear panels: the one with the big opening goes on
    the PSU side.
 7. Lid: the pegs drop into the posts, the two ribs straddle the card's top edge and the two guides
@@ -103,11 +122,10 @@ box is lifted by its floor, not by the lid.
 
 ## What this case does not do
 
-- It does not support the card's front by its bracket tab. The Lite board extends 46 mm in front of
-  the bracket plane, so nothing can stand under the tab without passing through the board. The card's
-  front weight sits on the PCIe slot, exactly as it does on a bare board; the cradle takes the lever
-  load at the far end and the lid guides keep the bracket from swaying.
-- The display ports sit 47 mm inside the rear wall. Plugging an HDMI cable is done through the tunnel.
+- The holder carries the card's front by its tab, but with gravity only: there is no thumbscrew. The
+  lid guides straddle the top of the bracket so it cannot sway; lifting the whole box upside down is
+  still a bad idea.
+- The display ports sit 18 mm inside the rear wall; the opening in the panel is sized for plugs.
 - It is not sealed against dust; it's a ventilated frame.
 
 ## Changing it
@@ -115,7 +133,8 @@ box is lifted by its floor, not by the lid.
 All geometry derives from the parameters at the top of the .scad. A longer card lengthens the box; a
 thicker card widens the cradle and moves the GPU intake grille; a 140 mm PSU shortens the PSU bay
 and lengthens the cable bay. `psu_wall_gap`, `atx_plug_clear` and `plug8_clear` are the three
-clearances that set the outside size.
+clearances that set the outside size; `atx_plug_clear` is 65 because sleeved Corsair bundles need a
+40 mm bend. Flat ribbon cables would allow 50.
 
 `openscad -o x.stl -D 'part="collision"' -D vents=false xgm-lite-frame.scad` renders the intersection
 of the printed geometry with the volumes of the board (connectors included), the card, the PSU and the

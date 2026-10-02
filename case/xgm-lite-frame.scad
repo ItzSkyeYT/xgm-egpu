@@ -19,22 +19,25 @@ holes = [[28,14],[28,51],[117,32.5],[206,14],[206,51]];   // O3.2 mounting holes
 hole_d = 3.2;
 pcie_a1_x = 61.15;  pcie_y = 20.7;                         // centre of contact A1/B1; slot centreline = card PCB plane
 pcie_x0 = 58.15;    pcie_x1 = 147.15;                      // slot body
+foot_slot_x = 13.7;                                        // 3 mm slot in the board (x 12.2..15.2, y 17..65): the GPU bracket's foot drops in here
+holder_holes_y = [18.65, 38.95, 59.3];                     // three 3 x 4 mm holes at x 7.2: for the bracket holder
+holder_hole_x = 7.2;
 usbc_y = [5.5, 14.4];                                      // USB-C receptacle on the rear edge
 atx_hdr_x = [30.5, 85.2];                                  // right-angle 24-pin header (overhangs the Y=0 edge by 9.7)
 xg_conn_x = [77.5, 136.2];                                 // the two micro-coax connectors of the laptop cable, Y 42..49
 
 gpu_len = 240;  gpu_h = 120;  gpu_w = 42;                  // Inno3D RTX 3060 Twin X2 OC: length, height, 2-slot width
 gpu_backplate = 2.5;                                       // backplate + gap on the solder side of the PCB
-bracket_to_a1 = 15.0;                                      // MEASURE: bracket outer face -> centre of the first gold finger
+bracket_to_a1 = pcie_a1_x - foot_slot_x;                   // 47.45: bracket plane = the board's foot slot (CEM Fig 9-1 gives 47.8)
 bracket_w = 18.42;  bracket_t = 0.86;
 bracket_margin = 5.3;                                      // card PCB plane -> solder-side edge of the bracket
-card_seat = 3.5;                                           // finger bottom above the board surface when seated (upper bound)
+card_seat = 1.82;                                          // finger bottom above the board surface when fully seated (ATX: 106.68 - 104.86)
 card_bottom_clear = 6.5;                                   // MEASURE: board surface -> lowest point of the card near its far end
-tab_above_board = 108.4;                                   // underside of the bracket's top tab above the board surface
-plug8_clear = 38;                                          // room above the card for the 8-pin plug and its cable bend
+tab_above_board = 106.7;                                   // MEASURE: board surface -> underside of the bracket's top tab (CEM: 104.86 + card_seat)
+plug8_clear = 42;                                          // room above the card for a straight 8-pin plug and a stiff sleeved cable
 
 psu_l = 160;  psu_w = 150;  psu_h = 86;                    // ATX PSU: length (rear -> modular face), width (fan face), height
-atx_plug_clear = 45;                                       // from the board's Y=0 edge: 24-pin plug body + cable bend
+atx_plug_clear = 65;                                       // from the board's Y=0 edge: 24-pin plug body (24) + a 40 mm bend of a sleeved bundle
 psu_wall_gap = 11;                                         // PSU fan face -> wall (keeps the corner and mid posts clear of the PSU)
 
 /* ---------- Frame ---------- */
@@ -52,7 +55,7 @@ gap_y = 11;           // board +Y edge -> wall (room for the edge clips and the 
 x_mid = 145;  y_mid = -40;      // mid posts (panels split here)
 x_seam = 135; y_seam = -50;     // floor and lid pieces split here (jigsaw tabs)
 lid_split_y = false;            // true: lid in 4 pieces for small beds
-xg_exit = "both";               // "side" (through the +Y wall beside the connectors), "rear", or "both"
+xg_exit_y = [-32, -2];          // laptop cable leaves through the rear wall here (its harness runs along the board's Y=0 edge)
 vent_w = 3;  vent_pitch = 6;  vent_h = 20;  vent_row = 24;
 $fn = 40;  eps = 0.01;
 
@@ -68,7 +71,7 @@ card_bot = zb + card_bottom_clear;           // lowest point of the card away fr
 bracket_y0 = pcie_y - bracket_margin;  bracket_y1 = bracket_y0 + bracket_w;
 tab_z    = zb + tab_above_board;
 psu_y1   = -atx_plug_clear;  psu_y0 = psu_y1 - psu_h;
-xi0 = -1;  xi1 = card_x1 + 3;
+xi0 = -4;  xi1 = card_x1 + 3;
 yi0 = psu_y0 - psu_wall_gap;  yi1 = board_w + gap_y;
 zi1 = card_top + plug8_clear;                // interior height = lid underside
 psu_x0 = xi0 + core + 1;  psu_x1 = psu_x0 + psu_l;
@@ -79,7 +82,7 @@ panel_h = zi1 - 0.5;
 peg = 6;
 
 echo(str("interior ", xi1-xi0, " x ", yi1-yi0, " x ", zi1, " mm; outside ", xp1-xp0, " x ", yp1-yp0, " x ", zi1+floor_t+lid_t, " mm"));
-echo(str("card: x ", xb, "..", card_x1, "  y ", card_y0, "..", card_y1, "  z ", card_z0, "..", card_top));
+echo(str("card: x ", xb, "..", card_x1, "  y ", card_y0, "..", card_y1, "  z ", card_z0, "..", card_top, "  bracket->A1 ", bracket_to_a1));
 echo(str("PSU: x ", psu_x0, "..", psu_x1, "  y ", psu_y0, "..", psu_y1, "  z 0..", psu_w));
 
 module box(x0,x1,y0,y1,z0,z1) { translate([x0,y0,z0]) cube([x1-x0, y1-y0, z1-z0]); }
@@ -89,6 +92,8 @@ module ghost_board() {
   color("green", 0.6) difference() {
     box(0, board_l, 0, board_w, standoff, zb);
     for (h = holes) translate([h[0], h[1], standoff-1]) cylinder(d = hole_d, h = board_t+2);
+    box(foot_slot_x-1.5, foot_slot_x+1.5, 17, board_w+1, standoff-1, zb+1);                          // bracket foot slot
+    for (y = holder_holes_y) box(holder_hole_x-1.5, holder_hole_x+1.5, y-2, y+2, standoff-1, zb+1);  // holder holes
   }
   color("darkgreen", 0.6) {
     box(atx_hdr_x[0], atx_hdr_x[1], -9.7, 12.8, zb, zb+12.6);   // 24-pin right-angle header
@@ -113,9 +118,11 @@ module ghost_zones() {   // volumes that must stay free for plugs and cables
   color("orange", 0.25) {
     box(atx_hdr_x[0]-2, atx_hdr_x[1]+2, -atx_plug_clear, 0, zb-1, zb+26);              // 24-pin plug + cable bend
     box(card_x1-110, card_x1, card_y0, card_y1, card_top, card_top+plug8_clear-0.1);    // 8-pin plug + cable bend
-    box(xg_conn_x[0], xg_conn_x[1], 40, yo1+1, zb, zb+8);                               // micro-coax ribbons out through the +Y wall
+    box(15, xg_conn_x[1], -12, 0, zb-1, zb+7);                                           // taped micro-coax harness along the Y=0 edge
+    box(xo0-10, 30, -25, -3, 4, 24);                                                     // the cable's strain-relief boot, leaving through the rear wall
+    box(atx_hdr_x[0], psu_x1+10, psu_y1+5, psu_y1+33, 3.5, 34);                          // 24-pin and 8-pin bundles lying in the channel, toward the bay
     box(xi0, xb-1, bracket_y0+0.5, bracket_y1-0.5, zb+6.5, tab_z-14);                   // DP/HDMI plugs reaching the bracket
-    box(xo0-6, 10, usbc_y[0]-2.5, usbc_y[1]+2.5, zb-2.5, zb+8.5);                       // USB-C plug
+    box(xo0-6, 10, usbc_y[0]-2.5, usbc_y[1]+2, zb-2.5, zb+8.5);                         // USB-C plug
     box(psu_x1, psu_x1+30, psu_y0, psu_y1, 10, psu_w-5);                                // modular plugs on the PSU
     box(xo0-25, psu_x0, psu_y0+3, psu_y1-3, 6, psu_w-6);                                // IEC plug / switch
   }
@@ -186,6 +193,18 @@ module board_clip(x, side) {   // horizontal cantilever with a chamfered lip hoo
     box(x+14, x+20, min(ye+s*0.3, ye+s*0.3+s*eps), max(ye+s*0.3, ye+s*0.3+s*eps), zb+0.3, zb+1.8);
   }
 }
+module board_clip_rear(y) {   // same clip, hooking over the board's rear edge (x = 0)
+  box(-3.5, -0.3, y, y+4, 0, 8.5);
+  box(-1.5, -0.3, y+4, y+20, 0, 8.3);
+  hull() {
+    box(-0.3, 0.9, y+14, y+20, zb+0.3, zb+0.6);
+    box(-0.3, -0.3+eps, y+14, y+20, zb+0.3, zb+1.8);
+  }
+}
+module cable_saddle(x) {      // U on the floor, open at the top, 30 mm wide: both power cables lie in it side by side
+  for (y = [[psu_y1+1, psu_y1+4], [psu_y1+34, psu_y1+37]]) box(x, x+14, y[0], y[1], 0, 22);
+  box(x, x+14, psu_y1+1, psu_y1+37, 0, 3);
+}
 module cradle_peg_centres() { for (y = [card_y0+7, card_y1-7]) translate([card_x1-9, y, 0]) children(); }
 
 module floor_full() {
@@ -197,8 +216,10 @@ module floor_full() {
         cylinder(d = boss_d, h = standoff - 0.05);
         cylinder(d = hole_d - pin_fit, h = standoff + board_t + 1.0);
       }
-      board_clip(52, +1);  board_clip(186, +1);      // +Y edge: clear of the laptop-cable ribbons (x 77..136)
-      board_clip(100, -1); board_clip(186, -1);      // Y=0 edge: between the power inputs
+      board_clip(52, +1);  board_clip(186, +1);      // +Y edge
+      board_clip(186, -1);                           // Y=0 edge: the only free stretch (header, inputs and the harness take the rest)
+      board_clip_rear(34);                           // rear edge, between the USB-C and the corner
+      cable_saddle(110); cable_saddle(190);          // hold the bottom run of the cable loop in the channel
       // PSU stops: behind the modular face (bottom edge only) and along the plug-zone side
       box(psu_x1+0.5, psu_x1+3.5, psu_y0+6, psu_y1-6, 0, 6);
       box(psu_x0+2, psu_x0+16, psu_y1+0.5, psu_y1+2.5, 0, 6);
@@ -206,6 +227,8 @@ module floor_full() {
     }
     for (p = post_centers()) translate([p[0]-(peg+peg_fit)/2, p[1]-(peg+peg_fit)/2, -floor_t-1]) cube([peg+peg_fit, peg+peg_fit, floor_t+2]);
     cradle_peg_centres() translate([-(peg+peg_fit)/2, -(peg+peg_fit)/2, -floor_t-1]) cube([peg+peg_fit, peg+peg_fit, floor_t+2]);
+    box(foot_slot_x-2.7, foot_slot_x+2.7, 16, board_w+1, -floor_t-1, 1);                        // relief for the bracket's foot
+    for (y = holder_holes_y) box(holder_hole_x-1.5, holder_hole_x+1.5, y-2, y+2, -floor_t-1, 1); // sockets for the holder's pegs
     // cable-tie slots in the cable bay and under the 8-pin route
     for (x = [psu_x1+25, psu_x1+65, psu_x1+105]) for (y = [psu_y0+20, psu_y0+50]) { box(x, x+1.8, y, y+6, -floor_t-1, 1); box(x+8, x+9.8, y, y+6, -floor_t-1, 1); }
   }
@@ -223,8 +246,8 @@ module lid_full() {
   // ribs straddling the card's top edge (front half of the card, clear of the 8-pin plug)
   for (y = [[card_y0-3.5, card_y0-0.5], [card_y1+0.5, card_y1+3.5]]) box(xb+14, xb+64, y[0], y[1], card_top+1, zi1+eps);
   // guides beside the bracket's top end
-  box(xb-6, xb+3,   bracket_y0-4.8, bracket_y0-0.8, tab_z-12, zi1+eps);   // solder side: beside the bracket's edge
-  box(xb-6, xb-0.3, bracket_y1+0.8, bracket_y1+4.8, tab_z-12, zi1+eps);   // component side: in front only (the shroud is behind)
+  box(xb-4.5, xb+3,   bracket_y0-4.8, bracket_y0-0.8, tab_z-12, zi1+eps); // solder side: beside the bracket's edge
+  box(xb-4.5, xb-0.3, bracket_y1+0.8, bracket_y1+4.8, tab_z-12, zi1+eps); // component side: in front only (the shroud is behind)
 }
 
 /* ================= panels ================= */
@@ -258,7 +281,7 @@ module rear_cutters() {
   box(xo0-1, xi0+1, psu_y0+3, psu_y1-3, 3, psu_w-3);                               // PSU rear face (IEC, switch, grille)
   box(xo0-1, xi0+1, usbc_y[0]-3.5, usbc_y[1]+3.5, zb-3, zb+9);                      // USB-C
   box(xo0-1, xi0+1, bracket_y0-1.5, bracket_y1+1.5, zb+6, tab_z-13);                // tunnel to the card's display ports
-  if (xg_exit == "rear" || xg_exit == "both") box(xo0-1, xi0+1, 38, 62, zb-1, zb+9); // laptop cable, rear exit
+  box(xo0-1, xi0+1, xg_exit_y[0], xg_exit_y[1], 3.5, 27);                             // laptop cable and its strain-relief boot
   vents_yz(xo0, xi0, 38, yi1-4, 14, zi1-9);
   vents_yz(xo0, xi0, 2, 38, tab_z-2, zi1-9);
   vents_yz(xo0, xi0, psu_y1+6, -4, 30, zi1-9);                                      // over the 24-pin plug zone
@@ -272,7 +295,6 @@ module left_cutters() {                                                         
 }
 module right_cutters() {                                                            // +Y wall: GPU intake + cable exit
   vents_xz(yi1, yo1, xb-4, card_x1+2, card_z0-2, card_top+2);
-  if (xg_exit == "side" || xg_exit == "both") box(xg_conn_x[0]-6, xg_conn_x[1]+6, yi1-1, yo1+1, 3.5, zb+9);
 }
 
 module panel_rear_l()  { panel_yz(xo0, xi0, yi0+core-slot_d+0.3, y_mid-2.3) rear_cutters(); }
@@ -301,6 +323,18 @@ module cradle() {
   }
   cradle_peg_centres() translate([-peg/2, -peg/2, -(floor_t-0.6)]) cube([peg, peg, floor_t-0.6+eps]);
 }
+
+/* ================= bracket holder: stands in the board's three 3 x 4 holes, the bracket's tab rests on its arm ================= */
+hx0 = holder_hole_x - 4.2;  hx1 = holder_hole_x + 1.3;      // 5.5 mm thick, in front of the bracket plane, under its tab
+module bracket_holder() {
+  z0 = zb + 0.3;
+  box(hx0, hx1, 17.2, 62, z0, z0+4.5);                                // base beam over the three pegs, below the lowest port
+  box(hx0, hx1, 40, 62, z0, tab_z-0.1);                               // column beside the ports
+  box(hx0, hx1, 37, 62, tab_z-30, tab_z-0.1);                         // wider head
+  box(hx0, hx1, 11, 62, tab_z-12, tab_z-0.1);                         // arm: its top face is the seat for the bracket's tab (shim up to touch)
+  for (y = holder_holes_y) box(holder_hole_x-1.3, holder_hole_x+1.3, y-1.8, y+1.8, -(floor_t-0.6), z0+eps);   // pegs through the board into the floor
+}
+module shim(t = 1.0) { difference() { box(0, 5.5, 0, 24, 0, t); } }   // lies on the holder's arm if the tab floats
 
 /* ================= splitting plates into bed-sized pieces (jigsaw tabs) ================= */
 module tab2d() { polygon([[-3,-eps],[3,-eps],[3,1.0],[5.2,2.2],[5.2,6.5],[-5.2,6.5],[-5.2,2.2],[-3,1.0]]); }
@@ -343,9 +377,9 @@ module coupon() {
 }
 
 /* ================= views ================= */
-module structure() { floor_full(); posts(); panels(); lid_full(); cradle(); }
+module structure() { floor_full(); posts(); panels(); lid_full(); cradle(); bracket_holder(); }
 module assembly()  { structure(); ghosts(); }
-module inside()    { floor_full(); posts(); panel_rear_l(); panel_rear_r(); panel_far_l(); panel_far_r(); panel_left_r(); panel_left_f(); cradle(); ghosts(); }   // lid and +Y wall removed
+module inside()    { floor_full(); posts(); panel_rear_l(); panel_rear_r(); panel_far_l(); panel_far_r(); panel_left_r(); panel_left_f(); cradle(); bracket_holder(); ghosts(); }   // lid and +Y wall removed
 module collision() { intersection() { structure(); ghosts_hard(); } }
 
 /* ================= part selector (parts are laid out for printing) ================= */
@@ -377,4 +411,8 @@ else if (part == "panel_right_r") flat_xz(yi1) panel_right_r();
 else if (part == "panel_right_f") flat_xz(yi1) panel_right_f();
 else if (part == "cradle") rotate([0,90,0]) translate([-card_x1, 0, 0]) cradle();   // on its side: the pegs become short horizontal stubs
 else if (part == "coupon") coupon();
+else if (part == "bracket_holder") rotate([0,90,0]) translate([-hx1, 0, 0]) bracket_holder();   // on its side, pegs horizontal
+else if (part == "shim_05") shim(0.5);
+else if (part == "shim_10") shim(1.0);
+else if (part == "shim_15") shim(1.5);
 else echo(str("unknown part: ", part));
