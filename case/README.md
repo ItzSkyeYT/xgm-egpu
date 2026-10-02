@@ -91,7 +91,8 @@ xgm-lite-frame.scad`, then `rsvg-convert -f pdf`.
 
 ## Parts
 
-Rendered STLs are in `stl/`. Re-render after changing parameters with `./render.sh` (all parts) or
+Exact sizes of every part, where each one sits, and the feature dimensions are in
+[`DIMENSIONS.md`](DIMENSIONS.md). Rendered STLs are in `stl/`. Re-render after changing parameters with `./render.sh` (all parts) or
 `./render.sh floor_rr cradle` (some parts); `./render-assembled.sh` rebuilds the in-place set and the 3MF.
 
 | Part | Qty | Size (mm) | Prints | Notes |
