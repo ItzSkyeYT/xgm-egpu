@@ -34,7 +34,7 @@ All numbers in mm, read from the rendered STLs in `stl/` (as laid out for printi
 | `panel_right_r` | 1 | 143.4 | 177.4 | 3.0 | +Y wall, rear part: GPU intake grille |
 | `panel_right_f` | 1 | 106.1 | 177.4 | 3.0 | +Y wall, far part: GPU intake grille |
 | `cradle` | 1 | 54.6 | 49.2 | 18.0 | support under the card's far end |
-| `bracket_holder` | 1 | 119.9 | 51.0 | 5.5 | stands in the board's 3 holes, arm under the bracket tab |
+| `bracket_holder` | 1 | 119.9 | 47.0 | 9.0 | stands in the board's 3 holes, arm under the bracket tab |
 | `shim_05` | as needed | 5.5 | 24.0 | 0.5 | 0.5 mm shim for the holder arm |
 | `shim_10` | as needed | 5.5 | 24.0 | 1.0 | 1.0 mm shim |
 | `shim_15` | as needed | 5.5 | 24.0 | 1.5 | 1.5 mm shim |
@@ -45,7 +45,7 @@ All numbers in mm, read from the rendered STLs in `stl/` (as laid out for printi
 | Part | X | Y | Z |
 |---|---|---|---|
 | board | 0.0 … 220.0 | -9.7 … 65.0 | 7.0 … 23.6 |
-| bracket_holder | 3.0 … 8.5 | 11.0 … 62.0 | -2.4 … 117.5 |
+| bracket_holder | 3.0 … 12.0 | 15.0 … 62.0 | -2.4 … 117.5 |
 | card | 3.5 … 253.7 | 15.4 … 59.6 | 4.8 … 135.9 |
 | cradle | 235.7 … 253.7 | 13.9 … 63.1 | -2.4 … 52.2 |
 | floor_fl | 135.0 … 261.7 | -150.0 … -43.5 | -3.0 … 3.0 |

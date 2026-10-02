@@ -126,7 +126,7 @@ module ghost_zones() {   // volumes that must stay free for plugs and cables
     box(xo0-10, 30, -25, -3, 4, 24);                                                     // the cable's strain-relief boot, leaving through the rear wall
     if (psu_iec_at_far) box(bay_x0, psu_x0+1, -atx_bend_reach-10, psu_y1-8, 7, 34);     // bundles running from the bend to the modular face (above the 6 mm PSU stop)
     else                box(atx_hdr_x[0], psu_x1+10, psu_y1+5, psu_y1+33, 3.5, 34);
-    box(xi0, xb-1, bracket_y0+0.5, bracket_y1-0.5, zb+6.5, tab_z-14);                   // DP/HDMI plugs reaching the bracket
+    box(xi0, xb-1, bracket_y0+0.5, bracket_y1-0.5, zb+6.5, tab_z-5.5);                  // DP/HDMI plugs reaching the bracket (top port ~9 mm under the tab)
     box(xo0-6, 10, usbc_y[0]-2.5, usbc_y[1]+2, zb-2.5, zb+8.5);                         // USB-C plug
     if (psu_iec_at_far) { box(psu_x0-30, psu_x0, psu_y0, psu_y1, 10, psu_w-5); box(psu_x1, xo1+25, psu_y0+3, psu_y1-3, 6, psu_w-6); }
     else                { box(psu_x1, psu_x1+30, psu_y0, psu_y1, 10, psu_w-5); box(xo0-25, psu_x0, psu_y0+3, psu_y1-3, 6, psu_w-6); }
@@ -252,7 +252,7 @@ module lid_full() {
   // ribs straddling the card's top edge (front half of the card, clear of the 8-pin plug)
   for (y = [[card_y0-3.5, card_y0-0.5], [card_y1+0.5, card_y1+3.5]]) box(xb+14, xb+64, y[0], y[1], card_top+1, zi1+eps);
   // guides beside the bracket's top end
-  box(xb-4.5, xb+3,   bracket_y0-4.8, bracket_y0-0.8, tab_z-12, zi1+eps); // solder side: beside the bracket's edge
+  box(xb-4.5, xb+3,   bracket_y0-4.8, bracket_y0-0.8, tab_z-12, zi1+eps); // solder side: beside the bracket's edge (outside the plug zone)
   box(xb-4.5, xb-0.3, bracket_y1+0.8, bracket_y1+4.8, tab_z-12, zi1+eps); // component side: in front only (the shroud is behind)
 }
 
@@ -287,7 +287,7 @@ module rear_cutters() {
   if (psu_iec_at_far) vents_yz(xo0, xi0, psu_y0+4, psu_y1-4, 8, zi1-9);                 // cable bay breathes
   else box(xo0-1, xi0+1, psu_y0+3, psu_y1-3, 3, psu_w-3);                           // PSU rear face (IEC, switch, grille)
   box(xo0-1, xi0+1, usbc_y[0]-3.5, usbc_y[1]+3.5, zb-3, zb+9);                      // USB-C
-  box(xo0-1, xi0+1, bracket_y0-1.5, bracket_y1+1.5, zb+6, tab_z-13);                // tunnel to the card's display ports
+  box(xo0-1, xi0+1, bracket_y0-1.5, bracket_y1+1.5, zb+6, tab_z-4.5);               // opening for the card's display ports, up to just under the tab
   box(xo0-1, xi0+1, xg_exit_y[0], xg_exit_y[1], 3.5, 27);                             // laptop cable and its strain-relief boot
   vents_yz(xo0, xi0, 38, yi1-4, 14, zi1-9);
   vents_yz(xo0, xi0, 2, 38, tab_z-2, zi1-9);
@@ -333,13 +333,15 @@ module cradle() {
 }
 
 /* ================= bracket holder: stands in the board's three 3 x 4 holes, the bracket's tab rests on its arm ================= */
-hx0 = holder_hole_x - 4.2;  hx1 = holder_hole_x + 1.3;      // 5.5 mm thick, in front of the bracket plane, under its tab
+hx0 = holder_hole_x - 4.2;  hx1 = holder_hole_x + 1.3;      // column 5.5 mm thick, in front of the bracket plane
+arm_x1 = xb - 1.7;                                          // the arm reaches to 1.7 mm from the bracket's outer face
+arm_h  = 4.5;                                               // thin: the top display port starts only ~9 mm under the tab
 module bracket_holder() {
   z0 = zb + 0.3;
   box(hx0, hx1, 17.2, 62, z0, z0+4.5);                                // base beam over the three pegs, below the lowest port
   box(hx0, hx1, 40, 62, z0, tab_z-0.1);                               // column beside the ports
   box(hx0, hx1, 37, 62, tab_z-30, tab_z-0.1);                         // wider head
-  box(hx0, hx1, 11, 62, tab_z-12, tab_z-0.1);                         // arm: its top face is the seat for the bracket's tab (shim up to touch)
+  box(hx0, arm_x1, bracket_y0-0.4, 62, tab_z-0.1-arm_h, tab_z-0.1);  // arm: its top face is the seat for the bracket's tab (shim up to touch)
   for (y = holder_holes_y) box(holder_hole_x-1.3, holder_hole_x+1.3, y-1.8, y+1.8, -(floor_t-0.6), z0+eps);   // pegs through the board into the floor
 }
 module shim(t = 1.0) { difference() { box(0, 5.5, 0, 24, 0, t); } }   // lies on the holder's arm if the tab floats
