@@ -160,16 +160,15 @@ module midpost_yz_local(h = zi1) {
 }
 module midpost_xz_local(h = zi1) { rotate([0,0,-90]) mirror([1,0,0]) midpost_yz_local(h); }
 
-module posts() {
-  translate([xi0, yi0, 0]) corner_post_local();
-  translate([xi0, yi1, 0]) mirror([0,1,0]) corner_post_local();
-  translate([xi1, yi0, 0]) mirror([1,0,0]) corner_post_local();
-  translate([xi1, yi1, 0]) mirror([1,0,0]) mirror([0,1,0]) corner_post_local();
-  translate([xi0, y_mid, 0]) midpost_yz_local();
-  translate([xi1, y_mid, 0]) mirror([1,0,0]) midpost_yz_local();
-  translate([x_mid, yi0, 0]) midpost_xz_local();
-  translate([x_mid, yi1, 0]) mirror([0,1,0]) midpost_xz_local();
-}
+module post_corner_rl() { translate([xi0, yi0, 0]) corner_post_local(); }
+module post_corner_rr() { translate([xi0, yi1, 0]) mirror([0,1,0]) corner_post_local(); }
+module post_corner_fl() { translate([xi1, yi0, 0]) mirror([1,0,0]) corner_post_local(); }
+module post_corner_fr() { translate([xi1, yi1, 0]) mirror([1,0,0]) mirror([0,1,0]) corner_post_local(); }
+module post_mid_rear()  { translate([xi0, y_mid, 0]) midpost_yz_local(); }
+module post_mid_far()   { translate([xi1, y_mid, 0]) mirror([1,0,0]) midpost_yz_local(); }
+module post_mid_left()  { translate([x_mid, yi0, 0]) midpost_xz_local(); }
+module post_mid_right() { translate([x_mid, yi1, 0]) mirror([0,1,0]) midpost_xz_local(); }
+module posts() { post_corner_rl(); post_corner_rr(); post_corner_fl(); post_corner_fr(); post_mid_rear(); post_mid_far(); post_mid_left(); post_mid_right(); }
 
 /* ================= lips (floor and lid), broken at the posts ================= */
 module lip_ring(z0, z1, t = 1.5) {
@@ -459,6 +458,35 @@ if (part == "assembly")   assembly();
 else if (part == "structure") structure();          // every printed part in place, one mesh, for 3D viewers
 else if (part == "ghosts")    ghosts_hard();         // board, card, PSU and cable zones, for 3D viewers
 else if (part == "plan_a3")   plan_a3();
+// ---- every part in its assembled position, one per file, for viewers (render-assembled.sh) ----
+else if (part == "asm_floor_rl") floor_rl();
+else if (part == "asm_floor_rr") floor_rr();
+else if (part == "asm_floor_fl") floor_fl();
+else if (part == "asm_floor_fr") floor_fr();
+else if (part == "asm_lid_l") lid_l();
+else if (part == "asm_lid_r") lid_r();
+else if (part == "asm_post_corner_rl") post_corner_rl();
+else if (part == "asm_post_corner_rr") post_corner_rr();
+else if (part == "asm_post_corner_fl") post_corner_fl();
+else if (part == "asm_post_corner_fr") post_corner_fr();
+else if (part == "asm_post_mid_rear") post_mid_rear();
+else if (part == "asm_post_mid_far") post_mid_far();
+else if (part == "asm_post_mid_left") post_mid_left();
+else if (part == "asm_post_mid_right") post_mid_right();
+else if (part == "asm_panel_rear_l") panel_rear_l();
+else if (part == "asm_panel_rear_r") panel_rear_r();
+else if (part == "asm_panel_far_l") panel_far_l();
+else if (part == "asm_panel_far_r") panel_far_r();
+else if (part == "asm_panel_left_r") panel_left_r();
+else if (part == "asm_panel_left_f") panel_left_f();
+else if (part == "asm_panel_right_r") panel_right_r();
+else if (part == "asm_panel_right_f") panel_right_f();
+else if (part == "asm_cradle") cradle();
+else if (part == "asm_bracket_holder") bracket_holder();
+else if (part == "asm_board") ghost_board();
+else if (part == "asm_card") ghost_card();
+else if (part == "asm_psu") ghost_psu();
+else if (part == "asm_zones") ghost_zones();
 else if (part == "plan_a4a")  plan_a4a();
 else if (part == "plan_a4b")  plan_a4b();
 else if (part == "inside") inside();

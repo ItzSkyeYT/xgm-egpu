@@ -80,15 +80,19 @@ xgm-lite-frame.scad`, then `rsvg-convert -f pdf`.
   zoom. In *Window → Customizer* set `part` to `assembly` (everything plus the real parts' volumes:
   board green, card grey, PSU black, plug and cable zones orange), `inside` (lid and intake wall
   removed), or any single part. Turn `vents` off for a faster preview.
-- Any STL viewer or slicer: `stl/_assembly_structure.stl` is every printed part in place as one mesh,
-  `stl/_assembly_ghosts.stl` is the board, card, PSU and cable zones. Drop both files into
-  3dviewer.net or your slicer and they load as two differently coloured objects. On a phone,
-  3dviewer.net works too.
+- **`xgm-lite-frame-assembled.3mf`**: every part in its assembled position as a separate, named,
+  coloured object (28 of them: the 4 floor quarters, 2 lid halves, 8 posts, 8 panels, cradle, holder,
+  plus the board, card, PSU and cable zones). Open it in 3dviewer.net, Bambu Studio, PrusaSlicer or
+  OrcaSlicer and hide a wall or the lid in the object list to look inside. 3dviewer.net works on a
+  phone. The same parts as individual in-place STLs are in `stl/assembled/`.
+- `stl/_assembly_structure.stl` and `stl/_assembly_ghosts.stl`: the same thing as just two meshes
+  (printed parts, and the real parts' volumes), for viewers that only take STL.
+- For printing, use `stl/<part>.stl`: one file per part, each already laid flat for the bed.
 
 ## Parts
 
 Rendered STLs are in `stl/`. Re-render after changing parameters with `./render.sh` (all parts) or
-`./render.sh floor_rr cradle` (some parts).
+`./render.sh floor_rr cradle` (some parts); `./render-assembled.sh` rebuilds the in-place set and the 3MF.
 
 | Part | Qty | Size (mm) | Prints | Notes |
 |---|---|---|---|---|
