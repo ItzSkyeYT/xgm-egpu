@@ -242,8 +242,10 @@ module floor_full() {
 module lid_full() {
   difference() {
     box(xp0, xp1, yp0, yp1, zi1, zi1+lid_t);
-    if (vents) for (p = grid(xb-4, card_x1+2, card_y0-4, yi1-3, vent_w, vent_pitch, vent_h, vent_row))
-      box(p[0], p[0]+vent_w, p[1], p[1]+vent_h, zi1-1, zi1+lid_t+1);
+    // vents over the card, but never within 3 mm of a jigsaw slot: keep clear of both seams
+    if (vents) for (p = grid(xb-4, card_x1+2, card_y0-4, yi1-5, vent_w, vent_pitch, vent_h, vent_row))
+      if (!(p[0]+vent_w > x_seam-4 && p[0] < x_seam+10) && !(p[1]+vent_h > y_seam-4 && p[1] < y_seam+10))
+        box(p[0], p[0]+vent_w, p[1], p[1]+vent_h, zi1-1, zi1+lid_t+1);
   }
   lip_ring(zi1-4, zi1);
   for (p = post_centers()) translate([p[0]-peg/2, p[1]-peg/2, zi1-3.6]) cube([peg, peg, 3.6+eps]);
