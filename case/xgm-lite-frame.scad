@@ -31,13 +31,16 @@ gpu_backplate = 2.5;                                       // backplate + gap on
 bracket_to_a1 = pcie_a1_x - foot_slot_x;                   // 47.45: bracket plane = the board's foot slot (CEM Fig 9-1 gives 47.8)
 bracket_w = 18.42;  bracket_t = 0.86;
 bracket_margin = 5.3;                                      // card PCB plane -> solder-side edge of the bracket
-card_seat = 1.82;                                          // finger bottom above the board surface when fully seated (ATX: 106.68 - 104.86)
-card_bottom_clear = 6.5;                                   // MEASURE: board surface -> lowest point of the card near its far end
-tab_above_board = 106.7;                                   // MEASURE: board surface -> underside of the bracket's top tab (CEM: 104.86 + card_seat)
+card_seat = 4.1;                                           // finger bottom above the board surface: measured tab height 109.0 minus CEM 104.86
+card_bottom_clear = 18.9;                                  // MEASURED: board surface -> lowest point of the card near its far end
+tab_above_board = 109.0;                                   // MEASURED: board surface -> underside of the bracket's top tab
+foot_below_board = 9.7;                                    // MEASURED: the bracket's foot reaches this far below the board's top surface
 plug8_clear = 42;                                          // room above the card for a straight 8-pin plug and a stiff sleeved cable
 
 psu_l = 160;  psu_w = 150;  psu_h = 86;                    // ATX PSU: length (rear -> modular face), width (fan face), height
-atx_plug_clear = 65;                                       // from the board's Y=0 edge: 24-pin plug body (24) + a 40 mm bend of a sleeved bundle
+atx_plug_clear = 48;                                       // from the board's Y=0 edge: 24-pin plug body + the start of its bend; the rest of the bend is in the cable bay
+atx_bend_reach = 92;                                       // MEASURED 86.8 + margin: how far from the board edge the sleeved bundle's bend reaches
+psu_iec_at_far = true;                                     // PSU turned end-for-end: IEC inlet in the far wall, modular face toward the rear, bay beside the 24-pin
 psu_wall_gap = 11;                                         // PSU fan face -> wall (keeps the corner and mid posts clear of the PSU)
 
 /* ---------- Frame ---------- */
@@ -49,7 +52,7 @@ slot_fit = 0.4;       // panel thickness clearance in the post slots
 peg_fit = 0.4;        // square pegs (posts, lid, cradle)
 pin_fit = 0.3;        // board pegs vs the O3.2 holes (on diameter)
 tab_fit = 0.2;        // jigsaw tabs between floor / lid pieces (per side)
-standoff = 5;         // board underside above the floor (through-hole pins need ~3)
+standoff = 7;         // board underside above the floor (the bracket foot reaches 9.7 below the board top: it ends inside the floor's slot)
 boss_d = 7;
 gap_y = 11;           // board +Y edge -> wall (room for the edge clips and the corner post)
 x_mid = 145;  y_mid = -40;      // mid posts (panels split here)
@@ -74,7 +77,8 @@ psu_y1   = -atx_plug_clear;  psu_y0 = psu_y1 - psu_h;
 xi0 = -4;  xi1 = card_x1 + 3;
 yi0 = psu_y0 - psu_wall_gap;  yi1 = board_w + gap_y;
 zi1 = card_top + plug8_clear;                // interior height = lid underside
-psu_x0 = xi0 + core + 1;  psu_x1 = psu_x0 + psu_l;
+psu_x0 = psu_iec_at_far ? xi1 - core - 1 - psu_l : xi0 + core + 1;  psu_x1 = psu_x0 + psu_l;
+bay_x0 = psu_iec_at_far ? xi0 + 4 : psu_x1 + 4;  bay_x1 = psu_iec_at_far ? psu_x0 - 4 : xi1 - 4;   // cable bay, along X
 xo0 = xi0 - wall;  xo1 = xi1 + wall;  yo0 = yi0 - wall;  yo1 = yi1 + wall;     // panel exterior
 xp0 = xo0 - lip;   xp1 = xo1 + lip;   yp0 = yo0 - lip;   yp1 = yo1 + lip;      // post / floor / lid outline
 slot_w = wall + slot_fit;
@@ -83,7 +87,7 @@ peg = 6;
 
 echo(str("interior ", xi1-xi0, " x ", yi1-yi0, " x ", zi1, " mm; outside ", xp1-xp0, " x ", yp1-yp0, " x ", zi1+floor_t+lid_t, " mm"));
 echo(str("card: x ", xb, "..", card_x1, "  y ", card_y0, "..", card_y1, "  z ", card_z0, "..", card_top, "  bracket->A1 ", bracket_to_a1));
-echo(str("PSU: x ", psu_x0, "..", psu_x1, "  y ", psu_y0, "..", psu_y1, "  z 0..", psu_w));
+echo(str("PSU: x ", psu_x0, "..", psu_x1, "  y ", psu_y0, "..", psu_y1, "  z 0..", psu_w, "  bay x ", bay_x0, "..", bay_x1, "  foot bottom z ", zb - foot_below_board));
 
 module box(x0,x1,y0,y1,z0,z1) { translate([x0,y0,z0]) cube([x1-x0, y1-y0, z1-z0]); }
 
@@ -116,15 +120,16 @@ module ghost_card() {
 module ghost_psu() { color("black", 0.35) box(psu_x0, psu_x1, psu_y0, psu_y1, 0.05, psu_w); }
 module ghost_zones() {   // volumes that must stay free for plugs and cables
   color("orange", 0.25) {
-    box(atx_hdr_x[0]-2, atx_hdr_x[1]+2, -atx_plug_clear, 0, zb-1, zb+26);              // 24-pin plug + cable bend
+    box(atx_hdr_x[0]-2, atx_hdr_x[1]+2, -atx_bend_reach, 0, zb-1, zb+28);              // 24-pin plug + the whole bend (reaches into the bay)
     box(card_x1-110, card_x1, card_y0, card_y1, card_top, card_top+plug8_clear-0.1);    // 8-pin plug + cable bend
     box(15, xg_conn_x[1], -12, 0, zb-1, zb+7);                                           // taped micro-coax harness along the Y=0 edge
     box(xo0-10, 30, -25, -3, 4, 24);                                                     // the cable's strain-relief boot, leaving through the rear wall
-    box(atx_hdr_x[0], psu_x1+10, psu_y1+5, psu_y1+33, 3.5, 34);                          // 24-pin and 8-pin bundles lying in the channel, toward the bay
+    if (psu_iec_at_far) box(bay_x0, psu_x0+1, -atx_bend_reach-10, psu_y1-8, 7, 34);     // bundles running from the bend to the modular face (above the 6 mm PSU stop)
+    else                box(atx_hdr_x[0], psu_x1+10, psu_y1+5, psu_y1+33, 3.5, 34);
     box(xi0, xb-1, bracket_y0+0.5, bracket_y1-0.5, zb+6.5, tab_z-14);                   // DP/HDMI plugs reaching the bracket
     box(xo0-6, 10, usbc_y[0]-2.5, usbc_y[1]+2, zb-2.5, zb+8.5);                         // USB-C plug
-    box(psu_x1, psu_x1+30, psu_y0, psu_y1, 10, psu_w-5);                                // modular plugs on the PSU
-    box(xo0-25, psu_x0, psu_y0+3, psu_y1-3, 6, psu_w-6);                                // IEC plug / switch
+    if (psu_iec_at_far) { box(psu_x0-30, psu_x0, psu_y0, psu_y1, 10, psu_w-5); box(psu_x1, xo1+25, psu_y0+3, psu_y1-3, 6, psu_w-6); }
+    else                { box(psu_x1, psu_x1+30, psu_y0, psu_y1, 10, psu_w-5); box(xo0-25, psu_x0, psu_y0+3, psu_y1-3, 6, psu_w-6); }
   }
 }
 module ghosts()      { ghost_board(); ghost_card(); ghost_psu(); ghost_zones(); }
@@ -218,9 +223,9 @@ module floor_full() {
       board_clip(52, +1);  board_clip(186, +1);      // +Y edge
       board_clip(186, -1);                           // Y=0 edge: the only free stretch (header, inputs and the harness take the rest)
       board_clip_rear(34);                           // rear edge, between the USB-C and the corner
-      cable_saddle(110); cable_saddle(190);          // hold the bottom run of the cable loop in the channel
-      // PSU stops: behind the modular face (bottom edge only) and along the plug-zone side
-      box(psu_x1+0.5, psu_x1+3.5, psu_y0+6, psu_y1-6, 0, 6);
+      // PSU stops: in front of the modular face (bottom edge only) and along the plug-zone side
+      if (psu_iec_at_far) box(psu_x0-3.5, psu_x0-0.5, psu_y0+6, psu_y1-6, 0, 6);
+      else                box(psu_x1+0.5, psu_x1+3.5, psu_y0+6, psu_y1-6, 0, 6);
       box(psu_x0+2, psu_x0+16, psu_y1+0.5, psu_y1+2.5, 0, 6);
       box(psu_x0+110, psu_x0+130, psu_y1+0.5, psu_y1+2.5, 0, 6);
     }
@@ -228,8 +233,8 @@ module floor_full() {
     cradle_peg_centres() translate([-(peg+peg_fit)/2, -(peg+peg_fit)/2, -floor_t-1]) cube([peg+peg_fit, peg+peg_fit, floor_t+2]);
     box(foot_slot_x-2.7, foot_slot_x+2.7, 16, board_w+1, -floor_t-1, 1);                        // relief for the bracket's foot
     for (y = holder_holes_y) box(holder_hole_x-1.5, holder_hole_x+1.5, y-2, y+2, -floor_t-1, 1); // sockets for the holder's pegs
-    // cable-tie slots in the cable bay and under the 8-pin route
-    for (x = [psu_x1+25, psu_x1+65, psu_x1+105]) for (y = [psu_y0+20, psu_y0+50]) { box(x, x+1.8, y, y+6, -floor_t-1, 1); box(x+8, x+9.8, y, y+6, -floor_t-1, 1); }
+    // cable-tie slots in the cable bay
+    for (x = [bay_x0+10, (bay_x0+bay_x1)/2-5, bay_x1-20]) for (y = [psu_y0+20, psu_y0+55]) { box(x, x+1.8, y, y+6, -floor_t-1, 1); box(x+8, x+9.8, y, y+6, -floor_t-1, 1); }
   }
 }
 
@@ -277,7 +282,8 @@ module vents_xz(y0, y1, x0, x1, z0, z1) { if (vents) for (p = grid(x0, x1, z0, z
 
 // rear wall (x in [xo0, xi0]) — cutters are world-coordinate solids
 module rear_cutters() {
-  box(xo0-1, xi0+1, psu_y0+3, psu_y1-3, 3, psu_w-3);                               // PSU rear face (IEC, switch, grille)
+  if (psu_iec_at_far) vents_yz(xo0, xi0, psu_y0+4, psu_y1-4, 8, zi1-9);                 // cable bay breathes
+  else box(xo0-1, xi0+1, psu_y0+3, psu_y1-3, 3, psu_w-3);                           // PSU rear face (IEC, switch, grille)
   box(xo0-1, xi0+1, usbc_y[0]-3.5, usbc_y[1]+3.5, zb-3, zb+9);                      // USB-C
   box(xo0-1, xi0+1, bracket_y0-1.5, bracket_y1+1.5, zb+6, tab_z-13);                // tunnel to the card's display ports
   box(xo0-1, xi0+1, xg_exit_y[0], xg_exit_y[1], 3.5, 27);                             // laptop cable and its strain-relief boot
@@ -287,7 +293,8 @@ module rear_cutters() {
 }
 module far_cutters() {
   vents_yz(xi1, xo1, card_y0-8, yi1-4, 8, zi1-9);                                   // GPU exhaust
-  vents_yz(xi1, xo1, yi0+4, psu_y1-4, 8, zi1-9);                                    // cable bay breathes too
+  if (psu_iec_at_far) box(xi1-1, xo1+1, psu_y0+3, psu_y1-3, 3, psu_w-3);               // PSU rear face (IEC, switch, grille)
+  else vents_yz(xi1, xo1, yi0+4, psu_y1-4, 8, zi1-9);                                // cable bay breathes too
 }
 module left_cutters() {                                                             // -Y wall: PSU intake
   vents_xz(yo0, yi0, psu_x0+2, psu_x1-4, 4, psu_w-4);
@@ -402,24 +409,24 @@ module plan2d() {
   // PSU, plug zone, saddles
   rect_o(psu_x0, psu_x1, psu_y0, psu_y1, 0.5);
   rect_o(atx_hdr_x[0]-2, atx_hdr_x[1]+2, -atx_plug_clear, 0, 0.25);
-  for (x = [110, 190]) rect_o(x, x+14, psu_y1+1, psu_y1+37, 0.3);
+  if (!psu_iec_at_far) for (x = [110, 190]) rect_o(x, x+14, psu_y1+1, psu_y1+37, 0.3);
   // openings in the rear wall, drawn as thick ticks on the wall line
   ln(xo0, usbc_y[0]-3.5, xo0, usbc_y[1]+3.5, 1.5);
   ln(xo0, bracket_y0-1.5, xo0, bracket_y1+1.5, 1.5);
   ln(xo0, xg_exit_y[0], xo0, xg_exit_y[1], 1.5);
-  ln(xo0, psu_y0+3, xo0, psu_y1-3, 1.5);
+  if (psu_iec_at_far) ln(xo1, psu_y0+3, xo1, psu_y1-3, 1.5); else ln(xo0, psu_y0+3, xo0, psu_y1-3, 1.5);
   // labels
   lbl(xb+30, card_y0+16, "GPU footprint (fans face +Y, this way ->)", 3.2);
   lbl(xb+30, card_y0+6, str("bracket plane x = ", xb, "   card ", gpu_len, " x ", gpu_w), 2.8);
   lbl(60, 40, "board 220 x 65, five pegs", 3);
   lbl(psu_x0+10, psu_y0+40, str("PSU on its side  ", psu_l, " x ", psu_w, " x ", psu_h, "  (fan -> -Y wall, IEC -> rear)"), 3.2);
-  lbl(psu_x0+10, psu_y0+30, "modular face ->", 3);
-  lbl(psu_x1+8, psu_y0+70, "cable bay", 3.2, 90);
+  lbl(psu_x0+10, psu_y0+30, psu_iec_at_far ? "<- modular face      IEC inlet at the far wall ->" : "modular face ->", 3);
+  lbl((bay_x0+bay_x1)/2-6, psu_y0+70, "cable bay", 3.2, 90);
   lbl(100, -40, "cable channel: 24-pin + 8-pin lie here as one loop", 3);
   lbl(atx_hdr_x[0]+2, -22, "24-pin plug + bend", 2.6);
   lbl(card_x1-16, card_y1+6, "cradle", 2.6);
   lbl(hx1+2, 50, "holder", 2.6, 90);
-  lbl(xo0+2, -60, "rear wall: PSU opening", 2.6, 90);
+  lbl(xo0+2, -60, psu_iec_at_far ? "rear wall: vents over the bay" : "rear wall: PSU opening", 2.6, 90);
   lbl(xo0+2, -31, "cable exit", 2.6, 90);
   lbl(xo0+2, 14, "ports", 2.6, 90);
   lbl(xo0-9, 2, "USB-C", 2.6, 90);
