@@ -136,7 +136,8 @@ grand = sum(totals.values())
 md = f"""# XGM Lite frame · print pack
 
 A print-only case for the **XG Mobile Station Lite** board, an **Inno3D RTX 3060 Twin X2 OC** and a
-**Corsair RM850**. No screws, glue or adapters: everything pegs, clips and slides together.
+**Corsair RM850**. No glue: the parts peg, slot and slide together, and the board and the lid are held
+by M3 screws in heat-set inserts.
 
 ![The finished case](img/case.png)
 
@@ -160,7 +161,7 @@ A print-only case for the **XG Mobile Station Lite** board, an **Inno3D RTX 3060
 | Stage | Folder | What it proves | Plastic |
 |:-:|---|---|--:|
 | 1 | [`1-tests`](1-tests/) | your printer's fits, the real plugs in the real openings, the grommet clip, the insert holes | {grams(totals['1-tests'])} |
-| 2 | [`2-board-and-card`](2-board-and-card/) | the board on its pegs and clips, the card on its two supports | {grams(totals['2-board-and-card'])} |
+| 2 | [`2-board-and-card`](2-board-and-card/) | the board screwed down on its five inserts, the card on its two supports | {grams(totals['2-board-and-card'])} |
 | 3 | [`3-structure-sample`](3-structure-sample/) | full-height posts, and a wall in its slots | {grams(totals['3-structure-sample'])} |
 | 4 | [`4-final`](4-final/) | the rest of the box | {grams(totals['4-final'])} |
 
