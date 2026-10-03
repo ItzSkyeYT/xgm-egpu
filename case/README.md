@@ -2,9 +2,11 @@
 
 `xgm-lite-frame.scad` is a parametric OpenSCAD enclosure for an **XG Mobile Station Lite** board
 (osy's open-source XG Mobile dock, "Lite" variant), a **desktop graphics card** and an **ATX power
-supply**. It needs no screws, threaded inserts, glue, magnets or 90° power adapters: the board sits on
-printed pegs, the panels slide into printed posts, the lid pegs into the posts, the PSU is held by its
-own weight and a few stops, and the card is held by the PCIe slot plus a printed cradle under its far end.
+supply**. It needs no glue, magnets or 90° power adapters. Screws are optional: by default five M3
+screws in heat-set inserts hold the board and four hold the lid (`use_inserts = false` gives the
+print-only version, with pegs and snap clips instead). The panels slide into printed posts, the PSU is
+held by its own weight and a few stops, and the card is held by the PCIe slot plus a printed cradle
+under its far end.
 
 The defaults are the parts it was drawn around:
 
@@ -107,7 +109,7 @@ Exact sizes of every part, where each one sits, and the feature dimensions are i
 
 | Part | Qty | Size (mm) | Prints | Notes |
 |---|---|---|---|---|
-| `floor_rl`, `floor_rr`, `floor_fl`, `floor_fr` | 1 each | ≤ 151 × 144 × 25 | flat, as exported | the four floor quarters; jigsaw tabs join them. `floor_rr` carries the board pegs, the clips, the foot relief and the holder sockets; `floor_rl` the two cable saddles |
+| `floor_rl`, `floor_rr`, `floor_fl`, `floor_fr` | 1 each | ≤ 151 × 144 × 25 | flat, as exported | the four floor quarters; jigsaw tabs join them. `floor_rr` (three) and `floor_fr` (two) carry the board bosses with their inserts; `floor_rr` also the foot relief, the holder sockets and the grommet clip |
 | `lid_l`, `lid_r` | 1 each | ≤ 151 × 244 × 75 | upside down, as exported | two-piece lid (needs a 250 mm bed). For smaller beds print `lid_rl`, `lid_rr`, `lid_fl`, `lid_fr` instead (≤ 151 × 144) |
 | `post_corner` | 4 | 15 × 15 × 180 | upright, as exported (socket on the bed, peg up) | identical; mirrors are the same part |
 | `post_mid` | 4 | 15 × 14 × 180 | upright | one per wall, where the panels split |
@@ -119,6 +121,7 @@ Exact sizes of every part, where each one sits, and the feature dimensions are i
 | `coupon` | 1 file, 2 pieces | 60 × 82 × 9 | flat | fit test: the two pieces are tested against each other |
 | `coupon_rear` | 1 | 58 × 89 × 3 | flat | bottom of the rear wall: laptop-cable notch, USB-C hole, bottom of the port window |
 | `coupon_grommet` | 1 file, 3 pieces | 54 × 24 × 19 | flat | three grommet clips, slots 10.5 / 11.5 / 12.5: the one that grips sets `grommet_slot` |
+| `coupon_inserts` | 1 | 52 × 17 × 9 | flat | three board bosses, insert holes 3.8 / 4.0 / 4.2: the one that takes an insert cleanly sets `insert_hole` |
 | `_assembly_structure`, `_assembly_ghosts` | — | — | not for printing | the whole thing, for viewers |
 
 Roughly 1.1 to 1.3 kg of PETG depending on infill. Every part fits a 180 × 180 mm bed except the
@@ -133,10 +136,11 @@ Everything to take to a printer is in [`print-pack/`](print-pack/), one folder p
 [README](print-pack/README.md): settings, a picture of each stage, what it checks, and a pass checklist.
 In short:
 
-1. **Tests**: `coupon` (two pieces), `coupon_rear` and `coupon_grommet`, about 25 g. Your printer's
-   fits, the real plugs in the real openings, and which clip grips the cable's grommet.
-2. **Board and card**: `floor_rr`, `floor_fr`, `bracket_holder`, `cradle` and the shims. The board on
-   its five pegs and five clips, the card on the holder and the cradle.
+1. **Tests**: `coupon` (two pieces), `coupon_rear`, `coupon_grommet` and `coupon_inserts`, about 30 g.
+   Your printer's fits, the real plugs in the real openings, which clip grips the cable's grommet, and
+   which hole takes the heat-set inserts.
+2. **Board and card**: `floor_rr`, `floor_fr`, `bracket_holder`, `cradle` and the shims. The board
+   screwed down on its five bosses, the card on the holder and the cradle.
 3. **Structure sample**: one `post_corner`, one `post_mid`, `panel_rear_r`. Full-height posts, a wall
    in its slots, and the wall's notch over the laptop cable.
 4. **The rest.**
@@ -146,23 +150,27 @@ model.
 
 ## Assembly
 
-1. Join the four floor quarters (press the jigsaw tabs down into their slots).
-2. Push the eight posts into the square holes in the floor. Corner posts have two slots at 90°, mid
+1. Heat-set inserts first, while the parts are loose: five into the round board bosses (three on
+   `floor_rr`, two on `floor_fr`) and one into the top end of each of the four corner posts. A soldering
+   iron at about 230 °C, pressed straight down until the insert sits flush.
+2. Join the four floor quarters (press the jigsaw tabs down into their slots).
+3. Push the eight posts into the square holes in the floor. Corner posts have two slots at 90°, mid
    posts two slots in line.
-3. Board on its pegs; press down until the five edge clips snap over the edges. Bracket holder into
-   its three holes.
-4. PSU on its side, fan toward the outer wall on the PSU side, IEC inlet toward the far wall, slid
+4. Board on its five bosses, screwed down with five M3×8 socket-head screws (M3×6 also works; nothing
+   longer than 8, or the tips reach the floor). Bracket holder into its three holes.
+5. PSU on its side, fan toward the outer wall on the PSU side, IEC inlet toward the far wall, slid
    forward against the stops.
-5. Card into the slot: foot in the board's slot, tab on the holder's arm, far end on the cradle. Then
+6. Card into the slot: foot in the board's slot, tab on the holder's arm, far end on the cradle. Then
    the 24-pin (its bundle leaves the plug, bends inside the bay and reaches the modular face; the spare
    length lies in the bay as one loop), the 8-pin over the top of the card into the same bay. Press
    the laptop cable's grommet down into the clip beside the board, the clip's thin wall going into the
    gap between the grommet's round disc and square plate, and lay the thick cable toward the rear corner.
-6. Slide the eight panels down into the post slots. The panel with the big opening is the far wall on
+7. Slide the eight panels down into the post slots. The panel with the big opening is the far wall on
    the PSU side. The board-side rear panel goes down over the laptop cable: its bottom notch straddles
    the cable.
-7. Lid: the pegs drop into the posts, the two ribs straddle the card's top edge and the two guides
-   straddle the top of the bracket.
+8. Lid: the mid-post pegs drop into their posts, the two ribs straddle the card's top edge and the two
+   guides straddle the top of the bracket. Four M3×8 or M3×10 screws go through the lid's corners into
+   the corner posts.
 
 Tie points: there are pairs of slots in the floor of the cable bay for zip ties, if you have them. The
 box is lifted by its floor, not by the lid.

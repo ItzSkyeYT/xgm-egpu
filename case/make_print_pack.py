@@ -9,7 +9,7 @@ DEST = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.path.join(HERE,
 
 # (file, quantity shown, copies printed)
 STAGES = [
-    ('1-tests', 'Tests', [('coupon', '1 file, 2 pieces', 1), ('coupon_rear', '1', 1), ('coupon_grommet', '1 file, 3 pieces', 1)]),
+    ('1-tests', 'Tests', [('coupon', '1 file, 2 pieces', 1), ('coupon_rear', '1', 1), ('coupon_grommet', '1 file, 3 pieces', 1), ('coupon_inserts', '1', 1)]),
     ('2-board-and-card', 'Board and card', [('floor_rr', '1', 1), ('floor_fr', '1', 1), ('bracket_holder', '1', 1),
                                             ('cradle', '1', 1), ('shim_05', '1', 1), ('shim_10', '1', 1), ('shim_15', '1', 1)]),
     ('3-structure-sample', 'Structure sample', [('post_corner', '1', 1), ('post_mid', '1', 1), ('panel_rear_r', '1', 1)]),
@@ -120,7 +120,7 @@ A print-only case for the **XG Mobile Station Lite** board, an **Inno3D RTX 3060
 
 | Stage | Folder | What it proves | Plastic |
 |:-:|---|---|--:|
-| 1 | [`1-tests`](1-tests/) | your printer's fits, the real plugs in the real openings, the cable grommet's clip | {grams(totals['1-tests'])} |
+| 1 | [`1-tests`](1-tests/) | your printer's fits, the real plugs in the real openings, the grommet clip, the insert holes | {grams(totals['1-tests'])} |
 | 2 | [`2-board-and-card`](2-board-and-card/) | the board on its pegs and clips, the card on its two supports | {grams(totals['2-board-and-card'])} |
 | 3 | [`3-structure-sample`](3-structure-sample/) | full-height posts, and a wall in its slots | {grams(totals['3-structure-sample'])} |
 | 4 | [`4-final`](4-final/) | the rest of the box | {grams(totals['4-final'])} |
@@ -155,6 +155,12 @@ and the rubber neck clicks down into the slot.
 
 - [ ] One of the three holds the grommet firmly: pushing it in takes a little force, it doesn't fall out, and the rubber isn't badly squashed. *Tell me which number.*
 
+**coupon_inserts** has three bosses like the ones that hold the board, with holes of 3.8, 4.0 and
+4.2 mm. Melt one M3×5×4.5 insert into each with a soldering iron at about 230 °C, pressing straight
+down until it sits flush, then let it cool.
+
+- [ ] One of the three takes its insert straight and flush, and an M3 screw tightens into it firmly without the insert turning. *Tell me which number.*
+
 **If something fails:** note which fit binds or rattles, or which clip held the grommet best. One
 number changes in the model, and only the coupon is reprinted.
 
@@ -167,8 +173,8 @@ number changes in the model, and only the coupon is reprinted.
 {table(STAGES[1][2])}
 
 - [ ] The two floor pieces press together on their jigsaw tabs and lie flat on the table.
-- [ ] The bare board drops onto its five pegs and sits flat on the round bosses.
-- [ ] The five clips snap over the board's edges.
+- [ ] The five inserts are melted into the round bosses, straight and flush: three on `floor_rr`, two on `floor_fr`.
+- [ ] The bare board sits flat on the five bosses, and five M3×8 screws pull it down without rocking. M3×6 also works; nothing longer than 8.
 - [ ] The holder's three pegs go down through the board's three small holes, into the floor.
 - [ ] With the card plugged in, the bracket's foot sits in the board's slot.
 - [ ] The bracket's top tab rests on the holder's arm, or floats a hair above it. Slide shims under it until it touches.
@@ -176,7 +182,7 @@ number changes in the model, and only the coupon is reprinted.
 
 **If something fails:**
 
-- *The pegs don't meet the holes:* stop and send a photo. The board isn't what its design file says.
+- *The bosses don't meet the board's holes:* stop and send a photo. The board isn't what its design file says.
 - *The tab is more than 2 mm off the arm:* re-measure the tab height. Only the holder is reprinted.
 - *The cradle lifts the card, or there's daylight under it:* re-measure the card's lowest point. Only the cradle is reprinted.
 
@@ -192,9 +198,10 @@ These go on the floor from stage 2: the corner post at the board's rear corner, 
 middle of the rear edge, and the wall between them.
 
 - [ ] The posts came out clean at full height, with no wobble or shifted layers near the top.
+- [ ] The corner post takes an insert in its top end, straight and flush.
 - [ ] Each post's peg drops into its square hole in the floor, and the post stands upright on its own.
 - [ ] The wall slides down into both posts' slots, all the way to the floor.
-- [ ] The wall's bottom notch drops over the laptop cable at the boot.
+- [ ] The wall's bottom notch drops over the thick laptop cable.
 
 ---
 
@@ -203,6 +210,9 @@ middle of the rear edge, and the wall between them.
 ![Stage 4 on the bed](img/stage-4.png)
 
 {table(STAGES[3][2])}
+
+**Screws:** melt an insert into the top end of each of the other three corner posts. The lid is held by
+four M3×8 or M3×10 screws through its corners.
 
 **On a bed under 250 mm**, print the four files in [`4-final/{SUBDIR_LIDQ}`](4-final/{SUBDIR_LIDQ}/)
 instead of `lid_l` and `lid_r`.

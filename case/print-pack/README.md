@@ -24,7 +24,7 @@ A print-only case for the **XG Mobile Station Lite** board, an **Inno3D RTX 3060
 
 | Stage | Folder | What it proves | Plastic |
 |:-:|---|---|--:|
-| 1 | [`1-tests`](1-tests/) | your printer's fits, the real plugs in the real openings, the cable grommet's clip | ≈ 25 g |
+| 1 | [`1-tests`](1-tests/) | your printer's fits, the real plugs in the real openings, the grommet clip, the insert holes | ≈ 30 g |
 | 2 | [`2-board-and-card`](2-board-and-card/) | the board on its pegs and clips, the card on its two supports | ≈ 185 g |
 | 3 | [`3-structure-sample`](3-structure-sample/) | full-height posts, and a wall in its slots | ≈ 100 g |
 | 4 | [`4-final`](4-final/) | the rest of the box | ≈ 830 g |
@@ -43,6 +43,7 @@ are throwaway: everything else ends up in the finished case. About **1140 g** of
 | `coupon.stl` | 1 file, 2 pieces | 60 × 82 × 9 | ≈ 10 g |
 | `coupon_rear.stl` | 1 | 58 × 89 × 3 | ≈ 10 g |
 | `coupon_grommet.stl` | 1 file, 3 pieces | 54 × 24 × 19 | ≈ 3 g |
+| `coupon_inserts.stl` | 1 | 52 × 17 × 9 | ≈ 3 g |
 
 **coupon** holds two identical pieces that you test against each other. Each fit should go together
 by hand and stay put: neither forced nor loose.
@@ -63,6 +64,12 @@ and the rubber neck clicks down into the slot.
 
 - [ ] One of the three holds the grommet firmly: pushing it in takes a little force, it doesn't fall out, and the rubber isn't badly squashed. *Tell me which number.*
 
+**coupon_inserts** has three bosses like the ones that hold the board, with holes of 3.8, 4.0 and
+4.2 mm. Melt one M3×5×4.5 insert into each with a soldering iron at about 230 °C, pressing straight
+down until it sits flush, then let it cool.
+
+- [ ] One of the three takes its insert straight and flush, and an M3 screw tightens into it firmly without the insert turning. *Tell me which number.*
+
 **If something fails:** note which fit binds or rattles, or which clip held the grommet best. One
 number changes in the model, and only the coupon is reprinted.
 
@@ -74,8 +81,8 @@ number changes in the model, and only the coupon is reprinted.
 
 | File | Qty | Size (mm) | Plastic |
 |---|:-:|---|--:|
-| `floor_rr.stl` | 1 | 150 × 144 × 19 | ≈ 75 g |
-| `floor_fr.stl` | 1 | 127 × 144 × 13 | ≈ 65 g |
+| `floor_rr.stl` | 1 | 150 × 144 × 19 | ≈ 70 g |
+| `floor_fr.stl` | 1 | 127 × 144 × 9.9 | ≈ 65 g |
 | `bracket_holder.stl` | 1 | 120 × 46 × 9 | ≈ 20 g |
 | `cradle.stl` | 1 | 55 × 49 × 18 | ≈ 30 g |
 | `shim_05.stl` | 1 | 5.5 × 24 × 0.5 | ≈ 1 g |
@@ -83,8 +90,8 @@ number changes in the model, and only the coupon is reprinted.
 | `shim_15.stl` | 1 | 5.5 × 24 × 1.5 | ≈ 1 g |
 
 - [ ] The two floor pieces press together on their jigsaw tabs and lie flat on the table.
-- [ ] The bare board drops onto its five pegs and sits flat on the round bosses.
-- [ ] The five clips snap over the board's edges.
+- [ ] The five inserts are melted into the round bosses, straight and flush: three on `floor_rr`, two on `floor_fr`.
+- [ ] The bare board sits flat on the five bosses, and five M3×8 screws pull it down without rocking. M3×6 also works; nothing longer than 8.
 - [ ] The holder's three pegs go down through the board's three small holes, into the floor.
 - [ ] With the card plugged in, the bracket's foot sits in the board's slot.
 - [ ] The bracket's top tab rests on the holder's arm, or floats a hair above it. Slide shims under it until it touches.
@@ -92,7 +99,7 @@ number changes in the model, and only the coupon is reprinted.
 
 **If something fails:**
 
-- *The pegs don't meet the holes:* stop and send a photo. The board isn't what its design file says.
+- *The bosses don't meet the board's holes:* stop and send a photo. The board isn't what its design file says.
 - *The tab is more than 2 mm off the arm:* re-measure the tab height. Only the holder is reprinted.
 - *The cradle lifts the card, or there's daylight under it:* re-measure the card's lowest point. Only the cradle is reprinted.
 
@@ -112,9 +119,10 @@ These go on the floor from stage 2: the corner post at the board's rear corner, 
 middle of the rear edge, and the wall between them.
 
 - [ ] The posts came out clean at full height, with no wobble or shifted layers near the top.
+- [ ] The corner post takes an insert in its top end, straight and flush.
 - [ ] Each post's peg drops into its square hole in the floor, and the post stands upright on its own.
 - [ ] The wall slides down into both posts' slots, all the way to the floor.
-- [ ] The wall's bottom notch drops over the laptop cable at the boot.
+- [ ] The wall's bottom notch drops over the thick laptop cable.
 
 ---
 
@@ -137,6 +145,9 @@ middle of the rear edge, and the wall between them.
 | `panel_right_f.stl` | 1 | 106 × 177 × 3 | ≈ 50 g |
 | `lid_l.stl` | 1 | 150 × 244 × 75 | ≈ 130 g |
 | `lid_r.stl` | 1 | 127 × 244 × 7 | ≈ 95 g |
+
+**Screws:** melt an insert into the top end of each of the other three corner posts. The lid is held by
+four M3×8 or M3×10 screws through its corners.
 
 **On a bed under 250 mm**, print the four files in [`4-final/lid-quarters-if-bed-under-250mm`](4-final/lid-quarters-if-bed-under-250mm/)
 instead of `lid_l` and `lid_r`.

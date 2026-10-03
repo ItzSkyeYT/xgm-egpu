@@ -55,6 +55,10 @@ pin_fit = 0.3;        // board pegs vs the O3.2 holes (on diameter)
 tab_fit = 0.2;        // jigsaw tabs between floor / lid pieces (per side)
 standoff = 7;         // board underside above the floor (the bracket foot reaches 9.7 below the board top: it ends inside the floor's slot)
 boss_d = 7;
+use_inserts = true;   // M3x5x4.5 heat-set inserts + M3 socket-head screws: 5 for the board, 4 for the lid. false = print-only pegs and clips
+insert_hole = 4.0;    // hole for the M3x5x4.5 inserts (4.5 across): confirm with coupon_inserts (3.8 / 4.0 / 4.2)
+insert_depth = 5.6;   // insert length 5 + 0.6
+boss_d_ins = 8.5;     // board boss with an insert
 gap_y = 24;           // board +Y (fan-side) edge -> wall: the laptop-cable harness and its boot run along this edge
 x_mid = 145;  y_mid = -40;      // mid posts (panels split here)
 x_seam = 135; y_seam = -50;     // floor and lid pieces split here (jigsaw tabs)
@@ -159,7 +163,8 @@ module ghost_card_detail() {   // the Inno3D Twin X2 OC as it actually looks; th
 module ghost_psu() { color("black", 0.35) box(psu_x0, psu_x1, psu_y0, psu_y1, 0.05, psu_w); }
 module ghost_zones() {   // volumes that must stay free for plugs and cables
   color("orange", 0.25) {
-    box(atx_hdr_x[0]-2, atx_hdr_x[1]+2, -atx_bend_reach, 0, zb-1, zb+28);              // 24-pin plug + the whole bend (reaches into the bay)
+    box(atx_hdr_x[0]-2, atx_hdr_x[1]+2, -atx_bend_reach, 0, zb-1, zb+28);
+    if (use_inserts) for (h = holes) translate([h[0], h[1], zb]) cylinder(d = 6, h = 3.2, $fn = 24);   // board screw heads              // 24-pin plug + the whole bend (reaches into the bay)
     box(card_x1-110, card_x1, card_y0, card_y1, card_top, card_top+plug8_clear-0.1);    // 8-pin plug + cable bend
     // laptop cable: harness along the fan-side edge, grommet in its clip, thick cable out through the rear notch
     box(grommet_x+20, xg_conn_x[1]+2, board_w+0.5, board_w+11, 1, 15);                               // harness along the edge
@@ -194,7 +199,10 @@ module corner_post_local(h = zi1) {
     translate([-wall-lip, -wall-lip, 0]) cube([wall+lip+core, wall+lip+core, h]);
     translate([-wall-slot_fit/2, core-slot_d, -1]) cube([slot_w, slot_d+2, h+2]);      // slot for the YZ panel
     translate([core-slot_d, -wall-slot_fit/2, -1]) cube([slot_d+2, slot_w, h+2]);      // slot for the XZ panel
-    translate([core/2, core/2, 0]) top_socket(h);
+    if (use_inserts) translate([core/2, core/2, 0]) {                  // insert for the lid screw, clearance below it
+      translate([0, 0, h - insert_depth]) cylinder(d = insert_hole, h = insert_depth + 1, $fn = 40);
+      translate([0, 0, h - insert_depth - 5]) cylinder(d = 3.2, h = 6, $fn = 30);
+    } else translate([core/2, core/2, 0]) top_socket(h);
   }
   translate([core/2, core/2, 0]) bottom_peg();
 }
@@ -262,13 +270,15 @@ module floor_full() {
       box(xp0, xp1, yp0, yp1, -floor_t, 0);                                   // plate
       lip_ring(0, 3);
       for (h = holes) translate([h[0], h[1], 0]) {
-        cylinder(d = boss_d, h = standoff - 0.05);
-        cylinder(d = hole_d - pin_fit, h = standoff + board_t + 1.0);
+        if (use_inserts) cylinder(d = boss_d_ins, h = standoff - 0.05);
+        else { cylinder(d = boss_d, h = standoff - 0.05); cylinder(d = hole_d - pin_fit, h = standoff + board_t + 1.0); }
       }
-      board_clip(150, +1); board_clip(186, +1);      // fan-side edge, beyond the harness (x < 138)
+      if (!use_inserts) {                              // print-only: the board is held by pegs and these clips
+        board_clip(150, +1); board_clip(186, +1);      // fan-side edge, beyond the harness (x < 138)
+        board_clip(100, -1); board_clip(186, -1);      // 24-pin edge: the two gaps between header and power inputs
+        board_clip_rear(34);                           // rear edge, between the USB-C and the corner
+      }
       translate([grommet_x, grommet_y, 0]) grommet_clip();   // the laptop cable's grommet clicks in here
-      board_clip(100, -1); board_clip(186, -1);      // 24-pin edge: the two gaps between header and power inputs
-      board_clip_rear(34);                           // rear edge, between the USB-C and the corner
       // PSU stops: in front of the modular face (bottom edge only) and along the plug-zone side
       if (psu_iec_at_far) box(psu_x0-3.5, psu_x0-0.5, psu_y0+6, psu_y1-6, 0, 6);
       else                box(psu_x1+0.5, psu_x1+3.5, psu_y0+6, psu_y1-6, 0, 6);
@@ -276,6 +286,10 @@ module floor_full() {
       box(psu_x0+110, psu_x0+130, psu_y1+0.5, psu_y1+2.5, 0, 6);
     }
     for (p = post_centers()) translate([p[0]-(peg+peg_fit)/2, p[1]-(peg+peg_fit)/2, -floor_t-1]) cube([peg+peg_fit, peg+peg_fit, floor_t+2]);
+    if (use_inserts) for (h = holes) translate([h[0], h[1], 0]) {      // insert in each board boss, screw clearance below it
+      translate([0, 0, standoff - insert_depth]) cylinder(d = insert_hole, h = insert_depth + 1, $fn = 40);
+      translate([0, 0, -1]) cylinder(d = 3.2, h = standoff + 1, $fn = 30);
+    }
     cradle_peg_centres() translate([-(peg+peg_fit)/2, -(peg+peg_fit)/2, -floor_t-1]) cube([peg+peg_fit, peg+peg_fit, floor_t+2]);
     box(foot_slot_x-2.7, foot_slot_x+2.7, 16, board_w+1, -floor_t-1, 1);                        // relief for the bracket's foot
     box(xi0-0.2, xi0+2, xg_exit_y[0], xg_exit_y[1], -0.1, 3.2);                                  // floor lip opened under the cable notch
@@ -293,9 +307,10 @@ module lid_full() {
     if (vents) for (p = grid(xb-4, card_x1+2, card_y0-4, yi1-5, vent_w, vent_pitch, vent_h, vent_row))
       if (!(p[0]+vent_w > x_seam-4 && p[0] < x_seam+10) && !(p[1]+vent_h > y_seam-4 && p[1] < y_seam+10))
         box(p[0], p[0]+vent_w, p[1], p[1]+vent_h, zi1-1, zi1+lid_t+1);
+    if (use_inserts) for (i = [0:3]) translate([post_centers()[i][0], post_centers()[i][1], zi1-1]) cylinder(d = 3.4, h = lid_t + 2, $fn = 30);   // lid screws into the corner posts
   }
   lip_ring(zi1-4, zi1);
-  for (p = post_centers()) translate([p[0]-peg/2, p[1]-peg/2, zi1-3.6]) cube([peg, peg, 3.6+eps]);
+  for (i = [(use_inserts ? 4 : 0) : 7]) translate([post_centers()[i][0]-peg/2, post_centers()[i][1]-peg/2, zi1-3.6]) cube([peg, peg, 3.6+eps]);   // pegs: mid posts (and corners when print-only)
   // ribs straddling the card's top edge (front half of the card, clear of the 8-pin plug)
   for (y = [[card_y0-3.5, card_y0-0.5], [card_y1+0.5, card_y1+3.5]]) box(xb+14, xb+64, y[0], y[1], card_top+1, zi1+eps);
   // guides beside the bracket's top end
@@ -453,6 +468,18 @@ module grommet_clip(slot = grommet_slot) {   // a thin wall that sits in the gro
     translate([-10, -slot/2, grommet_zc]) cube([20, slot, h]);
   }
   for (s = [-1, 1]) translate([-clip_t/2, s > 0 ? slot/2 - 0.6 : -slot/2, h - 2.5]) cube([clip_t, 0.6, 2.5]);   // snap lips
+}
+module coupon_inserts() {   // three bosses like the board's, holes 3.8 / 4.0 / 4.2: the one that takes an insert cleanly sets insert_hole
+  labels = ["3.8", "4.0", "4.2"];
+  difference() {
+    union() {
+      translate([-8, -8.5, 0]) cube([52, 17, 2]);
+      for (i = [0:2]) translate([i*18, 0, 2]) cylinder(d = boss_d_ins, h = standoff, $fn = 48);
+    }
+    for (i = [0:2]) translate([i*18, 0, 2 + standoff - insert_depth]) cylinder(d = 3.8 + 0.2*i, h = insert_depth + 1, $fn = 40);
+    for (i = [0:2]) translate([i*18, 0, 1]) cylinder(d = 3.2, h = standoff + 2, $fn = 30);
+  }
+  for (i = [0:2]) translate([i*18, -6.6, 2]) linear_extrude(0.6) text(labels[i], size = 2.6, font = "Liberation Sans:style=Bold", halign = "center", valign = "center");
 }
 module coupon_grommet() {   // three clips, slots 10.5 / 11.5 / 12.5: the one that grips the neck sets grommet_slot
   for (i = [0:2]) translate([i*20, 0, 0]) {
@@ -621,6 +648,7 @@ else if (part == "cradle") rotate([0,90,0]) translate([-card_x1, 0, 0]) cradle()
 else if (part == "coupon") { coupon(); translate([0, 45, 0]) coupon(); }   // two: tab, peg and slot are tested against the other piece
 else if (part == "coupon_rear") flat_yz(xo0) coupon_rear();
 else if (part == "coupon_grommet") mirror([0, 1, 0]) coupon_grommet();   // pre-mirrored so M() leaves the labels readable
+else if (part == "coupon_inserts") mirror([0, 1, 0]) coupon_inserts();
 else if (part == "bracket_holder") rotate([0,90,0]) translate([-hx1, 0, 0]) bracket_holder();   // on its side, pegs horizontal
 else if (part == "shim_05") shim(0.5);
 else if (part == "shim_10") shim(1.0);

@@ -12,8 +12,8 @@ nums=lambda key: re.search(key+r'[^"]*',echo).group(0)
 inside=re.search(r'interior ([\d.]+) x ([\d.]+) x ([\d.]+) mm; outside ([\d.]+) x ([\d.]+) x ([\d.]+)',echo).groups()
 qty={'post_corner':4,'post_mid':4,'shim_05':'as needed','shim_10':'as needed','shim_15':'as needed'}
 desc={
- 'floor_rl':'floor quarter, rear / PSU side: cable bay floor with tie slots','floor_rr':'floor quarter, rear / board side: 5 board pegs, 3 clips, holder sockets, foot relief',
- 'floor_fl':'floor quarter, far / PSU side: PSU stops','floor_fr':'floor quarter, far / board side: cradle sockets, clip',
+ 'floor_rl':'floor quarter, rear / PSU side: cable bay floor with tie slots','floor_rr':'floor quarter, rear / board side: 3 board bosses (inserts), holder sockets, foot relief, grommet clip',
+ 'floor_fl':'floor quarter, far / PSU side: PSU stops','floor_fr':'floor quarter, far / board side: 2 board bosses (inserts), cradle sockets',
  'lid_l':'lid, rear half: lip, 4 pegs, card ribs, bracket guides','lid_r':'lid, far half: lip, 4 pegs',
  'lid_rl':'lid quarter (small-bed alternative)','lid_rr':'lid quarter (small-bed alternative)','lid_fl':'lid quarter (small-bed alternative)','lid_fr':'lid quarter (small-bed alternative)',
  'post_corner':'corner post: two panel slots at 90°, peg below, socket on top','post_mid':'mid post: two panel slots in line, peg below, socket on top',
@@ -45,7 +45,7 @@ out.append("| board's rear edge → grommet gap, harness straight | 41.5 | `grom
 out.append("## Features\n\n| Feature | Size |\n|---|---|")
 out.append("| panels | 3.0 thick; ends sit 7.0 deep in corner posts, 5.0 deep in mid posts; slots are 3.4 wide |\n| posts | 15.0 × 15.0 section (corner), 15.0 × 14.0 (mid); stand 2.0 proud of the panels |")
 out.append("| square pegs / sockets | 6.0 × 6.0 pegs, 6.4 × 6.4 sockets (`peg_fit` 0.4); floor sockets go through the 3.0 plate |\n| lid and floor lips | 1.5 thick, 4.0 tall (lid) and 3.0 tall (floor), inside the panels, broken at the posts |")
-out.append("| jigsaw tabs | 10.4 wide head, 6.0 neck, 6.5 long; slots are 0.2 larger per side (`tab_fit`) |\n| board pegs | Ø2.9 on Ø7.0 bosses; board underside at 7.0, top surface at 8.6 |")
+out.append("| jigsaw tabs | 10.4 wide head, 6.0 neck, 6.5 long; slots are 0.2 larger per side (`tab_fit`) |\n| board bosses | Ø8.5, each with a Ø4.0 × 5.6 hole for an M3×5×4.5 heat-set insert (`insert_hole`); board underside at 7.0, top surface at 8.6 |")
 out.append("| bracket holder | 5.5 thick (x 3.0 … 8.5), arm 11 … 62 wide, seat 108.9 above the board top; pegs 2.6 × 3.6 |\n| cradle | inner width 43.2 (card 42.2 + 1), rest 18.6 above the board top |")
 out.append("| vents | 3.0 wide slots, 20 long, 6.0 pitch, rows every 24 |")
 open('DIMENSIONS.md','w').write("\n".join(out)+"\n"); print("DIMENSIONS.md written")

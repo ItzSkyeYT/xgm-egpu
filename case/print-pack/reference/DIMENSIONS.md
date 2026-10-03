@@ -14,9 +14,9 @@ All numbers in mm, read from the rendered STLs in `stl/` (as laid out for printi
 | Part | Qty | X | Y | Z | What it is |
 |---|---|---|---|---|---|
 | `floor_rl` | 1 | 150.5 | 106.5 | 9.0 | floor quarter, rear / PSU side: cable bay floor with tie slots |
-| `floor_rr` | 1 | 150.5 | 144.0 | 19.2 | floor quarter, rear / board side: 5 board pegs, 3 clips, holder sockets, foot relief |
+| `floor_rr` | 1 | 150.5 | 144.0 | 19.2 | floor quarter, rear / board side: 3 board bosses (inserts), holder sockets, foot relief, grommet clip |
 | `floor_fl` | 1 | 126.7 | 106.5 | 6.0 | floor quarter, far / PSU side: PSU stops |
-| `floor_fr` | 1 | 126.7 | 144.0 | 13.4 | floor quarter, far / board side: cradle sockets, clip |
+| `floor_fr` | 1 | 126.7 | 144.0 | 9.9 | floor quarter, far / board side: 2 board bosses (inserts), cradle sockets |
 | `lid_l` | 1 | 150.5 | 244.0 | 75.3 | lid, rear half: lip, 4 pegs, card ribs, bracket guides |
 | `lid_r` | 1 | 126.7 | 244.0 | 7.0 | lid, far half: lip, 4 pegs |
 | `lid_rl` | 1 | 150.5 | 106.5 | 7.0 | lid quarter (small-bed alternative) |
@@ -49,7 +49,7 @@ All numbers in mm, read from the rendered STLs in `stl/` (as laid out for printi
 | card | 3.5 … 253.7 | -59.6 … -15.4 | -1.1 … 133.9 |
 | cradle | 235.7 … 253.7 | -63.1 … -13.9 | -2.4 … 52.2 |
 | floor_fl | 135.0 … 261.7 | 43.5 … 150.0 | -3.0 … 3.0 |
-| floor_fr | 135.0 … 261.7 | -94.0 … 50.0 | -3.0 … 10.4 |
+| floor_fr | 135.0 … 261.7 | -94.0 … 50.0 | -3.0 … 7.0 |
 | floor_rl | -9.0 … 141.5 | 43.5 … 150.0 | -3.0 … 6.0 |
 | floor_rr | -9.0 … 141.5 | -94.0 … 50.0 | -3.0 … 16.2 |
 | lid_l | -9.0 … 141.5 | -94.0 … 150.0 | 105.6 … 180.9 |
@@ -96,7 +96,7 @@ All numbers in mm, read from the rendered STLs in `stl/` (as laid out for printi
 | square pegs / sockets | 6.0 × 6.0 pegs, 6.4 × 6.4 sockets (`peg_fit` 0.4); floor sockets go through the 3.0 plate |
 | lid and floor lips | 1.5 thick, 4.0 tall (lid) and 3.0 tall (floor), inside the panels, broken at the posts |
 | jigsaw tabs | 10.4 wide head, 6.0 neck, 6.5 long; slots are 0.2 larger per side (`tab_fit`) |
-| board pegs | Ø2.9 on Ø7.0 bosses; board underside at 7.0, top surface at 8.6 |
+| board bosses | Ø8.5, each with a Ø4.0 × 5.6 hole for an M3×5×4.5 heat-set insert (`insert_hole`); board underside at 7.0, top surface at 8.6 |
 | bracket holder | 5.5 thick (x 3.0 … 8.5), arm 11 … 62 wide, seat 108.9 above the board top; pegs 2.6 × 3.6 |
 | cradle | inner width 43.2 (card 42.2 + 1), rest 18.6 above the board top |
 | vents | 3.0 wide slots, 20 long, 6.0 pitch, rows every 24 |
