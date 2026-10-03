@@ -69,7 +69,7 @@ grommet: disc Ø14.8, plate 14.7, gap 1.4, sitting 41.5 from the board's rear ed
 long edge. For another card or PSU, those are the numbers to re-measure; each is a single parameter at the top of
 the file. The holder's arm is printed 0.1 mm low on purpose; `shim_05/10/15` go on it if the tab floats.
 
-Then print `coupon` first (5 g, twenty minutes). It has a jigsaw tab and slot, a 6 mm peg and
+Then print `coupon` first (about 10 g, half an hour). It has a jigsaw tab and slot, a 6 mm peg and
 socket, and a 3 mm panel slot. Everything should push together by hand and hold. If not, adjust
 `tab_fit`, `peg_fit`, `slot_fit` (all in mm) and print it again. Fits vary between printers; this is
 the cheap place to find out.
@@ -131,11 +131,13 @@ Exact sizes of every part, where each one sits, and the feature dimensions are i
 | `coupon_inserts` | 1 | 52 × 17 × 9 | flat | three board bosses, insert holes 3.8 / 4.0 / 4.2: the one that takes an insert cleanly sets `insert_hole` |
 | `_assembly_structure`, `_assembly_ghosts` | — | — | not for printing | the whole thing, for viewers |
 
-Roughly 1.1 to 1.3 kg of PETG depending on infill. Every part fits a 180 × 180 mm bed except the
-two-piece lid; the posts need 182 mm of Z.
+About 910 g of PETG, tests included, so one 1 kg spool: that is a real slice of every part for a Bambu
+X1 Carbon at 3 walls and 15 % infill, which `./slice_weights.py` writes to `weights.json` for the print
+pack. A volume estimate runs about a quarter high, and 4 walls with 40 % infill go just past a kilo.
+Every part fits a 180 × 180 mm bed except the two-piece lid; the posts need 182 mm of Z.
 
-Print settings: PETG (PLA softens next to a hot GPU and creeps under the PSU), 0.2 mm layers, 3 to 4
-perimeters, 25 to 40 % infill, no supports anywhere. Panels print flat with their outer face down.
+Print settings: PETG (PLA softens next to a hot GPU and creeps under the PSU), 0.2 mm layers, 3 walls,
+15 % infill, textured PEI plate, no supports anywhere. Panels print flat with their outer face down.
 
 ## Printing
 
@@ -143,7 +145,7 @@ Everything to take to a printer is in [`print-pack/`](print-pack/), one folder p
 [README](print-pack/README.md): settings, a picture of each stage, what it checks, and a pass checklist.
 In short:
 
-1. **Tests**: `coupon` (two pieces), `coupon_rear`, `coupon_grommet` and `coupon_inserts`, about 30 g.
+1. **Tests**: `coupon` (two pieces), `coupon_rear`, `coupon_grommet` and `coupon_inserts`, about 25 g.
    Your printer's fits, the real plugs in the real openings, which clip grips the cable's grommet, and
    which hole takes the heat-set inserts.
 2. **Board and card**: `floor_rr`, `floor_fr`, `bracket_holder`, `cradle` and the shims. The board
@@ -152,7 +154,7 @@ In short:
    in its slots, and the wall's notch over the laptop cable.
 4. **The rest.**
 
-Only the two coupons are throwaway. `./make-print-pack.sh` rebuilds the folder after any change to the
+Only the stage 1 tests are throwaway. `./make-print-pack.sh` rebuilds the folder after any change to the
 model.
 
 ## Assembly

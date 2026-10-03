@@ -1,0 +1,127 @@
+{
+ "slicer": "OrcaSlicer 2.4.2",
+ "printer": "Bambu Lab X1 Carbon 0.4 nozzle",
+ "filament": "Bambu PETG Basic @BBL X1C",
+ "process": "0.20mm Standard @BBL X1C",
+ "walls": 3,
+ "infill": "15%",
+ "plate": "Textured PEI Plate",
+ "parts": {
+  "bracket_holder": {
+   "g": 10.0,
+   "min": 26
+  },
+  "coupon": {
+   "g": 9.5,
+   "min": 30
+  },
+  "coupon_grommet": {
+   "g": 3.8,
+   "min": 29
+  },
+  "coupon_inserts": {
+   "g": 3.3,
+   "min": 20
+  },
+  "coupon_rear": {
+   "g": 8.7,
+   "min": 23
+  },
+  "cradle": {
+   "g": 13.7,
+   "min": 33
+  },
+  "floor_fl": {
+   "g": 31.0,
+   "min": 49
+  },
+  "floor_fr": {
+   "g": 44.9,
+   "min": 72
+  },
+  "floor_rl": {
+   "g": 37.6,
+   "min": 63
+  },
+  "floor_rr": {
+   "g": 52.7,
+   "min": 85
+  },
+  "lid_fl": {
+   "g": 31.6,
+   "min": 50
+  },
+  "lid_fr": {
+   "g": 42.0,
+   "min": 78
+  },
+  "lid_l": {
+   "g": 102.0,
+   "min": 209
+  },
+  "lid_r": {
+   "g": 72.6,
+   "min": 113
+  },
+  "lid_rl": {
+   "g": 36.1,
+   "min": 55
+  },
+  "lid_rr": {
+   "g": 67.6,
+   "min": 170
+  },
+  "panel_far_l": {
+   "g": 15.9,
+   "min": 31
+  },
+  "panel_far_r": {
+   "g": 47.4,
+   "min": 84
+  },
+  "panel_left_f": {
+   "g": 39.6,
+   "min": 79
+  },
+  "panel_left_r": {
+   "g": 56.2,
+   "min": 87
+  },
+  "panel_rear_l": {
+   "g": 37.6,
+   "min": 75
+  },
+  "panel_rear_r": {
+   "g": 42.1,
+   "min": 81
+  },
+  "panel_right_f": {
+   "g": 40.2,
+   "min": 77
+  },
+  "panel_right_r": {
+   "g": 54.1,
+   "min": 101
+  },
+  "post_corner": {
+   "g": 24.1,
+   "min": 204
+  },
+  "post_mid": {
+   "g": 22.2,
+   "min": 201
+  },
+  "shim_05": {
+   "g": 0.4,
+   "min": 8
+  },
+  "shim_10": {
+   "g": 0.5,
+   "min": 9
+  },
+  "shim_15": {
+   "g": 0.5,
+   "min": 9
+  }
+ }
+}

@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """Build print-pack/: one folder per stage, a README.md with settings, pictures and pass checklists.
 usage: make_print_pack.py [destination]   (default: ./print-pack next to this script)"""
-import os, shutil, subprocess, sys
+import json, os, shutil, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STL = os.path.join(HERE, 'stl')
 DEST = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.path.join(HERE, 'print-pack')
+WEIGHTS = {}                                                  # real slices from slice_weights.py, when it has been run
+if os.path.exists(os.path.join(HERE, 'weights.json')):
+    WEIGHTS = json.load(open(os.path.join(HERE, 'weights.json')))
 
 # (file, quantity shown, copies printed)
 STAGES = [
@@ -33,8 +36,9 @@ def stl_info(name):
                 vol += (ax*(by*cz-bz*cy) + bx*(cy*az-cz*ay) + cx*(ay*bz-az*by)) / 6.0
                 tri = []
     size = (max(xs)-min(xs), max(ys)-min(ys), max(zs)-min(zs))
-    fill = 0.6 if name.startswith('post') else 0.9          # thick posts get real infill; 3 mm plates print nearly solid
-    return size, abs(vol) / 1000.0 * 1.27 * fill              # PETG 1.27 g/cm3
+    sliced = WEIGHTS.get('parts', {}).get(name)
+    fill = 0.6 if name.startswith('post') else 0.9          # fallback estimate from the volume; it runs about a quarter high
+    return size, sliced['g'] if sliced else abs(vol) / 1000.0 * 1.27 * fill
 
 def read_stl(name):
     verts, index, tris, cur = [], {}, [], []
@@ -131,6 +135,16 @@ for f in ['xgm-lite-frame-assembled.3mf', 'plan/floor-plan-A3.pdf', 'plan/floor-
 shutil.copy(os.path.join(HERE, 'img', 'outside.png'), os.path.join(DEST, 'img', 'case.png'))
 shutil.copy(os.path.join(HERE, 'img', 'inside.png'), os.path.join(DEST, 'img', 'inside.png'))
 grand = sum(totals.values())
+walls, infill = (str(WEIGHTS['walls']), WEIGHTS['infill'].replace('%', ' %')) if WEIGHTS else ('3', '15 %')
+if WEIGHTS:
+    basis = (f"The weights are real slices, not estimates: {WEIGHTS['slicer']}, {WEIGHTS['printer'].replace(' 0.4 nozzle', '')}, "
+             f"{WEIGHTS['filament'].split(' @')[0]}, {walls} walls, {infill} infill. ")
+    basis += (f"At these settings **one 1 kg spool covers the whole pack**, tests included, with about {int(5 * round((1000 - grand) / 5))} g "
+              "to spare; 4 walls and 40 % infill push it just past a kilo. " if grand < 1000 else
+              "At these settings the pack needs more than one 1 kg spool. ")
+    basis += "Allow roughly 30 hours of printing in all, with the eight posts sharing one plate."
+else:
+    basis = "The weights are estimates from each part's volume; run `slice_weights.py` for real ones."
 
 # ---------------------------------------------------------------- README.md
 md = f"""# XGM Lite frame · print pack
@@ -147,11 +161,12 @@ by M3 screws in heat-set inserts.
 |---|---|
 | Material | **PETG**. PLA softens next to a warm GPU and creeps under the PSU's weight. |
 | Layer height | 0.2 mm |
-| Walls | 3 to 4 |
-| Infill | 25 to 40 % |
+| Walls | {walls} |
+| Infill | {infill} |
+| Plate | Textured PEI. Bambu's PETG profile refuses the smooth Cool Plate. Let the plate cool before removing parts. |
 | Supports | **None.** Nothing in this pack needs them. |
 | Orientation | As exported. Every file is already laid out for the bed. |
-| Bed | 180 × 180 mm, except the two-piece lid, which needs 250 mm |
+| Bed | 180 × 180 mm, except the two-piece lid, which needs 250 mm. On a Bambu X1 Carbon (256 mm) every part fits whole. |
 | Height | 182 mm, for the posts |
 
 > **Pick a PETG filament profile in the slicer.** The default is PLA.
@@ -170,8 +185,10 @@ copies included. File → Open Project loads the whole stage at once; then press
 the plate. If it doesn't all fit, put the leftover parts on a second plate. Single STL files come in with
 File → Import (Ctrl+I), or by dragging them onto the Orca window.
 
-Print the stages in order, and start a stage only when the previous one passed. Only the two coupons
+Print the stages in order, and start a stage only when the previous one passed. Only the stage 1 tests
 are throwaway: everything else ends up in the finished case. About **{grams(grand)[2:]}** of PETG in total.
+
+{basis}
 
 ---
 

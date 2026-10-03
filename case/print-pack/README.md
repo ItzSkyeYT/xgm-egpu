@@ -12,11 +12,12 @@ by M3 screws in heat-set inserts.
 |---|---|
 | Material | **PETG**. PLA softens next to a warm GPU and creeps under the PSU's weight. |
 | Layer height | 0.2 mm |
-| Walls | 3 to 4 |
-| Infill | 25 to 40 % |
+| Walls | 3 |
+| Infill | 15 % |
+| Plate | Textured PEI. Bambu's PETG profile refuses the smooth Cool Plate. Let the plate cool before removing parts. |
 | Supports | **None.** Nothing in this pack needs them. |
 | Orientation | As exported. Every file is already laid out for the bed. |
-| Bed | 180 × 180 mm, except the two-piece lid, which needs 250 mm |
+| Bed | 180 × 180 mm, except the two-piece lid, which needs 250 mm. On a Bambu X1 Carbon (256 mm) every part fits whole. |
 | Height | 182 mm, for the posts |
 
 > **Pick a PETG filament profile in the slicer.** The default is PLA.
@@ -25,18 +26,20 @@ by M3 screws in heat-set inserts.
 
 | Stage | Folder | What it proves | Plastic |
 |:-:|---|---|--:|
-| 1 | [`1-tests`](1-tests/) | your printer's fits, the real plugs in the real openings, the grommet clip, the insert holes | ≈ 30 g |
-| 2 | [`2-board-and-card`](2-board-and-card/) | the board screwed down on its five inserts, the card on its two supports | ≈ 185 g |
-| 3 | [`3-structure-sample`](3-structure-sample/) | full-height posts, and a wall in its slots | ≈ 100 g |
-| 4 | [`4-final`](4-final/) | the rest of the box | ≈ 830 g |
+| 1 | [`1-tests`](1-tests/) | your printer's fits, the real plugs in the real openings, the grommet clip, the insert holes | ≈ 25 g |
+| 2 | [`2-board-and-card`](2-board-and-card/) | the board screwed down on its five inserts, the card on its two supports | ≈ 125 g |
+| 3 | [`3-structure-sample`](3-structure-sample/) | full-height posts, and a wall in its slots | ≈ 90 g |
+| 4 | [`4-final`](4-final/) | the rest of the box | ≈ 675 g |
 
 **Opening a stage in OrcaSlicer:** each folder has a `stage-N.3mf` holding all of that stage's parts,
 copies included. File → Open Project loads the whole stage at once; then press **A** to arrange it on
 the plate. If it doesn't all fit, put the leftover parts on a second plate. Single STL files come in with
 File → Import (Ctrl+I), or by dragging them onto the Orca window.
 
-Print the stages in order, and start a stage only when the previous one passed. Only the two coupons
-are throwaway: everything else ends up in the finished case. About **1140 g** of PETG in total.
+Print the stages in order, and start a stage only when the previous one passed. Only the stage 1 tests
+are throwaway: everything else ends up in the finished case. About **910 g** of PETG in total.
+
+The weights are real slices, not estimates: OrcaSlicer 2.4.2, Bambu Lab X1 Carbon, Bambu PETG Basic, 3 walls, 15 % infill. At these settings **one 1 kg spool covers the whole pack**, tests included, with about 90 g to spare; 4 walls and 40 % infill push it just past a kilo. Allow roughly 30 hours of printing in all, with the eight posts sharing one plate.
 
 ---
 
@@ -47,8 +50,8 @@ are throwaway: everything else ends up in the finished case. About **1140 g** of
 | File | Qty | Size (mm) | Plastic |
 |---|:-:|---|--:|
 | `coupon.stl` | 1 file, 2 pieces | 60 × 82 × 9 | ≈ 10 g |
-| `coupon_rear.stl` | 1 | 58 × 89 × 3 | ≈ 10 g |
-| `coupon_grommet.stl` | 1 file, 3 pieces | 54 × 24 × 19 | ≈ 3 g |
+| `coupon_rear.stl` | 1 | 58 × 89 × 3 | ≈ 9 g |
+| `coupon_grommet.stl` | 1 file, 3 pieces | 54 × 24 × 19 | ≈ 4 g |
 | `coupon_inserts.stl` | 1 | 52 × 17 × 9 | ≈ 3 g |
 
 **coupon** holds two identical pieces that you test against each other. Each fit should go together
@@ -87,10 +90,10 @@ number changes in the model, and only the coupon is reprinted.
 
 | File | Qty | Size (mm) | Plastic |
 |---|:-:|---|--:|
-| `floor_rr.stl` | 1 | 150 × 144 × 19 | ≈ 70 g |
-| `floor_fr.stl` | 1 | 127 × 144 × 9.9 | ≈ 65 g |
-| `bracket_holder.stl` | 1 | 120 × 46 × 9 | ≈ 20 g |
-| `cradle.stl` | 1 | 55 × 49 × 18 | ≈ 30 g |
+| `floor_rr.stl` | 1 | 150 × 144 × 19 | ≈ 55 g |
+| `floor_fr.stl` | 1 | 127 × 144 × 9.9 | ≈ 45 g |
+| `bracket_holder.stl` | 1 | 120 × 46 × 9 | ≈ 10 g |
+| `cradle.stl` | 1 | 55 × 49 × 18 | ≈ 15 g |
 | `shim_05.stl` | 1 | 5.5 × 24 × 0.5 | ≈ 1 g |
 | `shim_10.stl` | 1 | 5.5 × 24 × 1 | ≈ 1 g |
 | `shim_15.stl` | 1 | 5.5 × 24 × 1.5 | ≈ 1 g |
@@ -118,8 +121,8 @@ number changes in the model, and only the coupon is reprinted.
 | File | Qty | Size (mm) | Plastic |
 |---|:-:|---|--:|
 | `post_corner.stl` | 1 | 15 × 15 × 180 | ≈ 25 g |
-| `post_mid.stl` | 1 | 15 × 14 × 180 | ≈ 25 g |
-| `panel_rear_r.stl` | 1 | 177 × 123 × 3 | ≈ 50 g |
+| `post_mid.stl` | 1 | 15 × 14 × 180 | ≈ 20 g |
+| `panel_rear_r.stl` | 1 | 177 × 123 × 3 | ≈ 40 g |
 
 These go on the floor from stage 2: the corner post at the board's rear corner, the mid post in the
 middle of the rear edge, and the wall between them.
@@ -138,19 +141,19 @@ middle of the rear edge, and the wall between them.
 
 | File | Qty | Size (mm) | Plastic |
 |---|:-:|---|--:|
-| `floor_rl.stl` | 1 | 150 × 106 × 9 | ≈ 50 g |
-| `floor_fl.stl` | 1 | 127 × 106 × 6 | ≈ 45 g |
+| `floor_rl.stl` | 1 | 150 × 106 × 9 | ≈ 40 g |
+| `floor_fl.stl` | 1 | 127 × 106 × 6 | ≈ 30 g |
 | `post_corner.stl` | 3 more | 15 × 15 × 180 | ≈ 70 g |
-| `post_mid.stl` | 3 more | 15 × 14 × 180 | ≈ 70 g |
-| `panel_rear_l.stl` | 1 | 177 × 99 × 3 | ≈ 45 g |
-| `panel_far_l.stl` | 1 | 177 × 99 × 3 | ≈ 20 g |
-| `panel_far_r.stl` | 1 | 177 × 123 × 3 | ≈ 60 g |
-| `panel_left_r.stl` | 1 | 143 × 177 × 3 | ≈ 75 g |
-| `panel_left_f.stl` | 1 | 106 × 177 × 3 | ≈ 45 g |
-| `panel_right_r.stl` | 1 | 143 × 177 × 3 | ≈ 65 g |
-| `panel_right_f.stl` | 1 | 106 × 177 × 3 | ≈ 50 g |
-| `lid_l.stl` | 1 | 150 × 244 × 75 | ≈ 130 g |
-| `lid_r.stl` | 1 | 127 × 244 × 7 | ≈ 95 g |
+| `post_mid.stl` | 3 more | 15 × 14 × 180 | ≈ 65 g |
+| `panel_rear_l.stl` | 1 | 177 × 99 × 3 | ≈ 40 g |
+| `panel_far_l.stl` | 1 | 177 × 99 × 3 | ≈ 15 g |
+| `panel_far_r.stl` | 1 | 177 × 123 × 3 | ≈ 45 g |
+| `panel_left_r.stl` | 1 | 143 × 177 × 3 | ≈ 55 g |
+| `panel_left_f.stl` | 1 | 106 × 177 × 3 | ≈ 40 g |
+| `panel_right_r.stl` | 1 | 143 × 177 × 3 | ≈ 55 g |
+| `panel_right_f.stl` | 1 | 106 × 177 × 3 | ≈ 40 g |
+| `lid_l.stl` | 1 | 150 × 244 × 75 | ≈ 100 g |
+| `lid_r.stl` | 1 | 127 × 244 × 7 | ≈ 75 g |
 
 **Screws:** melt an insert into the top end of each of the other three corner posts. The lid is held by
 four M3×8 or M3×10 screws through its corners.
