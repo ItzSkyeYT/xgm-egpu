@@ -186,7 +186,8 @@ bracket, shown in the last tile of the third picture.
    - eight into the low bosses beside the floor's seams, two on each floor piece, and four into the
      bosses under the lid, two on each half;
    - one into the top end of each of the eight posts;
-   - two into the bracket holder: one into the hole in its top edge, one into the hole in its back;
+   - two into the bracket holder: one into the hole in its top edge (gently: there is only a millimetre
+     of plastic on either side of it), one into the hole in its back;
    - corner posts: one into the higher side hole of all four, and one into the lower side hole of two
      of them. Those two go to the corners with two tabs: rear wall on the PSU side, far wall on the
      card side;

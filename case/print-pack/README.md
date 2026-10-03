@@ -160,7 +160,7 @@ number changes in the model, and only the coupon is reprinted.
 - [ ] The two floor pieces press together on their jigsaw tabs and lie flat on the table.
 - [ ] The five inserts are melted into the round bosses, straight and flush: three on `floor_rr`, two on `floor_fr`.
 - [ ] The bare board sits flat on the five bosses, and five M3×8 screws pull it down without rocking. M3×6 also works; nothing longer than 8.
-- [ ] Two inserts are melted into the holder: one into the hole in its top edge, one into the hole in its back, the face that lay on the bed.
+- [ ] Two inserts are melted into the holder: one into the hole in its top edge, one into the hole in its back, the face that lay on the bed. The one in the top edge has only a millimetre of plastic on either side: press gently and stop when it is flush.
 - [ ] The holder's three pegs go down through the board's three small holes, into the floor. Its back, the face with the insert, looks away from the card.
 - [ ] With the card plugged in, the bracket's foot sits in the board's slot and its top tab lies over the holder's top edge.
 - [ ] The oval hole in the tab sits over the insert. An M3×8 with a `bracket_washer` under its head goes down through it and tightens; the holder lifts a little to meet the tab, which is intended.
