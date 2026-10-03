@@ -1,6 +1,6 @@
 # Dimensions
 
-All numbers in mm, read from the rendered STLs in `stl/` (as laid out for printing) and `stl/assembled/` (in place). Regenerate with `./dimensions.py`.
+All numbers in mm, read from the rendered STLs in `build/stl/` (as laid out for printing) and `build/assembled/` (in place). Regenerate with `tools/dimensions.py`.
 
 ## Box
 

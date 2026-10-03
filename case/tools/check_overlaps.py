@@ -2,18 +2,19 @@
 """Check that no two printed parts occupy the same space. The collision test in the .scad only checks the
 printed parts against the real hardware; this one checks them against each other.
 
-Run after ./render-assembled.sh (it reads stl/assembled/ to skip pairs that are nowhere near each other).
+Run after render-assembled.sh (it reads build/assembled/ to skip pairs that are nowhere near each other).
 Every remaining pair is intersected by OpenSCAD with the vents off. Parts that only touch give faces with no
 volume between them, which is fine; any shared volume is reported with where it is.
 
-usage: ./check_overlaps.py [-j N] [-D name=value ...] [part ...]
+usage: check_overlaps.py [-j N] [-D name=value ...] [part ...]
   part ...        only the pairs involving one of these
   -D name=value   a model parameter for this run, e.g. -D use_inserts=false"""
-import itertools, os, re, subprocess, sys, tempfile
+import sys
+sys.dont_write_bytecode = True        # no __pycache__ beside the scripts
+import itertools, os, subprocess, tempfile
 from concurrent.futures import ThreadPoolExecutor
+from paths import SCAD, ASSEMBLED
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-SCAD = os.path.join(HERE, 'xgm-lite-frame.scad')
 # assembled STL name -> the module that draws it in place
 MODULES = {n: n + '()' for n in '''floor_rl floor_rr floor_fl floor_fr lid_l lid_r post_corner_rl post_corner_rr post_corner_fl
     post_corner_fr post_mid_rear post_mid_far post_mid_left post_mid_right panel_rear_l panel_rear_r panel_far_l panel_far_r
@@ -71,7 +72,7 @@ def main():
         if args[0] == '-j': jobs = int(args[1])
         else: DEFINES.extend(['-D', args[1]])
         args = args[2:]
-    boxes = {n: bbox(os.path.join(HERE, 'stl', 'assembled', n + '.stl')) for n in MODULES}
+    boxes = {n: bbox(os.path.join(ASSEMBLED, n + '.stl')) for n in MODULES}
     pairs = [p for p in itertools.combinations(MODULES, 2) if near(boxes[p[0]], boxes[p[1]]) and (not args or p[0] in args or p[1] in args)]
     print(f'{len(pairs)} pairs close enough to check')
     bad = 0

@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Pack the in-place part STLs into one 3MF with a named, coloured object per part.
-usage: make_3mf.py <dir with <part>.stl> <out.3mf>"""
-import sys, os, glob, zipfile
+usage: make_3mf.py [<dir with <part>.stl> <out.3mf>]     (default: build/assembled -> xgm-lite-frame-assembled.3mf)"""
+import sys
+sys.dont_write_bytecode = True        # no __pycache__ beside the scripts
+import os, glob, zipfile
 from xml.sax.saxutils import escape
+from paths import ASSEMBLED, MODEL_3MF
 
 COLOURS = {   # name prefix -> RGBA
     "floor": "4A6FA5FF", "lid": "7FA3D1FF", "post": "2F4F7FFF", "panel": "9DBBE0FF",
@@ -30,7 +33,7 @@ def read_stl(path):
                     tris.append(tuple(cur)); cur = []
     return verts, tris
 
-src, out = sys.argv[1], sys.argv[2]
+src, out = (sys.argv[1], sys.argv[2]) if len(sys.argv) > 2 else (ASSEMBLED, MODEL_3MF)
 files = sorted(glob.glob(os.path.join(src, "*.stl")))
 mats = list(COLOURS.items()) + [("other", "888888FF")]
 mat_index = {k: i for i, (k, _) in enumerate(mats)}

@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """Build print-pack/: one folder per stage with its batch plates (the OrcaSlicer projects from make_plates.py)
 and its loose STLs, and a README.md with the print order, settings, pictures and pass checklists.
-usage: make_print_pack.py [destination]   (default: ./print-pack next to this script)"""
-import json, os, shutil, subprocess, sys
+usage: make_print_pack.py [destination]   (default: print-pack/ in the case folder)"""
+import sys
+sys.dont_write_bytecode = True        # no __pycache__ beside the scripts
+import json, os, shutil, subprocess
+import paths
+from paths import CASE, STL, PLATES, DOCS, IMG, MODEL_3MF
 from stages import STAGES, NOTES, LID_QUARTERS, SUBDIR_LIDQ
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-STL = os.path.join(HERE, 'stl')
-PLATES = os.path.join(HERE, 'plates')
-DEST = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.path.join(HERE, 'print-pack')
+DEST = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else paths.PACK
 WEIGHTS = {}                                                  # real slices from make_plates.py, when it has been run
-if os.path.exists(os.path.join(HERE, 'weights.json')):
-    WEIGHTS = json.load(open(os.path.join(HERE, 'weights.json')))
+if os.path.exists(paths.WEIGHTS):
+    WEIGHTS = json.load(open(paths.WEIGHTS))
 
 def stl_info(name):
     xs, ys, zs, tri, vol = [], [], [], [], 0.0
@@ -126,12 +127,16 @@ os.makedirs(os.path.join(DEST, '4-final', SUBDIR_LIDQ))
 for n in LID_QUARTERS:
     shutil.copy(os.path.join(STL, n + '.stl'), os.path.join(DEST, '4-final', SUBDIR_LIDQ))
 ref = os.path.join(DEST, 'reference'); os.makedirs(ref)
-for f in ['xgm-lite-frame-assembled.3mf', 'plan/floor-plan-A3.pdf', 'plan/floor-plan-A4-2pages.pdf', 'DIMENSIONS.md', 'README.md']:
-    shutil.copy(os.path.join(HERE, f), ref)
-shutil.copy(os.path.join(HERE, 'img', 'outside.png'), os.path.join(DEST, 'img', 'case.png'))
-shutil.copy(os.path.join(HERE, 'img', 'inside.png'), os.path.join(DEST, 'img', 'inside.png'))
-for f in ['screws-floor.png', 'screws-lid.png', 'screws-closeups.png']:
-    shutil.copy(os.path.join(HERE, 'img', f), os.path.join(DEST, 'img', f))
+for f in [MODEL_3MF, os.path.join(DOCS, 'floor-plan-A3.pdf'), os.path.join(DOCS, 'floor-plan-A4-2pages.pdf'), os.path.join(DOCS, 'DIMENSIONS.md')]:
+    shutil.copy(f, ref)
+for f in sorted(os.listdir(IMG)):
+    shutil.copy(os.path.join(IMG, f), os.path.join(DEST, 'img', f))
+# the full notes, with their links pointed at where things are inside the pack
+notes = open(os.path.join(CASE, 'README.md')).read()
+for old, new in [('[`docs/`](docs/)', '`docs/`'), ('[`tools/`](tools/)', '`tools/`'), ('[`build/`](build/)', '`build/`'),   # folders that are not in the pack
+                 ('](docs/img/', '](../img/'), ('](docs/', ']('), ('](print-pack/', '](../')]:
+    notes = notes.replace(old, new)
+open(os.path.join(ref, 'README.md'), 'w').write(notes)
 grand = sum(totals.values())
 walls, infill = (str(WEIGHTS['walls']), WEIGHTS['infill'].replace('%', ' %')) if WEIGHTS else ('3', '15 %')
 sliced = WEIGHTS.get('batches', {})
@@ -156,7 +161,7 @@ A print-only case for the **XG Mobile Station Lite** board, an **Inno3D RTX 3060
 inserts hold the board, the posts, the lid, the seams between the floor's and the lid's pieces, and
 the card's bracket.
 
-![The finished case](img/case.png)
+![The finished case](img/outside.png)
 
 ## Settings
 

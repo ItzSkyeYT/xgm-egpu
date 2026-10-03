@@ -5,7 +5,7 @@ A print-only case for the **XG Mobile Station Lite** board, an **Inno3D RTX 3060
 inserts hold the board, the posts, the lid, the seams between the floor's and the lid's pieces, and
 the card's bracket.
 
-![The finished case](img/case.png)
+![The finished case](img/outside.png)
 
 ## Settings
 

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Floor plan at 1:1: plan/floor-plan-A3.pdf and plan/floor-plan-A4-2pages.pdf.
+"""Floor plan at 1:1: docs/floor-plan-A3.pdf and docs/floor-plan-A4-2pages.pdf.
 Outlines come from the model (part="plan_shapes"), dimensions from part="plan_meta"; labels, numbered
 markers, legend and page layout are drawn here as real text. The A4 pair joins at a cut line between the
 PSU and the board: sheet 1 is cut along it and laid on sheet 2, which repeats a band above the line. Its
 pages are portrait with the drawing turned a quarter, so that it fits an inkjet's printable area."""
-import os, re, json, subprocess, tempfile, html
+import sys
+sys.dont_write_bytecode = True        # no __pycache__ beside the scripts
+import os, re, json, shutil, subprocess, tempfile, html
+from paths import CASE, SCAD, DOCS as OUT
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-SCAD = os.path.join(HERE, 'xgm-lite-frame.scad')
-OUT = os.path.join(HERE, 'plan')
 FONT = "Liberation Sans, DejaVu Sans, Arial, sans-serif"
 INK, ACCENT, MUTED = '#1f2328', '#c2410c', '#57606a'
 
@@ -173,9 +173,10 @@ p2 = page(297, 210,
 open(f'{tmp}/a4-1.svg', 'w').write(p1); open(f'{tmp}/a4-2.svg', 'w').write(p2)
 
 # cairo stamps the PDFs with SOURCE_DATE_EPOCH when it is set: the model's last commit, so an unchanged plan rebuilds byte for byte
-epoch = subprocess.run(['git', 'log', '-1', '--format=%ct', '--', SCAD], capture_output=True, text=True, cwd=HERE).stdout.strip()
+epoch = subprocess.run(['git', 'log', '-1', '--format=%ct', '--', SCAD], capture_output=True, text=True, cwd=CASE).stdout.strip()
 env = dict(os.environ, SOURCE_DATE_EPOCH=epoch or '0')
 subprocess.run(['rsvg-convert', '-f', 'pdf', '-o', f'{OUT}/floor-plan-A3.pdf', f'{tmp}/a3.svg'], check=True, env=env)
 subprocess.run(['rsvg-convert', '-f', 'pdf', '-o', f'{OUT}/floor-plan-A4-2pages.pdf', f'{tmp}/a4-1.svg', f'{tmp}/a4-2.svg'], check=True, env=env)
+shutil.rmtree(tmp)
 print("written:", f'{OUT}/floor-plan-A3.pdf', f'{OUT}/floor-plan-A4-2pages.pdf',
       f"(plan {W:.1f} x {H:.1f} mm; A4 cut line at page y {cut1:.0f} on sheet 1, sheet 2's drawing ends at page y {bot2:.0f})")

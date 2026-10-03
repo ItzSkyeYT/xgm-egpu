@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""Build the batch plates. For every batch in stages.py this writes plates/<stage>/<batch>.3mf: an OrcaSlicer
-project with the batch's parts arranged on the bed and the print settings saved in it, ready for File > Open
-Project, Slice, Print. Each project is then sliced to check that it fits one plate and that the settings took,
-and its real print time and filament go into weights.json for make_print_pack.py.
+"""Build the batch plates. For every batch in stages.py this writes build/plates/<stage>/<batch>.3mf: an
+OrcaSlicer project with the batch's parts arranged on the bed and the print settings saved in it, ready for
+File > Open Project, Slice, Print. Each project is then sliced to check that it fits one plate and that the
+settings took, and its real print time and filament go into build/weights.json for make_print_pack.py.
 
 The profile is the machine the case is printed on: Bambu Lab X1 Carbon 0.4, Bambu PETG Basic, 0.20 mm,
-textured PEI plate. Takes about a quarter of an hour; run it after render.sh whenever the model changes.
-usage: make_plates.py            (ORCA=/path/to/orca-slicer to use another install)"""
-import glob, json, os, re, shutil, subprocess, sys, tempfile, zipfile
+textured PEI plate. Takes a minute or two; run it after render.sh whenever the model changes.
+usage: make_plates.py [--batches-only]     (ORCA=/path/to/orca-slicer to use another install)"""
+import sys
+sys.dont_write_bytecode = True        # no __pycache__ beside the scripts
+import glob, json, os, re, shutil, subprocess, tempfile, zipfile
+from paths import STL, PLATES, WEIGHTS
 from stages import STAGES
 
-HERE = os.path.dirname(os.path.abspath(__file__))
 ORCA = os.environ.get('ORCA', '/opt/orca-slicer/AppRun')
 PROFILES = os.path.join(os.path.dirname(os.path.realpath(ORCA)), 'resources', 'profiles', 'BBL')
 MACHINE, PROCESS, FILAMENT = 'Bambu Lab X1 Carbon 0.4 nozzle', '0.20mm Standard @BBL X1C', 'Bambu PETG Basic @BBL X1C'
@@ -104,13 +106,12 @@ def load_args(process):
     return ['--load-settings', f"{os.path.join(tmp, 'machine.json')};{process}", '--load-filaments', os.path.join(tmp, 'filament.json')]
 
 failed, parts, batches = [], {}, {}
-known = os.path.join(HERE, 'weights.json')
-if '--batches-only' in sys.argv and os.path.exists(known):     # keep the per-part weights, redo only the plates
-    parts = json.load(open(known))['parts']
+if '--batches-only' in sys.argv and os.path.exists(WEIGHTS):   # keep the per-part weights, redo only the plates
+    parts = json.load(open(WEIGHTS))['parts']
 
 # ---- every part on its own: what each piece weighs
 plain = process_file('plain', SETTINGS)
-for stl in [] if parts else sorted(glob.glob(os.path.join(HERE, 'stl', '*.stl'))):
+for stl in [] if parts else sorted(glob.glob(os.path.join(STL, '*.stl'))):
     name = os.path.basename(stl)[:-4]
     if name.startswith('_'):                            # whole-assembly meshes for viewers
         continue
@@ -125,16 +126,16 @@ for stl in [] if parts else sorted(glob.glob(os.path.join(HERE, 'stl', '*.stl'))
     print(f"{name:20} {result[0][1]:6.1f} g", flush=True)
 
 # ---- every batch: arrange, save as a project with its settings, then slice that project as a check
-shutil.rmtree(os.path.join(HERE, 'plates'), ignore_errors=True)       # no stale plate from an earlier plan
+shutil.rmtree(PLATES, ignore_errors=True)                 # no stale plate from an earlier plan
 for stage, _, stage_batches in STAGES:
-    os.makedirs(os.path.join(HERE, 'plates', stage), exist_ok=True)
+    os.makedirs(os.path.join(PLATES, stage), exist_ok=True)
     for batch, _, brim, rows in stage_batches:
         overrides = dict(SETTINGS, **(POSTS if brim else {}))
         out = os.path.join(tmp, 'batch-' + batch)
         os.makedirs(out)
         arrange = load_args(process_file(batch, overrides)) + ['--clone-objects', ','.join(str(c) for _, c in rows),
                    '--avoid-extrusion-cali-region', '--arrange', '1', '--outputdir', out, '--export-3mf', 'raw.3mf']
-        stls = [os.path.join(HERE, 'stl', n + '.stl') for n, _ in rows]
+        stls = [os.path.join(STL, n + '.stl') for n, _ in rows]
         # the arranger may lay a long part front to back, across the front strip: if so, turn the parts a quarter and forbid it to turn them back
         for attempt in (['--allow-rotations'] + stls, [turned(stl, os.path.join(out, 'turned')) for stl in stls]):
             code, error = orca(arrange + attempt, out)
@@ -145,7 +146,7 @@ for stage, _, stage_batches in STAGES:
             failed.append((batch, (error or f'exit {code}') if code else f'it reaches y = {box[1]:.1f}, into the strip where the printer draws its start lines'))
             continue
         # The project names Bambu's stock presets. The slicer's window only applies the values listed as different from them.
-        project = os.path.join(HERE, 'plates', stage, batch + '.3mf')
+        project = os.path.join(PLATES, stage, batch + '.3mf')
         different = ';'.join(sorted(k for k, v in overrides.items() if str(stock.get(k)) != v))
         with zipfile.ZipFile(os.path.join(out, 'raw.3mf')) as zin, zipfile.ZipFile(project, 'w', zipfile.ZIP_DEFLATED) as zout:
             for item in sorted(zin.infolist(), key=lambda i: i.filename):     # Orca's own order varies between runs
@@ -182,6 +183,6 @@ if failed:
     sys.exit('failed, so weights.json is left alone:\n' + '\n'.join(f'  {n}: {why}' for n, why in failed))
 json.dump({'slicer': 'OrcaSlicer ' + (version.group(1) if version else '?'), 'printer': MACHINE, 'filament': FILAMENT, 'process': PROCESS,
            'walls': int(SETTINGS['wall_loops']), 'infill': SETTINGS['sparse_infill_density'], 'plate': PLATE, 'parts': parts, 'batches': batches},
-          open(os.path.join(HERE, 'weights.json'), 'w'), indent=1)
+          open(WEIGHTS, 'w'), indent=1)
 total = sum(b['min'] for b in batches.values())
 print(f"weights.json: {len(parts)} parts, {len(batches)} batches, {sum(b['g'] for b in batches.values()):.0f} g, {total // 60} h {total % 60:02d} of printing")

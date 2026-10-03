@@ -1,4 +1,4 @@
-# A print-only case for the Lite board
+# A printed case for the Lite board
 
 `xgm-lite-frame.scad` is a parametric OpenSCAD enclosure for an **XG Mobile Station Lite** board
 (osy's open-source XG Mobile dock, "Lite" variant), a **desktop graphics card** and an **ATX power
@@ -10,6 +10,17 @@ through the card's bracket and one from the rear wall into the bracket holder
 tying the posts, the seams or the bracket). The panels slide into printed posts, the PSU is
 held by its own weight and a few stops, and the card is held by the PCIe slot, by its bracket and by
 a printed cradle under its far end.
+
+## What is where
+
+| | |
+|---|---|
+| [`print-pack/`](../) | **What goes to the printer.** Thirteen batch files in print order with the settings saved in them, plus checklists and pictures. Start with its [README](../README.md). |
+| `xgm-lite-frame.scad` | The model. Every number is a parameter at the top, and everything else in this folder is made from it. |
+| `xgm-lite-frame-assembled.3mf` | The whole case put together, to look at: open it in a slicer or a 3D viewer and hide parts. Not for printing. |
+| `docs/` | Every dimension ([`DIMENSIONS.md`](DIMENSIONS.md)), the floor plan at 1:1 as PDFs, and the pictures on this page. |
+| `tools/` | The scripts. `tools/rebuild.sh` runs them all, in order, after a change to the model. |
+| `build/` | What the scripts make on the way: every part as an STL, each batch as a slicer project, the sliced weights. Nothing in here needs opening, since the print pack has the same files sorted by stage. |
 
 The defaults are the parts it was drawn around:
 
@@ -36,9 +47,9 @@ down onto its top edge, which is how a PC chassis holds a card's front end. The 
 the standard screw lines of three slots (1.86 mm on the solder side of each slot's PCB plane); the
 3060's one screw point, an oval hole in its two-slot tab, is over the middle one.
 
-![outside: PSU intake side and lid](img/outside.png)
-![rear wall: PSU grille, laptop-cable exit, USB-C, display ports](img/rear.png)
-![inside, lid and GPU-intake wall removed](img/inside.png)
+![outside: PSU intake side and lid](../img/outside.png)
+![rear wall: PSU grille, laptop-cable exit, USB-C, display ports](../img/rear.png)
+![inside, lid and GPU-intake wall removed](../img/inside.png)
 
 ## Airflow
 
@@ -67,7 +78,7 @@ fan side. The clue was the rear photo: 24-pin and USB-C on the left, fans on the
 
 ## Measured, not assumed
 
-The defaults are now the real parts, measured with calipers (see the table in `DIMENSIONS.md`): card
+The defaults are now the real parts, measured with calipers (see the table in [`DIMENSIONS.md`](DIMENSIONS.md)): card
 thickness 42.2, bracket tab 109.0 above the board, foot 9.7 below it, card's lowest point 18.9 above
 the board at its far end, the sleeved 24-pin bend reaching 86.8 from the board edge, and the cable
 grommet: disc Ø14.8, plate 14.7, gap 1.4, sitting 41.5 from the board's rear edge and 12.7 out from its
@@ -83,7 +94,7 @@ the cheap place to find out.
 
 ## Check the fit on paper first
 
-`plan/floor-plan-A3.pdf` (one A3 page) and `plan/floor-plan-A4-2pages.pdf` (two A4 pages)
+[`docs/floor-plan-A3.pdf`](floor-plan-A3.pdf) (one A3 page) and [`docs/floor-plan-A4-2pages.pdf`](floor-plan-A4-2pages.pdf) (two A4 pages)
 are the floor plan at 1:1: the frame and its posts, the board with its holes, the card's footprint and
 bracket line, the PSU and its 24-pin bend, the cradle, the holder, the grommet clip and the openings
 in the walls, with numbered markers explained in a legend. Print at **actual size / 100 %**, never
@@ -93,12 +104,12 @@ line, lay it on sheet 2 with the cut edge on the dashed line there and the cross
 The A4 pages are portrait with the drawing turned sideways, on purpose: the 270.7 mm side then runs
 down the paper, where an inkjet can print almost to the edge. Laid out landscape, the printer driver
 turns the page itself and one wall lands in the strip it cannot print (the last 14.5 mm of the sheet
-on an HP Deskjet 1510). From a terminal: `lp -o media=A4 -o print-scaling=none plan/floor-plan-A4-2pages.pdf`.
+on an HP Deskjet 1510). From a terminal: `lp -o media=A4 -o print-scaling=none docs/floor-plan-A4-2pages.pdf`.
 
 Lay the board, the card and the PSU on it, plug the 24-pin in and see where the bundle wants to go.
 This costs nothing and catches the mistakes a render can't: a cable that is stiffer than I think, a
 plug that sticks out further, a PSU that isn't the one on the label. Re-export after changing
-parameters with `./make_plan.py`, which runs OpenSCAD for the outlines and `rsvg-convert` for the PDFs.
+parameters with `tools/make_plan.py`, which runs OpenSCAD for the outlines and `rsvg-convert` for the PDFs.
 
 ## Viewing the model in 3D
 
@@ -110,16 +121,16 @@ parameters with `./make_plan.py`, which runs OpenSCAD for the outlines and `rsvg
   coloured object (32 of them: the 4 floor quarters, 2 lid halves, 8 posts, 8 panels, cradle, holder
   and its washer, the seam bridges, every screw and every insert, plus the board, card, PSU and cable zones). Open it in 3dviewer.net, Bambu Studio, PrusaSlicer or
   OrcaSlicer and hide a wall or the lid in the object list to look inside. 3dviewer.net works on a
-  phone. The same parts as individual in-place STLs are in `stl/assembled/`.
-- `stl/_assembly_structure.stl` and `stl/_assembly_ghosts.stl`: the same thing as just two meshes
-  (printed parts, and the real parts' volumes), for viewers that only take STL.
-- For printing, use `stl/<part>.stl`: one file per part, each already laid flat for the bed.
+  phone. The same parts as individual in-place STLs are in `build/assembled/`.
+- For printing, use the batch files in `print-pack/`. Every part on its own, already laid flat for the
+  bed, is in `build/stl/<part>.stl`.
 
 ## Parts
 
 Exact sizes of every part, where each one sits, and the feature dimensions are in
-[`DIMENSIONS.md`](DIMENSIONS.md). Rendered STLs are in `stl/`. Re-render after changing parameters with `./render.sh` (all parts) or
-`./render.sh floor_rr cradle` (some parts); `./render-assembled.sh` rebuilds the in-place set and the 3MF.
+[`DIMENSIONS.md`](DIMENSIONS.md). Rendered STLs are in `build/stl/`. Re-render after changing parameters with
+`tools/render.sh` (all parts) or `tools/render.sh floor_rr cradle` (some parts); `tools/render-assembled.sh` rebuilds the
+in-place set and the 3MF.
 
 | Part | Qty | Size (mm) | Prints | Notes |
 |---|---|---|---|---|
@@ -139,11 +150,10 @@ Exact sizes of every part, where each one sits, and the feature dimensions are i
 | `coupon_rear` | 1 | 58 × 89 × 3 | flat | bottom of the rear wall: laptop-cable notch, USB-C hole, bottom of the port window |
 | `coupon_grommet` | 1 file, 3 pieces | 54 × 24 × 19 | flat | three grommet clips, slots 10.5 / 11.5 / 12.5: the one that grips sets `grommet_slot` |
 | `coupon_inserts` | 1 | 52 × 17 × 9 | flat | three board bosses, insert holes 3.8 / 4.0 / 4.2: the one that takes an insert cleanly sets `insert_hole` |
-| `_assembly_structure`, `_assembly_ghosts` | — | — | not for printing | the whole thing, for viewers |
 
 About 895 g of PETG, tests included, so one 1 kg spool, and about 31 hours of printing: those are real
 slices of the print pack's batches for a Bambu X1 Carbon at 3 walls and 15 % infill, which
-`./make_plates.py` writes to `weights.json`. A volume estimate runs about a quarter high, and 4 walls
+`tools/make_plates.py` writes to `build/weights.json`. A volume estimate runs about a quarter high, and 4 walls
 with 40 % infill go just past a kilo.
 Every part fits a 180 × 180 mm bed except the two-piece lid; the posts need 182 mm of Z.
 
@@ -152,8 +162,8 @@ Print settings: PETG (PLA softens next to a hot GPU and creeps under the PSU), 0
 
 ## Printing
 
-Everything to take to a printer is in [`print-pack/`](print-pack/), one folder per stage, with its own
-[README](print-pack/README.md): the print order, settings, a picture of each stage, what it checks, and
+Everything to take to a printer is in [`print-pack/`](../), one folder per stage, with its own
+[README](../README.md): the print order, settings, a picture of each stage, what it checks, and
 a pass checklist. Each stage is a few **batches**, one plate each: an OrcaSlicer project with the parts
 already arranged on an X1 Carbon's bed and the settings saved in it. In short:
 
@@ -168,17 +178,18 @@ already arranged on an X1 Carbon's bed and the settings saved in it. In short:
    the lid.
 
 Only the stage 1 tests are throwaway. The plan itself, stages and batches in print order, is
-`stages.py`. After any change to the model: `./render.sh`, then `./make_plates.py` (a minute or two:
-it arranges and slices every batch with OrcaSlicer's command line), then `./make-print-pack.sh`.
+`tools/stages.py`. After any change to the model, `tools/rebuild.sh` does everything in order: it renders
+every part, runs the two checks below, redraws the plans and the dimension tables, arranges and slices
+every batch with OrcaSlicer's command line and rebuilds the print pack. About four minutes.
 
 ## Assembly
 
 Where the 41 inserts and screws go, all M3×8: 25 at floor level, 14 for the lid, and two at the card's
 bracket, shown in the last tile of the third picture.
 
-![The 25 screws at floor level](img/screws-floor.png)
-![The 14 screws of the lid](img/screws-lid.png)
-![The kinds of joint](img/screws-closeups.png)
+![The 25 screws at floor level](../img/screws-floor.png)
+![The 14 screws of the lid](../img/screws-lid.png)
+![The kinds of joint](../img/screws-closeups.png)
 
 1. Heat-set inserts first, while the parts are loose, with a soldering iron at about 230 °C, pressed
    straight in until the insert sits flush:
@@ -242,8 +253,10 @@ thicker card widens the cradle and moves the GPU intake grille; a 140 mm PSU len
 size. `psu_iec_at_far = false` turns the PSU back round (IEC at the rear, bay at the far end), which
 only makes sense with flat cables that can bend inside a 65 mm channel.
 
-`openscad -o x.stl -D 'part="collision"' -D vents=false xgm-lite-frame.scad` renders the intersection
-of the printed geometry with the volumes of the board (connectors included), the card, the PSU and the
-plug/cable zones. It must come out empty; it does with the defaults. Run it after any change.
-`./check_overlaps.py` (after `./render-assembled.sh`) does the same for the printed parts against each
-other, which the first test does not look at.
+Two checks run as part of `tools/rebuild.sh`, and can be run on their own:
+
+- `tools/check-collision.sh` intersects the printed geometry with the volumes of the board (connectors
+  included), the card, the PSU and the plug/cable zones. It must come out empty, with inserts and
+  without. By hand: `openscad -o x.stl -D 'part="collision"' -D vents=false xgm-lite-frame.scad`.
+- `tools/check_overlaps.py` (after `tools/render-assembled.sh`) does the same for the printed parts
+  against each other, which the first check does not look at.
