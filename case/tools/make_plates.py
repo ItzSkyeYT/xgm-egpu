@@ -86,6 +86,16 @@ def turned(stl, folder):
     open(path, 'w').write(text)
     return path
 
+def objects_in_order(config):
+    """The project's list of objects, sorted by id. The slicer writes it in a different order from one run to the next."""
+    blocks = re.findall(r'^  <object id="\d+">\n.*?^  </object>\n', config, re.S | re.M)
+    if not blocks:
+        return config
+    start = config.index(blocks[0])
+    assert config[start:start + sum(map(len, blocks))] == ''.join(blocks), 'the object list is not in one piece'
+    blocks.sort(key=lambda b: int(re.match(r'  <object id="(\d+)"', b).group(1)))
+    return config[:start] + ''.join(blocks) + config[start + sum(map(len, blocks)):]
+
 def setting(text, key):
     found = re.search(rf'^; {key} = (.*)$', text, re.M)
     return found.group(1).strip().strip('"') if found else None
@@ -157,6 +167,7 @@ for stage, _, stage_batches in STAGES:
                     data = json.dumps(cfg, indent=4).encode()
                 elif item.filename == 'Metadata/model_settings.config':
                     data = data.replace(b'<metadata key="plater_name" value=""/>', f'<metadata key="plater_name" value="{batch}"/>'.encode())
+                    data = objects_in_order(data.decode()).encode()
                 info = zipfile.ZipInfo(item.filename, (1980, 1, 1, 0, 0, 0))      # fixed date: an unchanged batch rebuilds byte for byte
                 info.external_attr = 0o644 << 16
                 zout.writestr(info, data, zipfile.ZIP_DEFLATED)
