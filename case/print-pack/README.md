@@ -39,7 +39,7 @@ File → Import (Ctrl+I), or by dragging them onto the Orca window.
 Print the stages in order, and start a stage only when the previous one passed. Only the stage 1 tests
 are throwaway: everything else ends up in the finished case. About **910 g** of PETG in total.
 
-The weights are real slices, not estimates: OrcaSlicer 2.4.2, Bambu Lab X1 Carbon, Bambu PETG Basic, 3 walls, 15 % infill. At these settings **one 1 kg spool covers the whole pack**, tests included, with about 90 g to spare; 4 walls and 40 % infill push it just past a kilo. Allow roughly 30 hours of printing in all, with the eight posts sharing one plate.
+The weights are real slices, not estimates: OrcaSlicer 2.4.2, Bambu Lab X1 Carbon, Bambu PETG Basic, 3 walls, 15 % infill. At these settings **one 1 kg spool covers the whole pack**, tests included, with about 90 g to spare; 4 walls and 40 % infill push it just past a kilo. Allow about 33 hours of printing in all on that machine, as the slicer arranges the plates: roughly 1 h for stage 1, 3 h over two plates for stage 2, 5 h for stage 3 and 24 h over six plates for stage 4. The posts are what takes long: the plate that carries them runs for more than 7 h.
 
 ---
 
