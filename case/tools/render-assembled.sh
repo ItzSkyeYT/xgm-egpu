@@ -15,7 +15,7 @@ mkdir -p build/assembled build/logs
 printf '%s\n' "${parts[@]}" | xargs -P "$jobs" -I{} sh -c '
   openscad -o "build/assembled/{}.stl" -D "part=\"asm_{}\"" xgm-lite-frame.scad >"build/logs/assembled-{}.log" 2>&1
   n=$(grep -c "facet normal" "build/assembled/{}.stl" 2>/dev/null || true)
-  if [ "${n:-0}" -gt 0 ]; then
+  if [ "${n:-0}" -gt 0 ] && python3 tools/normalize_stl.py "build/assembled/{}.stl"; then
     rm -f "build/logs/assembled-{}.log"
     echo "{}: $n facets"
   else

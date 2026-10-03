@@ -7,7 +7,7 @@ pages are portrait with the drawing turned a quarter, so that it fits an inkjet'
 import sys
 sys.dont_write_bytecode = True        # no __pycache__ beside the scripts
 import os, re, json, shutil, subprocess, tempfile, html
-from paths import CASE, SCAD, DOCS as OUT
+from paths import SCAD, DOCS as OUT
 
 FONT = "Liberation Sans, DejaVu Sans, Arial, sans-serif"
 INK, ACCENT, MUTED = '#1f2328', '#c2410c', '#57606a'
@@ -172,9 +172,10 @@ p2 = page(297, 210,
           legend(ax, bot2 + 22), turn=True)
 open(f'{tmp}/a4-1.svg', 'w').write(p1); open(f'{tmp}/a4-2.svg', 'w').write(p2)
 
-# cairo stamps the PDFs with SOURCE_DATE_EPOCH when it is set: the model's last commit, so an unchanged plan rebuilds byte for byte
-epoch = subprocess.run(['git', 'log', '-1', '--format=%ct', '--', SCAD], capture_output=True, text=True, cwd=CASE).stdout.strip()
-env = dict(os.environ, SOURCE_DATE_EPOCH=epoch or '0')
+# cairo stamps the PDFs with the time they were made, unless SOURCE_DATE_EPOCH says otherwise. A fixed stamp (the day this
+# plan was first drawn) lets an unchanged plan rebuild byte for byte; the date of the model's last commit did not, because
+# committing a change moved it.
+env = dict(os.environ, SOURCE_DATE_EPOCH='1790899200')      # 2026-10-02 00:00 UTC
 subprocess.run(['rsvg-convert', '-f', 'pdf', '-o', f'{OUT}/floor-plan-A3.pdf', f'{tmp}/a3.svg'], check=True, env=env)
 subprocess.run(['rsvg-convert', '-f', 'pdf', '-o', f'{OUT}/floor-plan-A4-2pages.pdf', f'{tmp}/a4-1.svg', f'{tmp}/a4-2.svg'], check=True, env=env)
 shutil.rmtree(tmp)

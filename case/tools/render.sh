@@ -17,7 +17,7 @@ printf '%s\n' "${parts[@]}" | xargs -P "$jobs" -I{} sh -c '
   start=$(date +%s)
   openscad -o "build/stl/{}.stl" -D "part=\"{}\"" xgm-lite-frame.scad >"build/logs/{}.log" 2>&1
   n=$(grep -c "facet normal" "build/stl/{}.stl" 2>/dev/null || true)
-  if [ "${n:-0}" -gt 0 ] && python3 tools/normalize_stl.py "build/stl/{}.stl" >/dev/null; then
+  if [ "${n:-0}" -gt 0 ] && python3 tools/normalize_stl.py --shift "build/stl/{}.stl"; then
     rm -f "build/logs/{}.log"
     echo "{}: $(( $(date +%s) - start )) s, $n facets"
   else

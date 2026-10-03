@@ -1,14 +1,41 @@
 #!/usr/bin/env python3
-"""Shift ASCII STLs so their bounding box starts at (0, 0, 0): slicers then place them on the plate cleanly.
-usage: normalize_stl.py file.stl [...]"""
-import sys
-for path in sys.argv[1:]:
-    lines = open(path).read().splitlines()
-    vs = [(i, [float(t) for t in l.split()[1:4]]) for i, l in enumerate(lines) if l.strip().startswith('vertex')]
-    if not vs: continue
-    mn = [min(v[k] for _, v in vs) for k in range(3)]
-    if all(abs(m) < 1e-6 for m in mn): continue
-    for i, v in vs:
-        lines[i] = '      vertex %.4f %.4f %.4f' % (v[0]-mn[0], v[1]-mn[1], v[2]-mn[2])
-    open(path, 'w').write('\n'.join(lines) + '\n')
-    print(f"{path}: shifted by ({-mn[0]:.1f}, {-mn[1]:.1f}, {-mn[2]:.1f})")
+"""Rewrite ASCII STLs in one fixed form, so that the same shape always gives the same file. OpenSCAD writes
+the same facets in a different order from one run to the next, which made every rebuild look like a change.
+Coordinates go to 0.0001 mm, each facet starts at its lowest corner, the facets are sorted and their normals
+recomputed. With --shift the part is also moved so that its bounding box starts at (0, 0, 0), which is how
+a slicer wants a print file.
+usage: normalize_stl.py [--shift] file.stl [...]"""
+import math, sys
+
+def number(v):
+    return ('%.6f' % (round(v, 6) + 0.0)).rstrip('0').rstrip('.')                    # + 0.0: no minus zero
+
+def tidy(path, shift):
+    pts = [tuple(float(t) for t in line.split()[1:4]) for line in open(path) if line.lstrip().startswith('vertex')]
+    if not pts or len(pts) % 3:
+        return False
+    low = [min(p[k] for p in pts) for k in range(3)] if shift else (0.0, 0.0, 0.0)
+    pts = [tuple(round(p[k] - low[k], 4) + 0.0 for k in range(3)) for p in pts]       # + 0.0: no minus zero
+    facets = []
+    for i in range(0, len(pts), 3):
+        corners = pts[i:i + 3]
+        first = corners.index(min(corners))
+        facets.append(tuple(corners[first:] + corners[:first]))                      # same winding, lowest corner first
+    out = ['solid OpenSCAD_Model']
+    for a, b, c in sorted(facets):
+        u, v = [b[k] - a[k] for k in range(3)], [c[k] - a[k] for k in range(3)]
+        n = (u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0])
+        size = math.sqrt(sum(x * x for x in n)) or 1.0
+        out.append('  facet normal ' + ' '.join(number(x / size) for x in n))
+        out.append('    outer loop')
+        out += ['      vertex %.4f %.4f %.4f' % p for p in (a, b, c)]
+        out += ['    endloop', '  endfacet']
+    out.append('endsolid OpenSCAD_Model')
+    open(path, 'w').write('\n'.join(out) + '\n')
+    return True
+
+args = sys.argv[1:]
+shift = args[:1] == ['--shift']
+for path in args[1:] if shift else args:
+    if not tidy(path, shift):
+        sys.exit(f'{path}: not an ASCII STL with whole facets')

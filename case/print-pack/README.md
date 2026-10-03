@@ -34,7 +34,7 @@ the card's bracket.
 | 1 | [`1-tests`](1-tests/) | your printer's fits, the real plugs in the real openings, the grommet clip, the insert holes | 1 | 1 h 06 | ≈ 25 g |
 | 2 | [`2-board-and-card`](2-board-and-card/) | the board screwed down on its five inserts, the card on its two supports | 2 | 3 h 11 | ≈ 110 g |
 | 3 | [`3-structure-sample`](3-structure-sample/) | full-height posts, and a wall in its slots | 2 | 6 h 35 | ≈ 140 g |
-| 4 | [`4-final`](4-final/) | the rest of the box | 8 | 19 h 58 | ≈ 620 g |
+| 4 | [`4-final`](4-final/) | the rest of the box | 8 | 19 h 59 | ≈ 620 g |
 
 ### Print order
 
@@ -66,14 +66,14 @@ nothing below it is worth the plastic until it has passed.
     ├── panel_right_r               intake grille for the card's fans, rear half
     └── panel_right_f               intake grille for the card's fans, far half
 
-4 · The rest                              19 h 58 · 620 g
+4 · The rest                              19 h 59 · 620 g
 ├── 4A-floor-cable-bay.3mf                1 h 24 · 45 g
 │   └── floor_rl                    under the cable bay and the near end of the PSU, three post tabs
 ├── 4B-floor-psu.3mf                      1 h 24 · 45 g
 │   ├── floor_fl                    under most of the PSU, two post tabs
 │   ├── bridge_centre               the plate over the point where the four floor pieces meet
 │   └── 4 × bridge_strap            two across the floor's long seam, two under the lid's seam
-├── 4C-posts.3mf                          5 h 51 · 140 g
+├── 4C-posts.3mf                          5 h 52 · 140 g
 │   ├── 3 × post_corner             inserts in its top end and in its side, near the foot
 │   └── 3 × post_mid                between two wall panels; inserts in its top end and its sides
 ├── 4D-rear-wall.3mf                      2 h 41 · 80 g
@@ -106,7 +106,7 @@ OrcaSlicer; if it does, set the values from the table by hand. For any other sli
 Print the stages in order, and start a stage only when the previous one passed. Only the stage 1 tests
 are throwaway: everything else ends up in the finished case. About **895 g** of PETG in total.
 
-The times and weights are real slices of these very files, not estimates: OrcaSlicer 2.4.2, Bambu Lab X1 Carbon, Bambu PETG Basic, 3 walls, 15 % infill. At these settings **one 1 kg spool covers the whole pack**, tests included, with about 105 g to spare; 4 walls and 40 % infill push it just past a kilo. Allow about 31 hours of printing in all. The longest single batch is `4C-posts`, at 5 h 51: tall, thin posts print slowly, one small layer at a time.
+The times and weights are real slices of these very files, not estimates: OrcaSlicer 2.4.2, Bambu Lab X1 Carbon, Bambu PETG Basic, 3 walls, 15 % infill. At these settings **one 1 kg spool covers the whole pack**, tests included, with about 105 g to spare; 4 walls and 40 % infill push it just past a kilo. Allow about 31 hours of printing in all. The longest single batch is `4C-posts`, at 5 h 52: tall, thin posts print slowly, one small layer at a time.
 
 ---
 
@@ -208,7 +208,7 @@ each of the mid post's two foot bosses.
 |:-:|---|---|--:|--:|
 | 1 | [`4A-floor-cable-bay.3mf`](4-final/4A-floor-cable-bay.3mf) | `floor_rl` | 1 h 24 | ≈ 45 g |
 | 2 | [`4B-floor-psu.3mf`](4-final/4B-floor-psu.3mf) | `floor_fl`, `bridge_centre`, 4 × `bridge_strap` | 1 h 24 | ≈ 45 g |
-| 3 | [`4C-posts.3mf`](4-final/4C-posts.3mf) | 3 × `post_corner`, 3 × `post_mid` | 5 h 51 | ≈ 140 g |
+| 3 | [`4C-posts.3mf`](4-final/4C-posts.3mf) | 3 × `post_corner`, 3 × `post_mid` | 5 h 52 | ≈ 140 g |
 | 4 | [`4D-rear-wall.3mf`](4-final/4D-rear-wall.3mf) | `panel_rear_r`, `panel_rear_l` | 2 h 41 | ≈ 80 g |
 | 5 | [`4E-far-wall.3mf`](4-final/4E-far-wall.3mf) | `panel_far_l`, `panel_far_r` | 1 h 48 | ≈ 65 g |
 | 6 | [`4F-psu-side-wall.3mf`](4-final/4F-psu-side-wall.3mf) | `panel_left_r`, `panel_left_f` | 2 h 41 | ≈ 95 g |

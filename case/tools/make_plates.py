@@ -181,6 +181,14 @@ version = re.search(r'OrcaSlicer-([\d.]+)', subprocess.run([ORCA, '--help'], cap
 shutil.rmtree(tmp)
 if failed:
     sys.exit('failed, so weights.json is left alone:\n' + '\n'.join(f'  {n}: {why}' for n, why in failed))
+# The slicer's time estimate moves by a few seconds from one run to the next, enough to tip a rounded minute.
+# Numbers already on file stay unless a slice really changed, so that an unchanged model rebuilds to the same file.
+before = json.load(open(WEIGHTS)) if os.path.exists(WEIGHTS) else {}
+for now, was in ((parts, before.get('parts', {})), (batches, before.get('batches', {}))):
+    for name, new in now.items():
+        old = was.get(name)
+        if old and abs(new['g'] - old['g']) <= 0.15 and abs(new['min'] - old['min']) <= 2:
+            now[name] = old
 json.dump({'slicer': 'OrcaSlicer ' + (version.group(1) if version else '?'), 'printer': MACHINE, 'filament': FILAMENT, 'process': PROCESS,
            'walls': int(SETTINGS['wall_loops']), 'infill': SETTINGS['sparse_infill_density'], 'plate': PLATE, 'parts': parts, 'batches': batches},
           open(WEIGHTS, 'w'), indent=1)
