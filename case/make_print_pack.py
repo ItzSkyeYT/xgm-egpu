@@ -152,8 +152,8 @@ else:
 md = f"""# XGM Lite frame · print pack
 
 A print-only case for the **XG Mobile Station Lite** board, an **Inno3D RTX 3060 Twin X2 OC** and a
-**Corsair RM850**. No glue: the parts peg, slot and slide together, and 27 M3×8 screws in heat-set
-inserts hold the board, the posts and the lid.
+**Corsair RM850**. No glue: the parts peg, slot and slide together, and 39 M3×8 screws in heat-set
+inserts hold the board, the posts, the lid and the seams between the floor's and the lid's pieces.
 
 ![The finished case](img/case.png)
 
@@ -310,8 +310,14 @@ tabs (rear wall on the PSU side, far wall on the card side); for the mid posts, 
 of the rear-wall and far-wall ones, and one in each foot boss of the PSU-side one. The two mid posts
 beside the lid's seam, PSU side and card side, also take one in a top boss, facing the rear.
 
-**Screws:** every post to the floor tab or tabs beside it, then the lid: eight screws down into the
-posts and two sideways through the tabs under its rear half. All M3×8.
+**Inserts for the seam bridges**, 12: one in each of the eight low bosses beside the floor's seams, two
+per floor piece, and one in each of the four bosses under the lid.
+
+**Screws**, all M3×8: every post to the floor tab or tabs beside it; the centre plate over the point
+where the four floor pieces meet, and a strap across the long seam on each side of it; then the lid.
+Join its two halves upside down and screw the other two straps across the seam, so that it is one
+piece; lower it, and put eight screws down into the posts and two sideways through the tabs under its
+rear half.
 
 **On a bed under 250 mm**, print the four files in [`4-final/{SUBDIR_LIDQ}`](4-final/{SUBDIR_LIDQ}/)
 instead of the two lid batches.
@@ -320,14 +326,14 @@ instead of the two lid batches.
 
 ## Where every insert and screw goes
 
-27 inserts and 27 M3×8 socket-head screws. The horizontal ones must be M3×8: a longer screw bottoms out
+39 inserts and 39 M3×8 socket-head screws. The horizontal ones must be M3×8: a longer screw bottoms out
 in the post before it clamps.
 
-![The 17 screws at floor level](img/screws-floor.png)
+![The 25 screws at floor level](img/screws-floor.png)
 
-![The 10 screws of the lid](img/screws-lid.png)
+![The 14 screws of the lid](img/screws-lid.png)
 
-![The three kinds of joint](img/screws-closeups.png)
+![The kinds of joint](img/screws-closeups.png)
 
 ## Folder layout
 

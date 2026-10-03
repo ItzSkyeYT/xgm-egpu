@@ -55,7 +55,7 @@ pin_fit = 0.3;        // board pegs vs the O3.2 holes (on diameter)
 tab_fit = 0.2;        // jigsaw tabs between floor / lid pieces (per side)
 standoff = 7;         // board underside above the floor (the bracket foot reaches 9.7 below the board top: it ends inside the floor's slot)
 boss_d = 7;
-use_inserts = true;   // M3x5x4.5 heat-set inserts + M3 socket-head screws: 5 for the board, 10 for the lid, 12 between posts and floor. false = print-only pegs and clips
+use_inserts = true;   // M3x5x4.5 heat-set inserts + M3 socket-head screws: 5 board, 12 posts to floor, 8 floor bridges, 10 lid, 4 lid bridges. false = print-only pegs and clips
 insert_hole = 4.0;    // hole for the M3x5x4.5 inserts (4.5 across): confirm with coupon_inserts (3.8 / 4.0 / 4.2)
 insert_depth = 5.6;   // insert length 5 + 0.6
 boss_d_ins = 8.5;     // board boss with an insert
@@ -70,6 +70,14 @@ tie_t = 3;            // tab thickness
 tie_y0 = 1.8;         // tabs and bosses start this far from the wall's inner face, clear of the floor's and the lid's lips
 tie_gap = 3;          // a mid post's side face to the seam
 tie_c = (tie_y0 + core) / 2;    // the screw's distance from the wall's inner face
+// seam bridges: flat plates screwed across the floor's and the lid's seams. The jigsaw tabs only stop two pieces pulling apart
+// sideways; nothing but friction stops one lifting past the other, and the posts' ties are all out at the walls.
+bridge_t = 3;                   // plate thickness
+bridge_off = 10;                // each screw's distance from the seam
+bridge_boss_h = 4.5;            // floor boss under each screw: with the 3 mm floor below it, an insert and 1.9 mm of skin
+lid_boss_h = insert_depth + 0.4;  // lid boss: the whole insert, so that nothing shows through the lid's top face
+floor_straps_x = [110, 189];    // across the long seam: clear of the 24-pin bundle, the jigsaw tabs and the PSU's stops
+lid_straps_y = [-77, -28];      // across the lid's seam: clear of its jigsaw tabs, the vents and the 8-pin plug
 assert(abs((x_mid - 7 - x_seam) - tie_gap) < 0.01 && abs((y_seam - y_mid - 7) - tie_gap) < 0.01,
        "a mid post's side face must stand tie_gap from the seam, so that its tab is on the neighbouring piece");
 lid_split_y = false;            // true: lid in 4 pieces for small beds
@@ -360,6 +368,7 @@ module floor_full() {
       }
       translate([grommet_x, grommet_y, 0]) grommet_clip();   // the laptop cable's grommet clicks in here
       if (use_inserts) floor_ties("tab");                    // upright tabs: the posts are screwed down through them
+      if (use_inserts) for (p = bridge_screws_floor()) translate([p[0], p[1], 0]) cylinder(d = boss_d_ins, h = bridge_boss_h, $fn = 40);   // bosses for the seam bridges
       // PSU stops: in front of the modular face (bottom edge only) and along the plug-zone side
       if (psu_iec_at_far) box(psu_x0-3.5, psu_x0-0.5, psu_y0+6, psu_y1-6, 0, 6);
       else                box(psu_x1+0.5, psu_x1+3.5, psu_y0+6, psu_y1-6, 0, 6);
@@ -371,6 +380,7 @@ module floor_full() {
       translate([0, 0, standoff - insert_depth]) cylinder(d = insert_hole, h = insert_depth + 1, $fn = 40);
       translate([0, 0, -1]) cylinder(d = 3.2, h = standoff + 1, $fn = 30);
     }
+    if (use_inserts) for (p = bridge_screws_floor()) translate([p[0], p[1], bridge_boss_h - insert_depth]) cylinder(d = insert_hole, h = insert_depth + 1, $fn = 40);
     cradle_peg_centres() translate([-(peg+peg_fit)/2, -(peg+peg_fit)/2, -floor_t-1]) cube([peg+peg_fit, peg+peg_fit, floor_t+2]);
     box(foot_slot_x-2.7, foot_slot_x+2.7, 16, board_w+1, -floor_t-1, 1);                        // relief for the bracket's foot
     box(xi0-0.2, xi0+2, xg_exit_y[0], xg_exit_y[1], -0.1, 3.2);                                  // floor lip opened under the cable notch
@@ -396,6 +406,10 @@ module lid_full() {
   lip_ring(zi1-4, zi1);
   if (!use_inserts) for (p = post_centers()) translate([p[0]-peg/2, p[1]-peg/2, zi1-3.6]) cube([peg, peg, 3.6+eps]);   // print-only: pegs into the posts
   if (use_inserts) lid_ties("tab");                                                      // lid_l's tabs beside the two mid posts at the seam
+  if (use_inserts) for (p = bridge_screws_lid()) translate([p[0], p[1], zi1 - lid_boss_h]) difference() {   // bosses for the seam bridges
+    cylinder(d = boss_d_ins, h = lid_boss_h + eps, $fn = 40);
+    translate([0, 0, -1]) cylinder(d = insert_hole, h = insert_depth + 1, $fn = 40);
+  }
   // ribs straddling the card's top edge (front half of the card, clear of the 8-pin plug)
   for (y = [[card_y0-3.5, card_y0-0.5], [card_y1+0.5, card_y1+3.5]]) box(xb+14, xb+64, y[0], y[1], card_top+1, zi1+eps);
   // guides beside the bracket's top end
@@ -466,6 +480,26 @@ module panel_left_f()  { panel_xz(x_mid+2.3, xi1-core+slot_d-0.3, yo0, yi0) left
 module panel_right_r() { panel_xz(xi0+core-slot_d+0.3, x_mid-2.3, yi1, yo1) right_cutters(); }
 module panel_right_f() { panel_xz(x_mid+2.3, xi1-core+slot_d-0.3, yi1, yo1) right_cutters(); }
 module panels() { panel_rear_l(); panel_rear_r(); panel_far_l(); panel_far_r(); panel_left_r(); panel_left_f(); panel_right_r(); panel_right_f(); }
+
+/* ================= seam bridges (separate flat parts) ================= */
+function strap_pts(c, along_x) = [for (s = [-1, 1]) along_x ? [c[0] + s*bridge_off, c[1]] : [c[0], c[1] + s*bridge_off]];
+function centre_pts() = [for (sx = [-1, 1]) for (sy = [-1, 1]) [x_seam + sx*bridge_off, y_seam + sy*bridge_off]];   // one screw into each floor piece
+function bridge_screws_floor() = concat(centre_pts(), [for (x = floor_straps_x) each strap_pts([x, y_seam], false)]);
+function bridge_screws_lid()   = [for (y = lid_straps_y) each strap_pts([x_seam, y], true)];
+module bridge_plate(pts) {
+  difference() {
+    hull() for (p = pts) translate([p[0], p[1], 0]) cylinder(r = 5, h = bridge_t, $fn = 32);
+    for (p = pts) translate([p[0], p[1], -1]) cylinder(d = 3.4, h = bridge_t + 2, $fn = 30);
+  }
+}
+module bridges() {   // all five in place: one plate where the four floor pieces meet, two straps on the floor, two under the lid
+  translate([0, 0, bridge_boss_h]) { bridge_plate(centre_pts()); for (x = floor_straps_x) bridge_plate(strap_pts([x, y_seam], false)); }
+  translate([0, 0, zi1 - lid_boss_h - bridge_t]) for (y = lid_straps_y) bridge_plate(strap_pts([x_seam, y], true));
+}
+module bridge_heads() {
+  for (p = bridge_screws_floor()) translate([p[0], p[1], bridge_boss_h + bridge_t]) cylinder(d = 5.6, h = 3.2, $fn = 24);
+  for (p = bridge_screws_lid())   translate([p[0], p[1], zi1 - lid_boss_h - bridge_t - 3.2]) cylinder(d = 5.6, h = 3.2, $fn = 24);
+}
 
 /* ================= far-end cradle (separate part, plugs into the floor) ================= */
 module cradle() {
@@ -610,10 +644,10 @@ module plan_shapes() {
 module coupon_rear() { intersection() { panel_rear_r(); box(xo0-1, xi0+1, -3, board_w+22, 0, 58); } }
 
 /* ================= views ================= */
-module structure() { floor_full(); posts(); panels(); lid_full(); cradle(); bracket_holder(); }
+module structure() { floor_full(); posts(); panels(); lid_full(); cradle(); bracket_holder(); if (use_inserts) bridges(); }
 module assembly()  { structure(); ghosts(); }
 module inside()    { floor_full(); posts(); panel_rear_l(); panel_rear_r(); panel_far_l(); panel_far_r(); panel_left_r(); panel_left_f(); cradle(); bracket_holder(); ghosts(); }   // lid and +Y wall removed
-module tie_heads()  { floor_ties("head"); lid_ties("head"); }
+module tie_heads()  { floor_ties("head"); lid_ties("head"); bridge_heads(); }
 module collision() { intersection() { union() { structure(); if (use_inserts) tie_heads(); } ghosts_hard(); } }
 
 /* ================= pictures: where every insert and screw goes ================= */
@@ -621,6 +655,10 @@ module m3(len = 8) { cylinder(d = 5.5, h = 3, $fn = 24); translate([0, 0, -len])
 module hardware(what, where) {   // what: "screw" or "insert"; where: "floor" (the ties and the board), "lid"
   if (where == "floor") {
     floor_ties(what);
+    for (p = bridge_screws_floor()) translate([p[0], p[1], 0]) {
+      if (what == "screw")  translate([0, 0, bridge_boss_h + bridge_t]) m3();
+      if (what == "insert") translate([0, 0, bridge_boss_h - 5]) cylinder(d = 4.5, h = 5, $fn = 24);
+    }
     for (h = holes) translate([h[0], h[1], 0]) {
       if (what == "screw")  translate([0, 0, zb]) m3();
       if (what == "insert") translate([0, 0, standoff - 5]) cylinder(d = 4.5, h = 5, $fn = 24);
@@ -628,6 +666,10 @@ module hardware(what, where) {   // what: "screw" or "insert"; where: "floor" (t
   }
   if (where == "lid") {
     lid_ties(what);
+    for (p = bridge_screws_lid()) translate([p[0], p[1], 0]) {
+      if (what == "screw")  translate([0, 0, zi1 - lid_boss_h - bridge_t]) rotate([180, 0, 0]) m3();
+      if (what == "insert") translate([0, 0, zi1 - lid_boss_h]) cylinder(d = 4.5, h = 5, $fn = 24);
+    }
     for (p = post_centers()) translate([p[0], p[1], 0]) {
       if (what == "screw")  translate([0, 0, zi1 + lid_t]) m3();
       if (what == "insert") translate([0, 0, zi1 - 5]) cylinder(d = 4.5, h = 5, $fn = 24);
@@ -637,16 +679,21 @@ module hardware(what, where) {   // what: "screw" or "insert"; where: "floor" (t
 // render(): the preview gives up on cutting shapes this busy and would draw the whole floor four times, in one colour
 module pic_floor() { color("#f1f3f6") render() floor_rl(); color("#bcc7d5") render() floor_rr(); color("#bcc7d5") render() floor_fl(); color("#f1f3f6") render() floor_fr(); }
 module pic_frame() {             // floor and posts, no walls, no lid
-  pic_floor(); color("#7fa3d1") posts();
+  pic_floor(); color("#7fa3d1") posts(); color("#e9a23b") translate([0, 0, bridge_boss_h]) { bridge_plate(centre_pts()); for (x = floor_straps_x) bridge_plate(strap_pts([x, y_seam], false)); }
   color("#d8402c") hardware("screw", "floor"); color("#d9a520") hardware("insert", "floor");
 }
 module pic_lid() {               // the lid on its posts, seen from above
   color("#f1f3f6") render() lid_l(); color("#bcc7d5") render() lid_r(); color("#7fa3d1") posts();
   color("#d8402c") hardware("screw", "lid"); color("#d9a520") hardware("insert", "lid");
 }
-module pic_lid_under() {         // the same without the lid's plate: the posts' top ends, the lid's two tabs and their screws
-  color("#7fa3d1") posts(); color("#e3e8ee") lid_ties("tab");
-  color("#d8402c") lid_ties("screw"); color("#d9a520") hardware("insert", "lid");
+module pic_lid_below() {         // the lid alone, from underneath: its two straps, its two tabs, and the screws that go in from below
+  color("#f1f3f6") render() lid_l(); color("#bcc7d5") render() lid_r();
+  color("#e9a23b") translate([0, 0, zi1 - lid_boss_h - bridge_t]) for (y = lid_straps_y) bridge_plate(strap_pts([x_seam, y], true));
+  color("#d8402c") { lid_ties("screw"); for (p = bridge_screws_lid()) translate([p[0], p[1], zi1 - lid_boss_h - bridge_t]) rotate([180, 0, 0]) m3(); }
+}
+module pic_lid_under() {         // the same without the lid: the posts' top ends, the lid's two tabs and their screws
+  color("#7fa3d1") posts(); color("#e3e8ee") lid_ties("tab"); color("#d8402c") lid_ties("screw");
+  color("#d9a520") { lid_ties("insert"); for (p = post_centers()) translate([p[0], p[1], zi1 - 5]) cylinder(d = 4.5, h = 5, $fn = 24); }
 }
 
 /* ================= part selector (parts are laid out for printing) ================= */
@@ -701,12 +748,14 @@ else if (part == "asm_board") ghost_board();
 else if (part == "asm_card") ghost_card_detail();
 else if (part == "asm_psu") ghost_psu();
 else if (part == "asm_zones") ghost_zones();
+else if (part == "asm_bridges") bridges();
 else if (part == "asm_screws")  { hardware("screw", "floor");  hardware("screw", "lid"); }     // every M3 screw in place
 else if (part == "asm_inserts") { hardware("insert", "floor"); hardware("insert", "lid"); }    // and every heat-set insert
 else if (part == "inside") inside();
 else if (part == "pic_frame") pic_frame();
 else if (part == "pic_lid") pic_lid();
 else if (part == "pic_lid_under") pic_lid_under();
+else if (part == "pic_lid_below") pic_lid_below();
 else if (part == "collision") collision();
 else if (part == "floor_rl") translate([0,0,floor_t]) floor_rl();
 else if (part == "floor_rr") translate([0,0,floor_t]) floor_rr();
@@ -728,6 +777,8 @@ else if (part == "panel_left_r")  flat_xz(yo0) panel_left_r();
 else if (part == "panel_left_f")  flat_xz(yo0) panel_left_f();
 else if (part == "panel_right_r") flat_xz(yi1) panel_right_r();
 else if (part == "panel_right_f") flat_xz(yi1) panel_right_f();
+else if (part == "bridge_centre") bridge_plate([for (sx = [-1, 1]) for (sy = [-1, 1]) [sx*bridge_off, sy*bridge_off]]);
+else if (part == "bridge_strap")  bridge_plate([[-bridge_off, 0], [bridge_off, 0]]);
 else if (part == "cradle") rotate([0,90,0]) translate([-card_x1, 0, 0]) cradle();   // on its side: the pegs become short horizontal stubs
 else if (part == "coupon") { coupon(); translate([0, 45, 0]) coupon(); }   // two: tab, peg and slot are tested against the other piece
 else if (part == "coupon_rear") flat_yz(xo0) coupon_rear();

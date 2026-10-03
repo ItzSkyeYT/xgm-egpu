@@ -22,8 +22,8 @@ STAGES = [
     ('4-final', 'The rest', [
         ('4A-floor-cable-bay', 'the floor piece under the cable bay', False,
          [('floor_rl', 1)]),
-        ('4B-floor-psu', 'the floor piece under the PSU', False,
-         [('floor_fl', 1)]),
+        ('4B-floor-psu', 'the floor piece under the PSU, and the five seam bridges', False,
+         [('floor_fl', 1), ('bridge_centre', 1), ('bridge_strap', 4)]),
         ('4C-posts', 'the other six posts', True,
          [('post_corner', 3), ('post_mid', 3)]),
         ('4D-rear-wall', 'both halves of the rear wall', False,
@@ -64,6 +64,8 @@ NOTES = {
     'panel_right_f': "intake grille for the card's fans, far half",
     'lid_l': "with the guides that steady the card's bracket and top edge, and two post tabs",
     'lid_r': 'vents only',
+    'bridge_centre': 'the plate over the point where the four floor pieces meet',
+    'bridge_strap': "two across the floor's long seam, two under the lid's seam",
 }
 
 LID_QUARTERS = ['lid_rl', 'lid_rr', 'lid_fl', 'lid_fr']
