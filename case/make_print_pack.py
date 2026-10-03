@@ -283,8 +283,9 @@ print-pack/
   every part a separate object. File → Open Project in Orca, then hide parts in the object list to look
   inside. **Not for printing.**
 - [`floor-plan-A3.pdf`](reference/floor-plan-A3.pdf) and [`floor-plan-A4-2pages.pdf`](reference/floor-plan-A4-2pages.pdf):
-  the floor plan at 1:1. Print at 100 % and lay the real parts on it. For the A4 pair, cut sheet 1 along
-  its dashed line and lay it on sheet 2, cut edge on the dashed line there, crosses on crosses.
+  the floor plan at 1:1. Print at 100 % and lay the real parts on it. The A4 pair is drawn sideways so it
+  fits an inkjet's printable area: cut sheet 1 along its dashed line and lay it on sheet 2, cut edge on the
+  dashed line there, crosses on crosses.
 - [`README.md`](reference/README.md): the full notes, including the assembly order.
 - [`DIMENSIONS.md`](reference/DIMENSIONS.md): every part's size and position.
 """

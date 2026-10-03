@@ -76,12 +76,17 @@ the cheap place to find out.
 
 ## Check the fit on paper first
 
-`plan/floor-plan-A3.pdf` (one A3 page) and `plan/floor-plan-A4-2pages.pdf` (two A4 landscape pages)
+`plan/floor-plan-A3.pdf` (one A3 page) and `plan/floor-plan-A4-2pages.pdf` (two A4 pages)
 are the floor plan at 1:1: the frame and its posts, the board with its holes, the card's footprint and
 bracket line, the PSU and its 24-pin bend, the cradle, the holder, the grommet clip and the openings
 in the walls, with numbered markers explained in a legend. Print at **actual size / 100 %**, never
 "fit to page", then check the 100 mm bar with a ruler. For the A4 pair, cut sheet 1 along its dashed
 line, lay it on sheet 2 with the cut edge on the dashed line there and the crosses lined up, and tape.
+
+The A4 pages are portrait with the drawing turned sideways, on purpose: the 270.7 mm side then runs
+down the paper, where an inkjet can print almost to the edge. Laid out landscape, the printer driver
+turns the page itself and one wall lands in the strip it cannot print (the last 14.5 mm of the sheet
+on an HP Deskjet 1510). From a terminal: `lp -o media=A4 -o print-scaling=none plan/floor-plan-A4-2pages.pdf`.
 
 Lay the board, the card and the PSU on it, plug the 24-pin in and see where the bundle wants to go.
 This costs nothing and catches the mistakes a render can't: a cable that is stiffer than I think, a
