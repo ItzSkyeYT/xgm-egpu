@@ -148,7 +148,7 @@ for stage, _, stage_batches in STAGES:
         project = os.path.join(HERE, 'plates', stage, batch + '.3mf')
         different = ';'.join(sorted(k for k, v in overrides.items() if str(stock.get(k)) != v))
         with zipfile.ZipFile(os.path.join(out, 'raw.3mf')) as zin, zipfile.ZipFile(project, 'w', zipfile.ZIP_DEFLATED) as zout:
-            for item in zin.infolist():
+            for item in sorted(zin.infolist(), key=lambda i: i.filename):     # Orca's own order varies between runs
                 data = zin.read(item.filename)
                 if item.filename == 'Metadata/project_settings.config':
                     cfg = json.loads(data)

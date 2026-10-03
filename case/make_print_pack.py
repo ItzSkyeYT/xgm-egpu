@@ -152,8 +152,9 @@ else:
 md = f"""# XGM Lite frame · print pack
 
 A print-only case for the **XG Mobile Station Lite** board, an **Inno3D RTX 3060 Twin X2 OC** and a
-**Corsair RM850**. No glue: the parts peg, slot and slide together, and 39 M3×8 screws in heat-set
-inserts hold the board, the posts, the lid and the seams between the floor's and the lid's pieces.
+**Corsair RM850**. No glue: the parts peg, slot and slide together, and 41 M3×8 screws in heat-set
+inserts hold the board, the posts, the lid, the seams between the floor's and the lid's pieces, and
+the card's bracket.
 
 ![The finished case](img/case.png)
 
@@ -259,15 +260,16 @@ number changes in the model, and only the coupon is reprinted.
 - [ ] The two floor pieces press together on their jigsaw tabs and lie flat on the table.
 - [ ] The five inserts are melted into the round bosses, straight and flush: three on `floor_rr`, two on `floor_fr`.
 - [ ] The bare board sits flat on the five bosses, and five M3×8 screws pull it down without rocking. M3×6 also works; nothing longer than 8.
-- [ ] The holder's three pegs go down through the board's three small holes, into the floor.
-- [ ] With the card plugged in, the bracket's foot sits in the board's slot.
-- [ ] The bracket's top tab rests on the holder's arm, or floats a hair above it. Slide shims under it until it touches.
+- [ ] Two inserts are melted into the holder: one into the hole in its top edge, one into the hole in its back, the face that lay on the bed.
+- [ ] The holder's three pegs go down through the board's three small holes, into the floor. Its back, the face with the insert, looks away from the card.
+- [ ] With the card plugged in, the bracket's foot sits in the board's slot and its top tab lies over the holder's top edge.
+- [ ] The oval hole in the tab sits over the insert. An M3×8 with a `bracket_washer` under its head goes down through it and tightens; the holder lifts a little to meet the tab, which is intended.
 - [ ] The card's far end rests on the cradle without lifting the card out of its slot.
 
 **If something fails:**
 
 - *The bosses don't meet the board's holes:* stop and send a photo. The board isn't what its design file says.
-- *The tab is more than 2 mm off the arm:* re-measure the tab height. Only the holder is reprinted.
+- *The tab's oval hole misses the insert, or the holder's top edge sits more than a millimetre above or below the tab:* send a photo from straight above with a ruler in it. Only the holder is reprinted.
 - *The cradle lifts the card, or there's daylight under it:* re-measure the card's lowest point. Only the cradle is reprinted.
 
 ---
@@ -319,6 +321,11 @@ Join its two halves upside down and screw the other two straps across the seam, 
 piece; lower it, and put eight screws down into the posts and two sideways through the tabs under its
 rear half.
 
+**The bracket holder to the rear wall**, one screw: `panel_rear_r` has a short boss on its inside with a hole
+right through from the outside. Once that panel is down in its slots, put an M3×8 on the end of the hex key,
+pass it down the hole and tighten it into the insert in the holder's back. Do this after the bracket's own screw
+and before the lid goes on.
+
 **On a bed under 250 mm**, print the four files in [`4-final/{SUBDIR_LIDQ}`](4-final/{SUBDIR_LIDQ}/)
 instead of the two lid batches.
 
@@ -326,8 +333,8 @@ instead of the two lid batches.
 
 ## Where every insert and screw goes
 
-39 inserts and 39 M3×8 socket-head screws. The horizontal ones must be M3×8: a longer screw bottoms out
-in the post before it clamps.
+41 inserts and 41 M3×8 socket-head screws: 25 at floor level, 14 for the lid and 2 at the card's bracket, which
+are the last picture below. The horizontal ones must be M3×8: a longer screw bottoms out before it clamps.
 
 ![The 25 screws at floor level](img/screws-floor.png)
 

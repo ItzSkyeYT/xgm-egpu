@@ -45,7 +45,7 @@ if P['iec_far']:
 # ---------- numbered markers, explained in the legend ----------
 callouts = [
     (P['xo0'], (P['usbc_y0'] + P['usbc_y1']) / 2, "USB-C opening in the rear wall"),
-    (P['xo0'], (P['bracket_y0'] + P['bracket_y1']) / 2, "window in the rear wall for the card's display ports"),
+    (P['xo0'], (P['bracket_y0'] + P['ports_y1']) / 2, "window in the rear wall for the card's display ports"),
     (P['xo0'], (P['exit_y0'] + P['exit_y1']) / 2, "notch for the laptop cable, open at the bottom of the rear wall"),
     (P['xo0'], psu_cy, "rear wall: vents over the cable bay" if P['iec_far'] else "rear wall: PSU opening"),
     (P['xo1'], psu_cy, "far wall: opening for the PSU's power inlet and switch" if P['iec_far'] else "far wall: vents"),

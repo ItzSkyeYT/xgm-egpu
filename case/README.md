@@ -2,13 +2,14 @@
 
 `xgm-lite-frame.scad` is a parametric OpenSCAD enclosure for an **XG Mobile Station Lite** board
 (osy's open-source XG Mobile dock, "Lite" variant), a **desktop graphics card** and an **ATX power
-supply**. It needs no glue, magnets or 90° power adapters. By default 39 M3×8 screws in heat-set
+supply**. It needs no glue, magnets or 90° power adapters. By default 41 M3×8 screws in heat-set
 inserts hold it together: five for the board, twelve between the posts and the floor, eight in the
-plates that bridge the floor's seams, ten for the lid and four in the straps under the lid's seam
+plates that bridge the floor's seams, ten for the lid, four in the straps under the lid's seam, one
+through the card's bracket and one from the rear wall into the bracket holder
 (`use_inserts = false` gives the print-only version, with pegs and snap clips instead, and nothing
-tying the posts or the seams). The panels slide into printed posts, the PSU is
-held by its own weight and a few stops, and the card is held by the PCIe slot plus a printed cradle
-under its far end.
+tying the posts, the seams or the bracket). The panels slide into printed posts, the PSU is
+held by its own weight and a few stops, and the card is held by the PCIe slot, by its bracket and by
+a printed cradle under its far end.
 
 The defaults are the parts it was drawn around:
 
@@ -30,8 +31,10 @@ Two details of the Lite board that the case relies on, both visible in osy's KiC
 slot across the board at x = 13.7 mm is the chassis slot for the GPU bracket's foot (so the bracket
 plane sits there, 47.5 mm in front of the PCIe contact A1, as the PCIe CEM spec says it should), and
 the three 3 × 4 mm holes at x = 7.2 mm are for a bracket holder. This case prints that holder: it
-stands in the three holes, passes through them into the floor, and the bracket's top tab rests on
-its arm, which is how a PC chassis carries a card's front end.
+stands in the three holes, passes through them into the floor, and the bracket's top tab is screwed
+down onto its top edge, which is how a PC chassis holds a card's front end. The three holes sit under
+the standard screw lines of three slots (1.86 mm on the solder side of each slot's PCB plane); the
+3060's one screw point, an oval hole in its two-slot tab, is over the middle one.
 
 ![outside: PSU intake side and lid](img/outside.png)
 ![rear wall: PSU grille, laptop-cable exit, USB-C, display ports](img/rear.png)
@@ -68,8 +71,10 @@ The defaults are now the real parts, measured with calipers (see the table in `D
 thickness 42.2, bracket tab 109.0 above the board, foot 9.7 below it, card's lowest point 18.9 above
 the board at its far end, the sleeved 24-pin bend reaching 86.8 from the board edge, and the cable
 grommet: disc Ø14.8, plate 14.7, gap 1.4, sitting 41.5 from the board's rear edge and 12.7 out from its
-long edge. For another card or PSU, those are the numbers to re-measure; each is a single parameter at the top of
-the file. The holder's arm is printed 0.1 mm low on purpose; `shim_05/10/15` go on it if the tab floats.
+long edge, and the bracket's top tab: 39.4 long (a two-slot bracket) and 10.6 from its free edge to
+the bend. For another card or PSU, those are the numbers to re-measure; each is a single parameter at the top of
+the file. Once its screw is in, the holder hangs from the tab, so its height needs no adjusting;
+`shim_05/10/15` are only for the print-only variant, where the tab just rests on it.
 
 Then print `coupon` first (about 10 g, half an hour). It has a jigsaw tab and slot, a 6 mm peg and
 socket, and a 3 mm panel slot. Everything should push together by hand and hold. If not, adjust
@@ -102,8 +107,8 @@ parameters with `./make_plan.py`, which runs OpenSCAD for the outlines and `rsvg
   board green, card grey, PSU black, plug and cable zones orange), `inside` (lid and intake wall
   removed), or any single part. Turn `vents` off for a faster preview.
 - **`xgm-lite-frame-assembled.3mf`**: every part in its assembled position as a separate, named,
-  coloured object (28 of them: the 4 floor quarters, 2 lid halves, 8 posts, 8 panels, cradle, holder,
-  plus the board, card, PSU and cable zones). Open it in 3dviewer.net, Bambu Studio, PrusaSlicer or
+  coloured object (32 of them: the 4 floor quarters, 2 lid halves, 8 posts, 8 panels, cradle, holder
+  and its washer, the seam bridges, every screw and every insert, plus the board, card, PSU and cable zones). Open it in 3dviewer.net, Bambu Studio, PrusaSlicer or
   OrcaSlicer and hide a wall or the lid in the object list to look inside. 3dviewer.net works on a
   phone. The same parts as individual in-place STLs are in `stl/assembled/`.
 - `stl/_assembly_structure.stl` and `stl/_assembly_ghosts.stl`: the same thing as just two meshes
@@ -119,15 +124,16 @@ Exact sizes of every part, where each one sits, and the feature dimensions are i
 | Part | Qty | Size (mm) | Prints | Notes |
 |---|---|---|---|---|
 | `floor_rl`, `floor_rr`, `floor_fl`, `floor_fr` | 1 each | ≤ 151 × 127 × 24 | flat, as exported | the four floor quarters; jigsaw tabs join them, and twelve upright tabs take the screws that tie the posts down. `floor_rr` (three) and `floor_fr` (two) carry the board bosses with their inserts; `floor_rr` also the foot relief, the holder sockets and the grommet clip |
-| `lid_l`, `lid_r` | 1 each | ≤ 151 × 244 × 75 | upside down, as exported | two-piece lid (needs a 250 mm bed). For smaller beds print `lid_rl`, `lid_rr`, `lid_fl`, `lid_fr` instead (≤ 151 × 144) |
+| `lid_l`, `lid_r` | 1 each | ≤ 151 × 244 × 16 | upside down, as exported | two-piece lid (needs a 250 mm bed). For smaller beds print `lid_rl`, `lid_rr`, `lid_fl`, `lid_fr` instead (≤ 151 × 144) |
 | `post_corner` | 4 | 15 × 15 × 180 | upright, as exported (top end on the bed, peg up) | identical: each is turned, not mirrored. Insert holes in the top end and in the two inner faces near the foot |
 | `bridge_centre` | 1 | 30 × 30 × 3 | flat | the plate over the point where the four floor pieces meet: one screw into each |
 | `bridge_strap` | 4 | 30 × 10 × 3 | flat | two across the floor's long seam, two under the lid's seam |
 | `post_mid` | 4 | 15 × 20 × 180 | upright | one per wall, where the panels split; identical and symmetric. Insert holes in the top end and in a small boss on each side, at the foot and at the top |
-| `panel_rear_l`, `panel_rear_r`, `panel_far_l`, `panel_far_r` | 1 each | ≤ 178 × 111 × 3 | flat | rear wall: bay vents, USB-C hole, display-port opening, laptop-cable exit; far wall: PSU opening and GPU exhaust vents |
+| `panel_rear_l`, `panel_rear_r`, `panel_far_l`, `panel_far_r` | 1 each | ≤ 178 × 124 × 3 (`panel_rear_r`: 12 with its boss) | flat | rear wall: bay vents, USB-C hole, display-port opening, laptop-cable exit, and a boss with a screw hole that reaches in to the bracket holder; far wall: PSU opening and GPU exhaust vents |
 | `panel_left_r`, `panel_left_f`, `panel_right_r`, `panel_right_f` | 1 each | ≤ 144 × 178 × 3 | flat | left = PSU intake grille; right = GPU intake grille |
-| `bracket_holder` | 1 | 116 × 51 × 6 | on its side, as exported | stands in the board's three holes; the bracket tab rests on its arm |
-| `shim_05`, `shim_10`, `shim_15` | as needed | 24 × 6 | flat | 0.5 / 1.0 / 1.5 mm shims for the holder's arm |
+| `bracket_holder` | 1 | 119 × 51 × 6 | on its back, as exported | one flat plate: stands in the board's three holes, the bracket's tab is screwed to its top edge, its back is screwed to the rear wall. Insert holes in the top edge and in the back |
+| `bracket_washer` | 2 | Ø8 × 1.6 | flat | under the head of the bracket's screw, since the tab's oval hole is nearly as wide as the head; the second is a spare |
+| `shim_05`, `shim_10`, `shim_15` | print-only variant | 24 × 6 | flat | 0.5 / 1.0 / 1.5 mm shims for the holder's top edge |
 | `cradle` | 1 | 55 × 49 × 18 | on its side, as exported | supports the card's far end; height from `card_bottom_clear` |
 | `coupon` | 1 file, 2 pieces | 60 × 82 × 9 | flat | fit test: the two pieces are tested against each other |
 | `coupon_rear` | 1 | 58 × 89 × 3 | flat | bottom of the rear wall: laptop-cable notch, USB-C hole, bottom of the port window |
@@ -135,7 +141,7 @@ Exact sizes of every part, where each one sits, and the feature dimensions are i
 | `coupon_inserts` | 1 | 52 × 17 × 9 | flat | three board bosses, insert holes 3.8 / 4.0 / 4.2: the one that takes an insert cleanly sets `insert_hole` |
 | `_assembly_structure`, `_assembly_ghosts` | — | — | not for printing | the whole thing, for viewers |
 
-About 890 g of PETG, tests included, so one 1 kg spool, and about 30 hours of printing: those are real
+About 895 g of PETG, tests included, so one 1 kg spool, and about 31 hours of printing: those are real
 slices of the print pack's batches for a Bambu X1 Carbon at 3 walls and 15 % infill, which
 `./make_plates.py` writes to `weights.json`. A volume estimate runs about a quarter high, and 4 walls
 with 40 % infill go just past a kilo.
@@ -154,20 +160,21 @@ already arranged on an X1 Carbon's bed and the settings saved in it. In short:
 1. **Tests**: `coupon` (two pieces), `coupon_rear`, `coupon_grommet` and `coupon_inserts`, about 25 g.
    Your printer's fits, the real plugs in the real openings, which clip grips the cable's grommet, and
    which hole takes the heat-set inserts.
-2. **Board and card**: `floor_rr`, `floor_fr`, `bracket_holder`, `cradle` and the shims. The board
-   screwed down on its five bosses, the card on the holder and the cradle.
+2. **Board and card**: `floor_rr`, `floor_fr`, `bracket_holder` with its washer, `cradle`. The board
+   screwed down on its five bosses, the card's bracket screwed to the holder, its far end on the cradle.
 3. **Structure sample**: one `post_corner`, one `post_mid`, and both halves of the card-side wall.
    Full-height posts screwed to the floor, a seam pulled shut by a mid post, a wall in its slots.
 4. **The rest**: the two floor pieces under the PSU, the other six posts, the three remaining walls,
    the lid.
 
 Only the stage 1 tests are throwaway. The plan itself, stages and batches in print order, is
-`stages.py`. After any change to the model: `./render.sh`, then `./make_plates.py` (a quarter of an
-hour: it arranges and slices every batch with OrcaSlicer's command line), then `./make-print-pack.sh`.
+`stages.py`. After any change to the model: `./render.sh`, then `./make_plates.py` (a minute or two:
+it arranges and slices every batch with OrcaSlicer's command line), then `./make-print-pack.sh`.
 
 ## Assembly
 
-Where the 39 inserts and screws go, all M3×8:
+Where the 41 inserts and screws go, all M3×8: 25 at floor level, 14 for the lid, and two at the card's
+bracket, shown in the last tile of the third picture.
 
 ![The 25 screws at floor level](img/screws-floor.png)
 ![The 14 screws of the lid](img/screws-lid.png)
@@ -179,6 +186,7 @@ Where the 39 inserts and screws go, all M3×8:
    - eight into the low bosses beside the floor's seams, two on each floor piece, and four into the
      bosses under the lid, two on each half;
    - one into the top end of each of the eight posts;
+   - two into the bracket holder: one into the hole in its top edge, one into the hole in its back;
    - corner posts: one into the higher side hole of all four, and one into the lower side hole of two
      of them. Those two go to the corners with two tabs: rear wall on the PSU side, far wall on the
      card side;
@@ -193,20 +201,23 @@ Where the 39 inserts and screws go, all M3×8:
    beside it, twelve screws: four of them go into a tab on the neighbouring floor piece and pull that
    seam shut.
 4. Board on its five bosses, screwed down with five M3×8 socket-head screws (M3×6 also works; nothing
-   longer than 8, or the tips reach the floor). Bracket holder into its three holes.
+   longer than 8, or the tips reach the floor). Bracket holder into its three holes, its back (the
+   face with the insert) toward the rear wall.
 5. PSU on its side, fan toward the outer wall on the PSU side, IEC inlet toward the far wall, slid
    forward against the stops.
-6. Card into the slot: foot in the board's slot, tab on the holder's arm, far end on the cradle. Then
+6. Card into the slot: foot in the board's slot, tab over the holder's top edge, far end on the cradle.
+   Screw the tab down: one M3×8 with a `bracket_washer` under its head, through the tab's oval hole
+   into the holder, which rises a little to meet the tab. Then
    the 24-pin (its bundle leaves the plug, bends inside the bay and reaches the modular face; the spare
    length lies in the bay as one loop), the 8-pin over the top of the card into the same bay. Press
    the laptop cable's grommet down into the clip beside the board, the clip's thin wall going into the
    gap between the grommet's round disc and square plate, and lay the thick cable toward the rear corner.
 7. Slide the eight panels down into the post slots. The panel with the big opening is the far wall on
    the PSU side. The board-side rear panel goes down over the laptop cable: its bottom notch straddles
-   the cable.
+   the cable. Then the screw that ties the holder to that panel: on the end of the hex key, down the
+   hole in the panel and its boss, into the holder's back.
 8. Lid: join its two halves upside down on the table and screw the two straps across the seam, four
-   screws; it is now one piece. Lower it: the two ribs straddle the card's top edge, the two guides
-   straddle the top of the bracket, and the rear half's two tabs come down beside the mid posts. Eight
+   screws; it is now one piece. Lower it: the rear half's two tabs come down beside the mid posts. Eight
    screws go down through the lid into the posts, and two go sideways through those tabs.
 
 The horizontal screws are M3×8 exactly: a longer one bottoms out in the post before it clamps.
@@ -217,9 +228,8 @@ with a hand under the floor all the same, since that is what the PSU and the car
 
 ## What this case does not do
 
-- The holder carries the card's front by its tab, but with gravity only: there is no thumbscrew. The
-  lid guides straddle the top of the bracket so it cannot sway; lifting the whole box upside down is
-  still a bad idea.
+- The card is held at its bracket, like in a PC: the tab screwed to the holder, the holder screwed to
+  the rear wall. Its far end only rests in the cradle, so carry the box upright.
 - The display ports sit 18 mm inside the rear wall; the opening in the panel is sized for plugs.
 - It is not sealed against dust; it's a ventilated frame.
 
@@ -234,3 +244,5 @@ only makes sense with flat cables that can bend inside a 65 mm channel.
 `openscad -o x.stl -D 'part="collision"' -D vents=false xgm-lite-frame.scad` renders the intersection
 of the printed geometry with the volumes of the board (connectors included), the card, the PSU and the
 plug/cable zones. It must come out empty; it does with the defaults. Run it after any change.
+`./check_overlaps.py` (after `./render-assembled.sh`) does the same for the printed parts against each
+other, which the first test does not look at.

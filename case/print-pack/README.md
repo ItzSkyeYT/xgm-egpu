@@ -1,8 +1,9 @@
 # XGM Lite frame · print pack
 
 A print-only case for the **XG Mobile Station Lite** board, an **Inno3D RTX 3060 Twin X2 OC** and a
-**Corsair RM850**. No glue: the parts peg, slot and slide together, and 39 M3×8 screws in heat-set
-inserts hold the board, the posts, the lid and the seams between the floor's and the lid's pieces.
+**Corsair RM850**. No glue: the parts peg, slot and slide together, and 41 M3×8 screws in heat-set
+inserts hold the board, the posts, the lid, the seams between the floor's and the lid's pieces, and
+the card's bracket.
 
 ![The finished case](img/case.png)
 
@@ -31,9 +32,9 @@ inserts hold the board, the posts, the lid and the seams between the floor's and
 | Stage | Folder | What it proves | Batches | Time | Plastic |
 |:-:|---|---|:-:|--:|--:|
 | 1 | [`1-tests`](1-tests/) | your printer's fits, the real plugs in the real openings, the grommet clip, the insert holes | 1 | 1 h 06 | ≈ 25 g |
-| 2 | [`2-board-and-card`](2-board-and-card/) | the board screwed down on its five inserts, the card on its two supports | 2 | 3 h 09 | ≈ 110 g |
+| 2 | [`2-board-and-card`](2-board-and-card/) | the board screwed down on its five inserts, the card on its two supports | 2 | 3 h 11 | ≈ 110 g |
 | 3 | [`3-structure-sample`](3-structure-sample/) | full-height posts, and a wall in its slots | 2 | 6 h 35 | ≈ 140 g |
-| 4 | [`4-final`](4-final/) | the rest of the box | 8 | 21 h 01 | ≈ 635 g |
+| 4 | [`4-final`](4-final/) | the rest of the box | 8 | 19 h 58 | ≈ 620 g |
 
 ### Print order
 
@@ -48,11 +49,11 @@ nothing below it is worth the plastic until it has passed.
     ├── coupon_grommet              three clips, slots of 10.5, 11.5 and 12.5 mm
     └── coupon_rear                 a slice of the rear wall: cable notch, USB-C hole, port window
 
-2 · Board and card                        3 h 09 · 110 g
-├── 2A-floor-board-rear.3mf               1 h 40 · 55 g
+2 · Board and card                        3 h 11 · 110 g
+├── 2A-floor-board-rear.3mf               1 h 42 · 55 g
 │   ├── floor_rr                    three of the five board bosses, the holder's holes, the grommet clip, three post tabs
-│   ├── bracket_holder              stands in the board's three small holes, carries the bracket's tab
-│   └── shim_05, shim_10, shim_15   shims for the holder's arm
+│   ├── bracket_holder              stands in the board's three small holes; the bracket's tab is screwed to its top edge
+│   └── 2 × bracket_washer          goes under the head of the bracket's screw; the second one is a spare
 └── 2B-floor-board-far.3mf                1 h 29 · 50 g
     ├── floor_fr                    the other two board bosses, four post tabs
     └── cradle                      under the card's far end
@@ -65,7 +66,7 @@ nothing below it is worth the plastic until it has passed.
     ├── panel_right_r               intake grille for the card's fans, rear half
     └── panel_right_f               intake grille for the card's fans, far half
 
-4 · The rest                              21 h 01 · 635 g
+4 · The rest                              19 h 58 · 620 g
 ├── 4A-floor-cable-bay.3mf                1 h 24 · 45 g
 │   └── floor_rl                    under the cable bay and the near end of the PSU, three post tabs
 ├── 4B-floor-psu.3mf                      1 h 24 · 45 g
@@ -75,8 +76,8 @@ nothing below it is worth the plastic until it has passed.
 ├── 4C-posts.3mf                          5 h 51 · 140 g
 │   ├── 3 × post_corner             inserts in its top end and in its side, near the foot
 │   └── 3 × post_mid                between two wall panels; inserts in its top end and its sides
-├── 4D-rear-wall.3mf                      2 h 30 · 80 g
-│   ├── panel_rear_r                USB-C opening, display-port window, laptop-cable notch
+├── 4D-rear-wall.3mf                      2 h 41 · 80 g
+│   ├── panel_rear_r                USB-C opening, display-port window, laptop-cable notch, and the boss that is screwed to the bracket holder
 │   └── panel_rear_l                vents over the cable bay
 ├── 4E-far-wall.3mf                       1 h 48 · 65 g
 │   ├── panel_far_l                 opening for the PSU's power inlet and switch
@@ -84,8 +85,8 @@ nothing below it is worth the plastic until it has passed.
 ├── 4F-psu-side-wall.3mf                  2 h 41 · 95 g
 │   ├── panel_left_r                PSU intake grille, rear half
 │   └── panel_left_f                PSU intake grille, far half
-├── 4G-lid-rear.3mf                       3 h 29 · 100 g
-│   └── lid_l                       with the guides that steady the card's bracket and top edge, and two post tabs
+├── 4G-lid-rear.3mf                       2 h 15 · 85 g
+│   └── lid_l                       with the two tabs that are screwed to the mid posts
 └── 4H-lid-far.3mf                        1 h 54 · 70 g
     └── lid_r                       vents only
 ```
@@ -103,9 +104,9 @@ OrcaSlicer; if it does, set the values from the table by hand. For any other sli
 `stl/` folder.
 
 Print the stages in order, and start a stage only when the previous one passed. Only the stage 1 tests
-are throwaway: everything else ends up in the finished case. About **910 g** of PETG in total.
+are throwaway: everything else ends up in the finished case. About **895 g** of PETG in total.
 
-The times and weights are real slices of these very files, not estimates: OrcaSlicer 2.4.2, Bambu Lab X1 Carbon, Bambu PETG Basic, 3 walls, 15 % infill. At these settings **one 1 kg spool covers the whole pack**, tests included, with about 90 g to spare; 4 walls and 40 % infill push it just past a kilo. Allow about 32 hours of printing in all. The longest single batch is `4C-posts`, at 5 h 51: tall, thin posts print slowly, one small layer at a time.
+The times and weights are real slices of these very files, not estimates: OrcaSlicer 2.4.2, Bambu Lab X1 Carbon, Bambu PETG Basic, 3 walls, 15 % infill. At these settings **one 1 kg spool covers the whole pack**, tests included, with about 105 g to spare; 4 walls and 40 % infill push it just past a kilo. Allow about 31 hours of printing in all. The longest single batch is `4C-posts`, at 5 h 51: tall, thin posts print slowly, one small layer at a time.
 
 ---
 
@@ -153,21 +154,22 @@ number changes in the model, and only the coupon is reprinted.
 
 | Order | Open this file | Pieces | Time | Plastic |
 |:-:|---|---|--:|--:|
-| 1 | [`2A-floor-board-rear.3mf`](2-board-and-card/2A-floor-board-rear.3mf) | `floor_rr`, `bracket_holder`, `shim_05`, `shim_10`, `shim_15` | 1 h 40 | ≈ 55 g |
+| 1 | [`2A-floor-board-rear.3mf`](2-board-and-card/2A-floor-board-rear.3mf) | `floor_rr`, `bracket_holder`, 2 × `bracket_washer` | 1 h 42 | ≈ 55 g |
 | 2 | [`2B-floor-board-far.3mf`](2-board-and-card/2B-floor-board-far.3mf) | `floor_fr`, `cradle` | 1 h 29 | ≈ 50 g |
 
 - [ ] The two floor pieces press together on their jigsaw tabs and lie flat on the table.
 - [ ] The five inserts are melted into the round bosses, straight and flush: three on `floor_rr`, two on `floor_fr`.
 - [ ] The bare board sits flat on the five bosses, and five M3×8 screws pull it down without rocking. M3×6 also works; nothing longer than 8.
-- [ ] The holder's three pegs go down through the board's three small holes, into the floor.
-- [ ] With the card plugged in, the bracket's foot sits in the board's slot.
-- [ ] The bracket's top tab rests on the holder's arm, or floats a hair above it. Slide shims under it until it touches.
+- [ ] Two inserts are melted into the holder: one into the hole in its top edge, one into the hole in its back, the face that lay on the bed.
+- [ ] The holder's three pegs go down through the board's three small holes, into the floor. Its back, the face with the insert, looks away from the card.
+- [ ] With the card plugged in, the bracket's foot sits in the board's slot and its top tab lies over the holder's top edge.
+- [ ] The oval hole in the tab sits over the insert. An M3×8 with a `bracket_washer` under its head goes down through it and tightens; the holder lifts a little to meet the tab, which is intended.
 - [ ] The card's far end rests on the cradle without lifting the card out of its slot.
 
 **If something fails:**
 
 - *The bosses don't meet the board's holes:* stop and send a photo. The board isn't what its design file says.
-- *The tab is more than 2 mm off the arm:* re-measure the tab height. Only the holder is reprinted.
+- *The tab's oval hole misses the insert, or the holder's top edge sits more than a millimetre above or below the tab:* send a photo from straight above with a ruler in it. Only the holder is reprinted.
 - *The cradle lifts the card, or there's daylight under it:* re-measure the card's lowest point. Only the cradle is reprinted.
 
 ---
@@ -207,10 +209,10 @@ each of the mid post's two foot bosses.
 | 1 | [`4A-floor-cable-bay.3mf`](4-final/4A-floor-cable-bay.3mf) | `floor_rl` | 1 h 24 | ≈ 45 g |
 | 2 | [`4B-floor-psu.3mf`](4-final/4B-floor-psu.3mf) | `floor_fl`, `bridge_centre`, 4 × `bridge_strap` | 1 h 24 | ≈ 45 g |
 | 3 | [`4C-posts.3mf`](4-final/4C-posts.3mf) | 3 × `post_corner`, 3 × `post_mid` | 5 h 51 | ≈ 140 g |
-| 4 | [`4D-rear-wall.3mf`](4-final/4D-rear-wall.3mf) | `panel_rear_r`, `panel_rear_l` | 2 h 30 | ≈ 80 g |
+| 4 | [`4D-rear-wall.3mf`](4-final/4D-rear-wall.3mf) | `panel_rear_r`, `panel_rear_l` | 2 h 41 | ≈ 80 g |
 | 5 | [`4E-far-wall.3mf`](4-final/4E-far-wall.3mf) | `panel_far_l`, `panel_far_r` | 1 h 48 | ≈ 65 g |
 | 6 | [`4F-psu-side-wall.3mf`](4-final/4F-psu-side-wall.3mf) | `panel_left_r`, `panel_left_f` | 2 h 41 | ≈ 95 g |
-| 7 | [`4G-lid-rear.3mf`](4-final/4G-lid-rear.3mf) | `lid_l` | 3 h 29 | ≈ 100 g |
+| 7 | [`4G-lid-rear.3mf`](4-final/4G-lid-rear.3mf) | `lid_l` | 2 h 15 | ≈ 85 g |
 | 8 | [`4H-lid-far.3mf`](4-final/4H-lid-far.3mf) | `lid_r` | 1 h 54 | ≈ 70 g |
 
 Print the floor first, then the posts: every wall needs a post on each side before it can go in, and the
@@ -231,6 +233,11 @@ Join its two halves upside down and screw the other two straps across the seam, 
 piece; lower it, and put eight screws down into the posts and two sideways through the tabs under its
 rear half.
 
+**The bracket holder to the rear wall**, one screw: `panel_rear_r` has a short boss on its inside with a hole
+right through from the outside. Once that panel is down in its slots, put an M3×8 on the end of the hex key,
+pass it down the hole and tighten it into the insert in the holder's back. Do this after the bracket's own screw
+and before the lid goes on.
+
 **On a bed under 250 mm**, print the four files in [`4-final/lid-quarters-if-bed-under-250mm`](4-final/lid-quarters-if-bed-under-250mm/)
 instead of the two lid batches.
 
@@ -238,8 +245,8 @@ instead of the two lid batches.
 
 ## Where every insert and screw goes
 
-39 inserts and 39 M3×8 socket-head screws. The horizontal ones must be M3×8: a longer screw bottoms out
-in the post before it clamps.
+41 inserts and 41 M3×8 socket-head screws: 25 at floor level, 14 for the lid and 2 at the card's bracket, which
+are the last picture below. The horizontal ones must be M3×8: a longer screw bottoms out before it clamps.
 
 ![The 25 screws at floor level](img/screws-floor.png)
 

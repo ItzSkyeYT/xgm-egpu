@@ -1,6 +1,6 @@
 // xgm-lite-frame.scad
-// Print-only enclosure for an XG Mobile Station Lite (osy) board + a desktop GPU + an ATX PSU.
-// No screws, inserts, glue or adapters: pegs, slots, friction fits and gravity.
+// Printed enclosure for an XG Mobile Station Lite (osy) board + a desktop GPU + an ATX PSU.
+// use_inserts = true (the default): M3 heat-set inserts and M3x8 screws hold it together. false: pegs, slots, friction fits and gravity.
 //
 // World frame:  X along the board (0 = the board's rear edge, where the USB-C is; +X toward the card's far end)
 //               Y across the board (0 = the edge with the 24-pin ATX header; the GPU cooler is on +Y)
@@ -29,8 +29,10 @@ xg_conn_x = [77.5, 136.2];                                 // the two micro-coax
 
 gpu_len = 240;  gpu_h = 120;  gpu_w = 42.2;                // Inno3D RTX 3060 Twin X2 OC: length, height (Inno3D), thickness measured at the bracket end
 gpu_backplate = 2.5;                                       // backplate + gap on the solder side of the PCB
-bracket_to_a1 = pcie_a1_x - foot_slot_x;                   // 47.45: bracket plane = the board's foot slot (CEM Fig 9-1 gives 47.8)
-bracket_w = 18.42;  bracket_t = 0.86;
+bracket_to_a1 = pcie_a1_x - foot_slot_x;                   // 47.45: bracket plane = the board's foot slot (CEM Fig 9-1 gives 47.8 to its outer face, 0.4 further back)
+bracket_w = 41.5;  bracket_t = 0.86;                       // a two-slot bracket: 18.42 + 20.32 on paper, starting 2.6 inside bracket_y0; its top tab MEASURED 39.4 long, starting 0.6 inside
+bracket_port_w = 18.42;                                    // the display ports are all in the first slot's row
+tab_reach = 11.4;                                          // top tab, bracket's outer face -> free edge: MEASURED 10.6 to the bend, plus the bend and the 0.4 above
 bracket_margin = 5.3;                                      // card PCB plane -> solder-side edge of the bracket
 card_seat = 4.1;                                           // finger bottom above the board surface: measured tab height 109.0 minus CEM 104.86
 card_bottom_clear = 18.9;                                  // MEASURED: board surface -> lowest point of the card near its far end
@@ -55,7 +57,7 @@ pin_fit = 0.3;        // board pegs vs the O3.2 holes (on diameter)
 tab_fit = 0.2;        // jigsaw tabs between floor / lid pieces (per side)
 standoff = 7;         // board underside above the floor (the bracket foot reaches 9.7 below the board top: it ends inside the floor's slot)
 boss_d = 7;
-use_inserts = true;   // M3x5x4.5 heat-set inserts + M3 socket-head screws: 5 board, 12 posts to floor, 8 floor bridges, 10 lid, 4 lid bridges. false = print-only pegs and clips
+use_inserts = true;   // M3x5x4.5 heat-set inserts + M3 socket-head screws: 5 board, 12 posts to floor, 8 floor bridges, 10 lid, 4 lid bridges, 1 bracket tab, 1 holder to rear wall. false = print-only pegs and clips
 insert_hole = 4.0;    // hole for the M3x5x4.5 inserts (4.5 across): confirm with coupon_inserts (3.8 / 4.0 / 4.2)
 insert_depth = 5.6;   // insert length 5 + 0.6
 boss_d_ins = 8.5;     // board boss with an insert
@@ -105,6 +107,13 @@ card_z0  = zb + card_seat;                   // finger bottom (Datum W)
 card_top = card_z0 + 3.2 + gpu_h;            // generous: height taken from the PCB's main bottom edge
 card_bot = zb + card_bottom_clear;           // lowest point of the card away from the connector (measured)
 bracket_y0 = pcie_y - bracket_margin;  bracket_y1 = bracket_y0 + bracket_w;
+ports_y1 = bracket_y0 + bracket_port_w;
+// The screw point used here is the oval hole (4.5 x 6.8) in the card's tab, at the second slot's standard screw position. (The first slot's is the
+// open corner behind the finger at the tab's backplate end: right over the top display port's plug, where there is no depth for an insert.)
+// Across the board: the standard puts a slot's screw 1.86 on the solder side of the PCB plane, so 20.32 - 1.86 on the cooler side for the second
+// slot; the board's own holder holes sit under those same lines (38.95 for this one). Along the board: 5.08 in front of the bracket's outer
+// face by the standard, about 4.6 on the photo, and that face is at xb or 0.4 behind it. The oval forgives 0.8 one way and 1.9 the other.
+tab_screw = [xb - 5.0, pcie_y + 18.4];
 tab_z    = zb + tab_above_board;
 psu_y1   = -atx_plug_clear;  psu_y0 = psu_y1 - psu_h;
 xi0 = -4;  xi1 = card_x1 + 3;
@@ -148,7 +157,7 @@ module ghost_card() {
   color("gray", 0.5) box(xb, card_x1, card_y0, card_y1, card_bot, card_top);
   color("gray", 0.5) box(pcie_x0-1, pcie_x1+1, pcie_y-0.8, pcie_y+0.8, card_z0, card_bot+eps);   // finger tab
   color("silver", 0.7) box(xb, xb+bracket_t, bracket_y0, bracket_y1, card_z0-7.9, tab_z);
-  color("silver", 0.7) box(xb-10.2, xb, bracket_y0, bracket_y1, tab_z, tab_z+0.9);
+  color("silver", 0.7) box(xb-tab_reach, xb, bracket_y0, bracket_y1, tab_z, tab_z+0.9);
 }
 module ghost_card_detail() {   // the Inno3D Twin X2 OC as it actually looks; the plain box above stays the collision envelope
   pcb_x0 = xb + 1.9;  pcb_x1 = xb + 190;
@@ -166,17 +175,27 @@ module ghost_card_detail() {   // the Inno3D Twin X2 OC as it actually looks; th
     cylinder(d = 36, h = 5);
     for (a = [0:40:359]) rotate([0,0,a]) translate([14,-3,0]) cube([30, 6, 1.2]);
   }
+  ghost_bracket();
+  color("black") box(xb+150, xb+168, pcie_y-0.8, pcie_y+8.5, pcb_z1-2, pcb_z1+7);                     // 8-pin socket
+}
+module ghost_bracket() {
   color("silver") difference() {                                                                        // bracket with its ports
     box(xb, xb+bracket_t, bracket_y0, bracket_y1, zb-foot_below_board, tab_z+0.9);
     for (i = [0:2]) box(xb-1, xb+2, bracket_y0+1.2, bracket_y0+17.2, tab_z-9-6.5-i*16, tab_z-9-i*16);  // 3x DisplayPort
     box(xb-1, xb+2, bracket_y0+2, bracket_y0+16.5, tab_z-9-6.5-3*16-4, tab_z-9-3*16-4);              // HDMI
-    for (zz = [zb+12 : 7 : tab_z-62]) for (yy = [bracket_y0+3 : 5 : bracket_y1-5]) box(xb-1, xb+2, yy, yy+3, zz, zz+4);   // vent mesh, roughly
+    for (zz = [zb+12 : 7 : tab_z-62]) for (yy = [bracket_y0+3 : 5 : ports_y1-5]) box(xb-1, xb+2, yy, yy+3, zz, zz+4);     // vent mesh under the ports, roughly
+    for (zz = [zb+12 : 7 : tab_z-12]) for (yy = [ports_y1+4 : 5 : bracket_y1-6]) box(xb-1, xb+2, yy, yy+3, zz, zz+4);     // the second slot is all grille
   }
-  color("silver") difference() {                                                                        // top tab with its screw hole
-    box(xb-10.2, xb+bracket_t, bracket_y0+1.5, bracket_y0+14, tab_z, tab_z+0.9);
-    translate([xb-5.5, bracket_y0+7.5, tab_z-1]) cylinder(d = 4.3, h = 3);
+  ghost_tab();
+}
+module ghost_tab() {   // the top tab as measured and photographed: 39.4 long, a finger at the backplate end, two notches, one oval screw hole
+  t0 = tab_screw[1] - 23.1;  t1 = t0 + 39.4;  xf = xb - tab_reach + 0.4;     // its two ends (the oval is 23.1 from the finger's tip), its free edge
+  color("silver") difference() {
+    box(xf, xb+bracket_t, t0, t1, tab_z, tab_z+0.9);
+    box(xf+3.9, xb+bracket_t+1, t0-1, t0+5.4, tab_z-1, tab_z+2);                                         // only the finger reaches the end
+    for (y = [t0+9.2, t0+9.2+20.32]) box(xf-1, xf+4.2, y-1.5, y+1.5, tab_z-1, tab_z+2);                  // notches, open to the free edge
+    hull() for (dy = [-1.15, 1.15]) translate([tab_screw[0], tab_screw[1]+dy, tab_z-1]) cylinder(d = 4.5, h = 3, $fn = 30);   // the oval
   }
-  color("black") box(xb+150, xb+168, pcie_y-0.8, pcie_y+8.5, pcb_z1-2, pcb_z1+7);                     // 8-pin socket
 }
 module ghost_psu() { color("black", 0.35) box(psu_x0, psu_x1, psu_y0, psu_y1, 0.05, psu_w); }
 module ghost_zones() {   // volumes that must stay free for plugs and cables
@@ -194,7 +213,7 @@ module ghost_zones() {   // volumes that must stay free for plugs and cables
     box(xo0-10, 12, 69, 78, grommet_zc-cable_d/2, grommet_zc+cable_d/2);                               // ... and out, clear of the corner post
     if (psu_iec_at_far) box(bay_x0, psu_x0+1, -atx_bend_reach-10, psu_y1-8, 7, 34);     // bundles running from the bend to the modular face (above the 6 mm PSU stop)
     else                box(atx_hdr_x[0], psu_x1+10, psu_y1+5, psu_y1+33, 3.5, 34);
-    box(xi0, xb-1, bracket_y0+0.5, bracket_y1-0.5, zb+6.5, tab_z-5.5);                  // DP/HDMI plugs reaching the bracket (top port ~9 mm under the tab)
+    box(xi0, xb-1, bracket_y0+0.5, ports_y1-0.5, zb+6.5, tab_z-5.5);                    // DP/HDMI plugs reaching the bracket (top port ~9 mm under the tab)
     box(xo0-6, 10, usbc_y[0]-2.5, usbc_y[1]+2, zb-2.5, zb+8.5);                         // USB-C plug
     if (psu_iec_at_far) { box(psu_x0-30, psu_x0, psu_y0, psu_y1, 10, psu_w-5); box(psu_x1, xo1+25, psu_y0+3, psu_y1-3, 6, psu_w-6); }
     else                { box(psu_x1, psu_x1+30, psu_y0, psu_y1, 10, psu_w-5); box(xo0-25, psu_x0, psu_y0+3, psu_y1-3, 6, psu_w-6); }
@@ -410,11 +429,11 @@ module lid_full() {
     cylinder(d = boss_d_ins, h = lid_boss_h + eps, $fn = 40);
     translate([0, 0, -1]) cylinder(d = insert_hole, h = insert_depth + 1, $fn = 40);
   }
-  // ribs straddling the card's top edge (front half of the card, clear of the 8-pin plug)
-  for (y = [[card_y0-3.5, card_y0-0.5], [card_y1+0.5, card_y1+3.5]]) box(xb+14, xb+64, y[0], y[1], card_top+1, zi1+eps);
-  // guides beside the bracket's top end
-  box(xb-4.5, xb+3,   bracket_y0-4.8, bracket_y0-0.8, tab_z-12, zi1+eps); // solder side: beside the bracket's edge (outside the plug zone)
-  box(xb-4.5, xb-0.3, bracket_y1+0.8, bracket_y1+4.8, tab_z-12, zi1+eps); // component side: in front only (the shroud is behind)
+  // print-only: guides beside the two ends of the bracket's tab (with inserts the tab is screwed to the holder instead)
+  if (!use_inserts) {
+    box(xb-4.5, xb+3,   bracket_y0-4.8, bracket_y0-0.8, tab_z-12, zi1+eps); // solder side: beside the bracket's edge (outside the plug zone)
+    box(xb-4.5, xb-0.3, bracket_y1+0.8, bracket_y1+4.8, tab_z-12, zi1+eps); // component side: in front only (the shroud is behind)
+  }
 }
 
 /* ================= panels ================= */
@@ -448,7 +467,7 @@ module rear_cutters() {
   if (psu_iec_at_far) vents_yz(xo0, xi0, psu_y0+4, psu_y1-4, 8, zi1-9);                 // cable bay breathes
   else box(xo0-1, xi0+1, psu_y0+3, psu_y1-3, 3, psu_w-3);                           // PSU rear face (IEC, switch, grille)
   box(xo0-1, xi0+1, usbc_y[0]-3.5, usbc_y[1]+3.5, zb-3, zb+9);                      // USB-C
-  box(xo0-1, xi0+1, bracket_y0-1.5, bracket_y1+1.5, zb+6, tab_z-4.5);               // opening for the card's display ports, up to just under the tab
+  box(xo0-1, xi0+1, bracket_y0-1.5, ports_y1+1.5, zb+6, tab_z-4.5);                 // opening for the card's display ports, up to just under the tab
   // (the laptop-cable notch is cut in panel_rear_r itself: it must reach the bottom edge, outside the safe area)
   vents_yz(xo0, xi0, 38, yi1-4, 30, zi1-9);
   vents_yz(xo0, xi0, 2, 38, tab_z-2, zi1-9);
@@ -469,8 +488,14 @@ module right_cutters() {                                                        
 module panel_rear_l()  { panel_yz(xo0, xi0, yi0+core-slot_d+0.3, y_mid-2.3) rear_cutters(); }
 module panel_rear_r()  {
   difference() {
-    panel_yz(xo0, xi0, y_mid+2.3, yi1-core+slot_d-0.3) rear_cutters();
-    box(xo0-1, xi0+1, xg_exit_y[0], xg_exit_y[1], -1, 27);   // laptop-cable notch, open at the bottom: the panel drops over the routed cable
+    union() {
+      difference() {
+        panel_yz(xo0, xi0, y_mid+2.3, yi1-core+slot_d-0.3) rear_cutters();
+        box(xo0-1, xi0+1, xg_exit_y[0], xg_exit_y[1], -1, 27);   // laptop-cable notch, open at the bottom: the panel drops over the routed cable
+      }
+      if (use_inserts) wall_tie_boss();                          // boss reaching in to the bracket holder
+    }
+    if (use_inserts) wall_tie_cut();
   }
 }
 module panel_far_l()   { panel_yz(xi1, xo1, yi0+core-slot_d+0.3, y_mid-2.3) far_cutters(); }
@@ -518,19 +543,47 @@ module cradle() {
   cradle_peg_centres() translate([-peg/2, -peg/2, -(floor_t-0.6)]) cube([peg, peg, floor_t-0.6+eps]);
 }
 
-/* ================= bracket holder: stands in the board's three 3 x 4 holes, the bracket's tab rests on its arm ================= */
-hx0 = holder_hole_x - 4.2;  hx1 = holder_hole_x + 1.3;      // column 5.5 mm thick, in front of the bracket plane
-arm_x1 = xb - 1.7;                                          // the arm reaches to 1.7 mm from the bracket's outer face
-arm_h  = 4.5;                                               // thin: the top display port starts only ~9 mm under the tab
+/* ================= bracket holder: stands in the board's three 3 x 4 holes, carries the bracket's tab ================= */
+// One flat plate, 6.2 thick, with the pegs flush with its back face: it prints lying on that face with nothing in the air.
+hx0 = holder_hole_x - 1.4;                                  // back face (toward the rear wall)
+hx1 = xb - 1.7;                                             // front face: 1.7 mm from the bracket's outer face (1.3 if the bracket sits where the CEM spec puts it)
+peg_w = 2.6;                                                // pegs 2.6 x 3.6 in the board's 3 x 4 holes
+arm_h = 4.5;                                                // thin: the top display port starts only ~9 mm under the tab
+holder_gap = use_inserts ? 0.8 : 0.3;                       // base beam above the board. Screwed to the tab the holder hangs from it, and can sink this far for a tab lower than measured
+holder_y1  = use_inserts ? 66 : 61.5;                       // the head reaches past the tab's far end, where the screw from the rear wall can get at it
+wall_tie = [holder_y1 - 4.5, tab_z - 17.6];                 // y, z of that screw: clear of the tab's footprint (the panel slides down past it), between two rows of vents
+tie_tip = hx0 - 0.5;                                        // the rear panel's boss stops 0.5 short of the holder's back face
 module bracket_holder() {
-  z0 = zb + 0.3;
-  box(hx0, hx1, 17.2, 61.5, z0, z0+4.5);                              // base beam over the three pegs, below the lowest port
-  box(hx0, hx1, 40, 61.5, z0, tab_z-0.1);                             // column beside the ports
-  box(hx0, hx1, 37, 61.5, tab_z-30, tab_z-0.1);                       // wider head
-  box(hx0, arm_x1, bracket_y0-0.4, 61.5, tab_z-0.1-arm_h, tab_z-0.1);  // arm: its top face is the seat for the bracket's tab (shim up to touch)
-  for (y = holder_holes_y) box(holder_hole_x-1.3, holder_hole_x+1.3, y-1.8, y+1.8, -(floor_t-0.6), z0+eps);   // pegs through the board into the floor
+  z0 = zb + holder_gap;  top = tab_z - 0.1;
+  difference() {
+    union() {
+      box(hx0, hx1, 17.2, 61.5, z0, z0+4.5);                              // base beam over the three pegs, below the lowest port
+      box(hx0, hx1, 40, 61.5, z0, top);                                   // column beside the ports
+      box(hx0, hx1, 37, holder_y1, tab_z-30, top);                        // wider head
+      box(hx0, hx1, bracket_y0-0.4, holder_y1, top-arm_h, top);           // arm: its top face is the seat for the bracket's tab
+      if (use_inserts) box(hx0, hx1, tab_screw[1]-3.6, 40, top-11, top);  // body for the tab screw's insert, 2 mm clear of the top port's plug
+      for (y = holder_holes_y) box(hx0, hx0+peg_w, y-1.8, y+1.8, holder_gap-(floor_t-0.3), z0+eps);   // pegs through the board into the floor
+    }
+    if (use_inserts) {
+      translate([tab_screw[0], tab_screw[1], top-insert_depth]) cylinder(d = insert_hole, h = insert_depth+1, $fn = 40);   // insert under the tab's oval hole
+      translate([tab_screw[0], tab_screw[1], top-9]) cylinder(d = 3.3, h = 9, $fn = 24);                                    // and room below it for the tip of an M3x8
+      translate([hx0-1, wall_tie[0], wall_tie[1]]) rotate([0, 90, 0]) cylinder(d = insert_hole, h = insert_depth+1, $fn = 40);   // insert in the back face, for the screw from the rear wall
+    }
+    else box(hx0-1, hx1+1, bracket_y1+0.4, 62, tab_z-12.5, tab_z);        // print-only: room for the lid's guide beside the tab's far end
+  }
 }
-module shim(t = 1.0) { difference() { box(0, 5.5, 0, 24, 0, t); } }   // lies on the holder's arm if the tab floats
+module shim(t = 1.0) { difference() { box(0, 5.5, 0, 24, 0, t); } }   // print-only: lies on the holder's arm if the tab floats
+module bracket_washer() { difference() { cylinder(d = 8, h = 1.6, $fn = 48); translate([0, 0, -1]) cylinder(d = 3.4, h = 4, $fn = 30); } }   // under the tab screw's head: the oval is nearly as wide as the head. 8 across, so it stays on the flat of the tab
+
+// rear wall <-> holder: a boss on the panel's inner face, an M3x8 sunk into it from outside, an insert in the holder's back
+module wall_tie_shape(grow = 0, x0, x1) {   // an upright oblong around the screw's axis; the holder's height follows the tab, so the screw gets +-0.7 of travel
+  hull() for (dz = [-0.7, 0.7]) translate([x0, wall_tie[0], wall_tie[1]+dz]) rotate([0, 90, 0]) cylinder(d = 6.2 + grow, h = x1 - x0, $fn = 40);
+}
+module wall_tie_boss() { wall_tie_shape(3.2, xo0, tie_tip); }             // through the wall too: it fills the vent slots it lands on
+module wall_tie_cut() {
+  wall_tie_shape(0, xo0-1, tie_tip-3);                                    // well for the screw's head: 3 mm of boss left under it
+  hull() for (dz = [-0.7, 0.7]) translate([xo0, wall_tie[0], wall_tie[1]+dz]) rotate([0, 90, 0]) cylinder(d = 3.6, h = tie_tip-xo0+1, $fn = 30);
+}
 
 /* ================= splitting plates into bed-sized pieces (jigsaw tabs) ================= */
 module tab2d() { polygon([[-3,-eps],[3,-eps],[3,1.0],[5.2,2.2],[5.2,6.5],[-5.2,6.5],[-5.2,2.2],[-3,1.0]]); }
@@ -628,14 +681,14 @@ module plan_shapes() {
   rect_o(xb, card_x1, card_y0, card_y1, 0.5);
   ln(xb, bracket_y0, xb, bracket_y1, 1.2);
   rect_o(card_x1-18, card_x1, card_y0-3.5, card_y1+3.5, 0.3);
-  rect_o(hx0, hx1, 11, 61.5, 0.3);
+  rect_o(hx0, hx1, bracket_y0-0.4, holder_y1, 0.3);
   rect_o(psu_x0, psu_x1, psu_y0, psu_y1, 0.5);
   rect_o(atx_hdr_x[0]-2, atx_hdr_x[1]+2, -atx_bend_reach, 0, 0.25);
   rect_o(grommet_x+20, xg_conn_x[1]+2, board_w+0.5, board_w+11, 0.25);
   rect_o(grommet_x-2.8, grommet_x+2.8, grommet_y-7.4, grommet_y+7.4, 0.3);
   rect_o(grommet_x-clip_t/2, grommet_x+clip_t/2, grommet_y-clip_hw, grommet_y+clip_hw, 0.7);
   ln(xo0, usbc_y[0]-3.5, xo0, usbc_y[1]+3.5, 1.5);
-  ln(xo0, bracket_y0-1.5, xo0, bracket_y1+1.5, 1.5);
+  ln(xo0, bracket_y0-1.5, xo0, ports_y1+1.5, 1.5);
   ln(xo0, xg_exit_y[0], xo0, xg_exit_y[1], 1.5);
   if (psu_iec_at_far) ln(xo1, psu_y0+3, xo1, psu_y1-3, 1.5); else ln(xo0, psu_y0+3, xo0, psu_y1-3, 1.5);
 }
@@ -644,10 +697,15 @@ module plan_shapes() {
 module coupon_rear() { intersection() { panel_rear_r(); box(xo0-1, xi0+1, -3, board_w+22, 0, 58); } }
 
 /* ================= views ================= */
-module structure() { floor_full(); posts(); panels(); lid_full(); cradle(); bracket_holder(); if (use_inserts) bridges(); }
+module washer_placed() { translate([tab_screw[0], tab_screw[1], tab_z+0.95]) bracket_washer(); }   // on the tab, under the screw's head
+module structure() { floor_full(); posts(); panels(); lid_full(); cradle(); bracket_holder(); if (use_inserts) { bridges(); washer_placed(); } }
 module assembly()  { structure(); ghosts(); }
 module inside()    { floor_full(); posts(); panel_rear_l(); panel_rear_r(); panel_far_l(); panel_far_r(); panel_left_r(); panel_left_f(); cradle(); bracket_holder(); ghosts(); }   // lid and +Y wall removed
-module tie_heads()  { floor_ties("head"); lid_ties("head"); bridge_heads(); }
+module bracket_heads() {
+  translate([tab_screw[0], tab_screw[1], tab_z+2.55]) cylinder(d = 5.6, h = 3.2, $fn = 24);                                  // on the washer
+  translate([tie_tip-3-3.2, wall_tie[0], wall_tie[1]]) rotate([0, 90, 0]) cylinder(d = 5.6, h = 3.2, $fn = 24);            // down the well in the rear wall's boss
+}
+module tie_heads()  { floor_ties("head"); lid_ties("head"); bridge_heads(); bracket_heads(); }
 module collision() { intersection() { union() { structure(); if (use_inserts) tie_heads(); } ghosts_hard(); } }
 
 /* ================= pictures: where every insert and screw goes ================= */
@@ -663,6 +721,10 @@ module hardware(what, where) {   // what: "screw" or "insert"; where: "floor" (t
       if (what == "screw")  translate([0, 0, zb]) m3();
       if (what == "insert") translate([0, 0, standoff - 5]) cylinder(d = 4.5, h = 5, $fn = 24);
     }
+  }
+  if (where == "bracket") {   // the tab screw, down through the washer and the tab's oval hole; the screw from the rear wall into the holder's back
+    if (what == "screw")  { translate([tab_screw[0], tab_screw[1], tab_z+2.55]) m3(); translate([tie_tip-3, wall_tie[0], wall_tie[1]]) rotate([0, -90, 0]) m3(); }
+    if (what == "insert") { translate([tab_screw[0], tab_screw[1], tab_z-0.1-5]) cylinder(d = 4.5, h = 5, $fn = 24); translate([hx0, wall_tie[0], wall_tie[1]]) rotate([0, 90, 0]) cylinder(d = 4.5, h = 5, $fn = 24); }
   }
   if (where == "lid") {
     lid_ties(what);
@@ -691,14 +753,23 @@ module pic_lid_below() {         // the lid alone, from underneath: its two stra
   color("#e9a23b") translate([0, 0, zi1 - lid_boss_h - bridge_t]) for (y = lid_straps_y) bridge_plate(strap_pts([x_seam, y], true));
   color("#d8402c") { lid_ties("screw"); for (p = bridge_screws_lid()) translate([p[0], p[1], zi1 - lid_boss_h - bridge_t]) rotate([180, 0, 0]) m3(); }
 }
+module pic_bracket() {           // the card's bracket end, cut through the screw from the rear wall and seen from the card-side wall
+  cut = wall_tie[0];
+  color("#7fa3d1") render() intersection() { bracket_holder(); box(-50, 50, -50, cut, tab_z-52, 200); }
+  color("#e3e8ee") render() intersection() { panel_rear_r(); box(xo0-1, tie_tip+1, 20, cut, tab_z-52, tab_z+18); }
+  color("#e9a23b") washer_placed();
+  intersection() { ghost_bracket(); box(-50, 50, -50, 100, tab_z-52, 200); }
+  color("#d8402c") hardware("screw", "bracket"); color("#d9a520") hardware("insert", "bracket");
+}
 module pic_lid_under() {         // the same without the lid: the posts' top ends, the lid's two tabs and their screws
   color("#7fa3d1") posts(); color("#e3e8ee") lid_ties("tab"); color("#d8402c") lid_ties("screw");
   color("#d9a520") { lid_ties("insert"); for (p = post_centers()) translate([p[0], p[1], zi1 - 5]) cylinder(d = 4.5, h = 5, $fn = 24); }
 }
 
 /* ================= part selector (parts are laid out for printing) ================= */
-module flat_yz(x0) { rotate([0, 90, 0]) translate([-x0 - wall, 0, 0]) children(); }   // YZ panel -> lying flat, exterior face down
-module flat_xz(y0) { rotate([-90, 0, 0]) translate([0, -y0 - wall, 0]) children(); }
+// panels lie flat with their exterior face on the bed. x0 / y0 = the panel's lower coordinate; out = +1 if the exterior is its upper face, -1 if its lower one
+module flat_yz(x0, out = 1) { rotate([0, 90*out, 0]) translate([out > 0 ? -x0 - wall : -x0, 0, 0]) children(); }
+module flat_xz(y0, out = 1) { rotate([-90*out, 0, 0]) translate([0, out > 0 ? -y0 - wall : -y0, 0]) children(); }
 module M() { mirror([0, MIRROR ? 1 : 0, 0]) children(); }                              // design frame -> real world
 
 if (part == "plan_shapes")    mirror([0, MIRROR ? 1 : 0]) plan_shapes();     // 2D outlines only, for make_plan.py
@@ -706,7 +777,7 @@ else if (part == "plan_meta") {                                                /
   echo(PLAN = [["xb", xb], ["card_x1", card_x1], ["card_y0", card_y0], ["card_y1", card_y1], ["psu_x0", psu_x0], ["psu_x1", psu_x1],
     ["psu_y0", psu_y0], ["psu_y1", psu_y1], ["bay_x0", bay_x0], ["bay_x1", bay_x1], ["xo0", xo0], ["xo1", xo1], ["yo0", yo0], ["yo1", yo1],
     ["xi0", xi0], ["xi1", xi1], ["yi0", yi0], ["yi1", yi1], ["xp0", xp0], ["xp1", xp1], ["yp0", yp0], ["yp1", yp1],
-    ["usbc_y0", usbc_y[0]], ["usbc_y1", usbc_y[1]], ["bracket_y0", bracket_y0], ["bracket_y1", bracket_y1], ["exit_y0", xg_exit_y[0]], ["exit_y1", xg_exit_y[1]],
+    ["usbc_y0", usbc_y[0]], ["usbc_y1", usbc_y[1]], ["bracket_y0", bracket_y0], ["bracket_y1", bracket_y1], ["ports_y1", ports_y1], ["exit_y0", xg_exit_y[0]], ["exit_y1", xg_exit_y[1]],
     ["hdr_x0", atx_hdr_x[0]], ["hdr_x1", atx_hdr_x[1]], ["bend", atx_bend_reach], ["hx0", hx0], ["hx1", hx1], ["foot_slot_x", foot_slot_x],
     ["grommet_x", grommet_x], ["grommet_y", grommet_y], ["conn_x1", xg_conn_x[1]], ["board_w", board_w], ["board_l", board_l],
     ["gpu_len", gpu_len], ["gpu_w", gpu_w], ["psu_l", psu_l], ["psu_w", psu_w], ["psu_h", psu_h],
@@ -749,13 +820,15 @@ else if (part == "asm_card") ghost_card_detail();
 else if (part == "asm_psu") ghost_psu();
 else if (part == "asm_zones") ghost_zones();
 else if (part == "asm_bridges") bridges();
-else if (part == "asm_screws")  { hardware("screw", "floor");  hardware("screw", "lid"); }     // every M3 screw in place
-else if (part == "asm_inserts") { hardware("insert", "floor"); hardware("insert", "lid"); }    // and every heat-set insert
+else if (part == "asm_screws")  { hardware("screw", "floor");  hardware("screw", "lid");  hardware("screw", "bracket"); }    // every M3 screw in place
+else if (part == "asm_inserts") { hardware("insert", "floor"); hardware("insert", "lid"); hardware("insert", "bracket"); }   // and every heat-set insert
+else if (part == "asm_bracket_washer") washer_placed();
 else if (part == "inside") inside();
 else if (part == "pic_frame") pic_frame();
 else if (part == "pic_lid") pic_lid();
 else if (part == "pic_lid_under") pic_lid_under();
 else if (part == "pic_lid_below") pic_lid_below();
+else if (part == "pic_bracket") pic_bracket();
 else if (part == "collision") collision();
 else if (part == "floor_rl") translate([0,0,floor_t]) floor_rl();
 else if (part == "floor_rr") translate([0,0,floor_t]) floor_rr();
@@ -769,22 +842,23 @@ else if (part == "lid_fl") rotate([180,0,0]) translate([0,0,-(zi1+lid_t)]) lid_f
 else if (part == "lid_fr") rotate([180,0,0]) translate([0,0,-(zi1+lid_t)]) lid_fr();
 else if (part == "post_corner") rotate([180,0,0]) translate([0,0,-zi1]) corner_post_local();   // upside down: socket on the bed, peg up
 else if (part == "post_mid")    rotate([180,0,0]) translate([0,0,-zi1]) midpost_yz_local();
-else if (part == "panel_rear_l")  flat_yz(xo0) panel_rear_l();
-else if (part == "panel_rear_r")  flat_yz(xo0) panel_rear_r();
+else if (part == "panel_rear_l")  flat_yz(xo0, -1) panel_rear_l();
+else if (part == "panel_rear_r")  flat_yz(xo0, -1) panel_rear_r();   // the boss for the holder points up
 else if (part == "panel_far_l")   flat_yz(xi1) panel_far_l();
 else if (part == "panel_far_r")   flat_yz(xi1) panel_far_r();
-else if (part == "panel_left_r")  flat_xz(yo0) panel_left_r();
-else if (part == "panel_left_f")  flat_xz(yo0) panel_left_f();
+else if (part == "panel_left_r")  flat_xz(yo0, -1) panel_left_r();
+else if (part == "panel_left_f")  flat_xz(yo0, -1) panel_left_f();
 else if (part == "panel_right_r") flat_xz(yi1) panel_right_r();
 else if (part == "panel_right_f") flat_xz(yi1) panel_right_f();
 else if (part == "bridge_centre") bridge_plate([for (sx = [-1, 1]) for (sy = [-1, 1]) [sx*bridge_off, sy*bridge_off]]);
 else if (part == "bridge_strap")  bridge_plate([[-bridge_off, 0], [bridge_off, 0]]);
 else if (part == "cradle") rotate([0,90,0]) translate([-card_x1, 0, 0]) cradle();   // on its side: the pegs become short horizontal stubs
 else if (part == "coupon") { coupon(); translate([0, 45, 0]) coupon(); }   // two: tab, peg and slot are tested against the other piece
-else if (part == "coupon_rear") flat_yz(xo0) coupon_rear();
+else if (part == "coupon_rear") flat_yz(xo0, -1) coupon_rear();
 else if (part == "coupon_grommet") mirror([0, 1, 0]) coupon_grommet();   // pre-mirrored so M() leaves the labels readable
 else if (part == "coupon_inserts") mirror([0, 1, 0]) coupon_inserts();
-else if (part == "bracket_holder") rotate([0,90,0]) translate([-hx1, 0, 0]) bracket_holder();   // on its side, pegs horizontal
+else if (part == "bracket_holder") rotate([0,-90,0]) translate([-hx0, 0, 0]) bracket_holder();   // on its back: pegs and plate all on the bed
+else if (part == "bracket_washer") bracket_washer();
 else if (part == "shim_05") shim(0.5);
 else if (part == "shim_10") shim(1.0);
 else if (part == "shim_15") shim(1.5);
