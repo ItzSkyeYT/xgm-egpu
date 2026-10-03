@@ -36,6 +36,41 @@ def stl_info(name):
     fill = 0.6 if name.startswith('post') else 0.9          # thick posts get real infill; 3 mm plates print nearly solid
     return size, abs(vol) / 1000.0 * 1.27 * fill              # PETG 1.27 g/cm3
 
+def read_stl(name):
+    verts, index, tris, cur = [], {}, [], []
+    for line in open(os.path.join(STL, name + '.stl')):
+        t = line.split()
+        if t and t[0] == 'vertex':
+            v = (float(t[1]), float(t[2]), float(t[3])); i = index.get(v)
+            if i is None: i = len(verts); index[v] = i; verts.append(v)
+            cur.append(i)
+            if len(cur) == 3: tris.append(tuple(cur)); cur = []
+    return verts, tris
+
+def write_stage_3mf(rows, out):
+    """Every file of the stage, copies included, laid flat in a grid: one File > Open Project loads the whole stage."""
+    import zipfile
+    objs, x, y, row_h = [], 0.0, 0.0, 0.0
+    for n, _, copies in rows:
+        verts, tris = read_stl(n); (sx, sy, sz), _ = stl_info(n)
+        for c in range(copies):
+            if x > 0 and x + sx > 250: x, y, row_h = 0.0, y + row_h + 10, 0.0
+            objs.append((n + (f' ({c+1})' if copies > 1 else ''), [(vx + x, vy - y - sy, vz) for vx, vy, vz in verts], tris))
+            x += sx + 10; row_h = max(row_h, sy)
+    xml = ['<?xml version="1.0" encoding="UTF-8"?>',
+           '<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">', ' <resources>']
+    for i, (n, verts, tris) in enumerate(objs, start=1):
+        xml.append(f'  <object id="{i}" name="{n}" type="model"><mesh><vertices>')
+        xml += [f'<vertex x="{a:.4f}" y="{b:.4f}" z="{c:.4f}"/>' for a, b, c in verts]
+        xml.append('</vertices><triangles>')
+        xml += [f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in tris]
+        xml.append('</triangles></mesh></object>')
+    xml += [' </resources>', ' <build>'] + [f'  <item objectid="{i}"/>' for i in range(1, len(objs) + 1)] + [' </build>', '</model>']
+    with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
+        z.writestr('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>\n')
+        z.writestr('_rels/.rels', '<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>\n')
+        z.writestr('3D/3dmodel.model', '\n'.join(xml) + '\n')
+
 def grams(g):
     return f"≈ {max(1, round(g))} g" if g < 10 else f"≈ {int(5 * round(g / 5))} g"
 
@@ -82,6 +117,7 @@ for key, title, rows in STAGES:
     for n, _, _ in rows:
         shutil.copy(os.path.join(STL, n + '.stl'), os.path.join(DEST, key))
     totals[key] = sum(stl_info(n)[1] * c for n, _, c in rows)
+    write_stage_3mf(rows, os.path.join(DEST, key, f"stage-{key[0]}.3mf"))
     render_stage([n for n, _, _ in rows], os.path.join(DEST, "img", f"stage-{key[0]}.png"))
 os.makedirs(os.path.join(DEST, '4-final', SUBDIR_LIDQ))
 for n in LID_QUARTERS:
@@ -124,6 +160,11 @@ A print-only case for the **XG Mobile Station Lite** board, an **Inno3D RTX 3060
 | 2 | [`2-board-and-card`](2-board-and-card/) | the board on its pegs and clips, the card on its two supports | {grams(totals['2-board-and-card'])} |
 | 3 | [`3-structure-sample`](3-structure-sample/) | full-height posts, and a wall in its slots | {grams(totals['3-structure-sample'])} |
 | 4 | [`4-final`](4-final/) | the rest of the box | {grams(totals['4-final'])} |
+
+**Opening a stage in OrcaSlicer:** each folder has a `stage-N.3mf` holding all of that stage's parts,
+copies included. File → Open Project loads the whole stage at once; then press **A** to arrange it on
+the plate. If it doesn't all fit, put the leftover parts on a second plate. Single STL files come in with
+File → Import (Ctrl+I), or by dragging them onto the Orca window.
 
 Print the stages in order, and start a stage only when the previous one passed. Only the two coupons
 are throwaway: everything else ends up in the finished case. About **{grams(grand)[2:]}** of PETG in total.
@@ -224,10 +265,10 @@ instead of `lid_l` and `lid_r`.
 ```
 print-pack/
 ├── README.md                  this file
-├── 1-tests/                   coupon, coupon_rear
-├── 2-board-and-card/          floor_rr, floor_fr, bracket_holder, cradle, shim_05, shim_10, shim_15
-├── 3-structure-sample/        post_corner, post_mid, panel_rear_r
-├── 4-final/                   the remaining floor, posts, walls and lid
+├── 1-tests/                   stage-1.3mf (everything below in one project), coupon, coupon_rear
+├── 2-board-and-card/          stage-2.3mf, floor_rr, floor_fr, bracket_holder, cradle, shim_05, shim_10, shim_15
+├── 3-structure-sample/        stage-3.3mf, post_corner, post_mid, panel_rear_r
+├── 4-final/                   stage-4.3mf, the remaining floor, posts, walls and lid
 │   └── {SUBDIR_LIDQ}/   lid_rl, lid_rr, lid_fl, lid_fr
 ├── reference/                 assembled 3MF, 1:1 floor plans, full notes, every dimension
 └── img/                       the pictures in this file
@@ -236,7 +277,8 @@ print-pack/
 ## Reference
 
 - [`xgm-lite-frame-assembled.3mf`](reference/xgm-lite-frame-assembled.3mf): the whole case assembled,
-  every part a separate object. Open it in a slicer and hide parts to look inside. **Not for printing.**
+  every part a separate object. File → Open Project in Orca, then hide parts in the object list to look
+  inside. **Not for printing.**
 - [`floor-plan-A3.pdf`](reference/floor-plan-A3.pdf) and [`floor-plan-A4-2pages.pdf`](reference/floor-plan-A4-2pages.pdf):
   the floor plan at 1:1. Print at 100 % and lay the real parts on it.
 - [`README.md`](reference/README.md): the full notes, including the assembly order.

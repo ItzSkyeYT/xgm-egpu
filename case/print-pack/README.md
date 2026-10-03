@@ -29,6 +29,11 @@ A print-only case for the **XG Mobile Station Lite** board, an **Inno3D RTX 3060
 | 3 | [`3-structure-sample`](3-structure-sample/) | full-height posts, and a wall in its slots | ≈ 100 g |
 | 4 | [`4-final`](4-final/) | the rest of the box | ≈ 830 g |
 
+**Opening a stage in OrcaSlicer:** each folder has a `stage-N.3mf` holding all of that stage's parts,
+copies included. File → Open Project loads the whole stage at once; then press **A** to arrange it on
+the plate. If it doesn't all fit, put the leftover parts on a second plate. Single STL files come in with
+File → Import (Ctrl+I), or by dragging them onto the Orca window.
+
 Print the stages in order, and start a stage only when the previous one passed. Only the two coupons
 are throwaway: everything else ends up in the finished case. About **1140 g** of PETG in total.
 
@@ -159,10 +164,10 @@ instead of `lid_l` and `lid_r`.
 ```
 print-pack/
 ├── README.md                  this file
-├── 1-tests/                   coupon, coupon_rear
-├── 2-board-and-card/          floor_rr, floor_fr, bracket_holder, cradle, shim_05, shim_10, shim_15
-├── 3-structure-sample/        post_corner, post_mid, panel_rear_r
-├── 4-final/                   the remaining floor, posts, walls and lid
+├── 1-tests/                   stage-1.3mf (everything below in one project), coupon, coupon_rear
+├── 2-board-and-card/          stage-2.3mf, floor_rr, floor_fr, bracket_holder, cradle, shim_05, shim_10, shim_15
+├── 3-structure-sample/        stage-3.3mf, post_corner, post_mid, panel_rear_r
+├── 4-final/                   stage-4.3mf, the remaining floor, posts, walls and lid
 │   └── lid-quarters-if-bed-under-250mm/   lid_rl, lid_rr, lid_fl, lid_fr
 ├── reference/                 assembled 3MF, 1:1 floor plans, full notes, every dimension
 └── img/                       the pictures in this file
@@ -171,7 +176,8 @@ print-pack/
 ## Reference
 
 - [`xgm-lite-frame-assembled.3mf`](reference/xgm-lite-frame-assembled.3mf): the whole case assembled,
-  every part a separate object. Open it in a slicer and hide parts to look inside. **Not for printing.**
+  every part a separate object. File → Open Project in Orca, then hide parts in the object list to look
+  inside. **Not for printing.**
 - [`floor-plan-A3.pdf`](reference/floor-plan-A3.pdf) and [`floor-plan-A4-2pages.pdf`](reference/floor-plan-A4-2pages.pdf):
   the floor plan at 1:1. Print at 100 % and lay the real parts on it.
 - [`README.md`](reference/README.md): the full notes, including the assembly order.
