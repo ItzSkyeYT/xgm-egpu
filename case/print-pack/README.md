@@ -24,13 +24,13 @@ A print-only case for the **XG Mobile Station Lite** board, an **Inno3D RTX 3060
 
 | Stage | Folder | What it proves | Plastic |
 |:-:|---|---|--:|
-| 1 | [`1-tests`](1-tests/) | your printer's fits, and the real plugs in the real openings | ≈ 20 g |
+| 1 | [`1-tests`](1-tests/) | your printer's fits, the real plugs in the real openings, the cable grommet's clip | ≈ 25 g |
 | 2 | [`2-board-and-card`](2-board-and-card/) | the board on its pegs and clips, the card on its two supports | ≈ 185 g |
 | 3 | [`3-structure-sample`](3-structure-sample/) | full-height posts, and a wall in its slots | ≈ 100 g |
 | 4 | [`4-final`](4-final/) | the rest of the box | ≈ 830 g |
 
 Print the stages in order, and start a stage only when the previous one passed. Only the two coupons
-are throwaway: everything else ends up in the finished case. About **1135 g** of PETG in total.
+are throwaway: everything else ends up in the finished case. About **1140 g** of PETG in total.
 
 ---
 
@@ -42,6 +42,7 @@ are throwaway: everything else ends up in the finished case. About **1135 g** of
 |---|:-:|---|--:|
 | `coupon.stl` | 1 file, 2 pieces | 60 × 82 × 9 | ≈ 10 g |
 | `coupon_rear.stl` | 1 | 58 × 89 × 3 | ≈ 10 g |
+| `coupon_grommet.stl` | 1 file, 3 pieces | 54 × 24 × 19 | ≈ 3 g |
 
 **coupon** holds two identical pieces that you test against each other. Each fit should go together
 by hand and stay put: neither forced nor loose.
@@ -52,12 +53,18 @@ by hand and stay put: neither forced nor loose.
 
 **coupon_rear** is the bottom of the real rear wall, board side.
 
-- [ ] It slides down over the laptop cable at the rubber boot without pinching it. *The real wall goes in exactly like this.*
+- [ ] It slides down over the thick laptop cable without pinching it. *The real wall goes in exactly like this.*
 - [ ] A USB-C plug goes through the small hole.
 - [ ] An HDMI plug goes into the bottom of the big window.
 
-**If something fails:** note which fit binds or rattles. One number changes in the model, and only
-the coupon is reprinted.
+**coupon_grommet** has three small clips with slots of 10.5, 11.5 and 12.5 mm, the number printed
+beside each. The clip's thin wall goes into the gap between the grommet's round disc and square plate,
+and the rubber neck clicks down into the slot.
+
+- [ ] One of the three holds the grommet firmly: pushing it in takes a little force, it doesn't fall out, and the rubber isn't badly squashed. *Tell me which number.*
+
+**If something fails:** note which fit binds or rattles, or which clip held the grommet best. One
+number changes in the model, and only the coupon is reprinted.
 
 ---
 
@@ -67,7 +74,7 @@ the coupon is reprinted.
 
 | File | Qty | Size (mm) | Plastic |
 |---|:-:|---|--:|
-| `floor_rr.stl` | 1 | 150 × 144 × 13 | ≈ 75 g |
+| `floor_rr.stl` | 1 | 150 × 144 × 19 | ≈ 75 g |
 | `floor_fr.stl` | 1 | 127 × 144 × 13 | ≈ 65 g |
 | `bracket_holder.stl` | 1 | 120 × 46 × 9 | ≈ 20 g |
 | `cradle.stl` | 1 | 55 × 49 × 18 | ≈ 30 g |

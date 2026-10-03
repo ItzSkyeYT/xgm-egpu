@@ -9,7 +9,7 @@ DEST = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.path.join(HERE,
 
 # (file, quantity shown, copies printed)
 STAGES = [
-    ('1-tests', 'Tests', [('coupon', '1 file, 2 pieces', 1), ('coupon_rear', '1', 1)]),
+    ('1-tests', 'Tests', [('coupon', '1 file, 2 pieces', 1), ('coupon_rear', '1', 1), ('coupon_grommet', '1 file, 3 pieces', 1)]),
     ('2-board-and-card', 'Board and card', [('floor_rr', '1', 1), ('floor_fr', '1', 1), ('bracket_holder', '1', 1),
                                             ('cradle', '1', 1), ('shim_05', '1', 1), ('shim_10', '1', 1), ('shim_15', '1', 1)]),
     ('3-structure-sample', 'Structure sample', [('post_corner', '1', 1), ('post_mid', '1', 1), ('panel_rear_r', '1', 1)]),
@@ -120,7 +120,7 @@ A print-only case for the **XG Mobile Station Lite** board, an **Inno3D RTX 3060
 
 | Stage | Folder | What it proves | Plastic |
 |:-:|---|---|--:|
-| 1 | [`1-tests`](1-tests/) | your printer's fits, and the real plugs in the real openings | {grams(totals['1-tests'])} |
+| 1 | [`1-tests`](1-tests/) | your printer's fits, the real plugs in the real openings, the cable grommet's clip | {grams(totals['1-tests'])} |
 | 2 | [`2-board-and-card`](2-board-and-card/) | the board on its pegs and clips, the card on its two supports | {grams(totals['2-board-and-card'])} |
 | 3 | [`3-structure-sample`](3-structure-sample/) | full-height posts, and a wall in its slots | {grams(totals['3-structure-sample'])} |
 | 4 | [`4-final`](4-final/) | the rest of the box | {grams(totals['4-final'])} |
@@ -145,12 +145,18 @@ by hand and stay put: neither forced nor loose.
 
 **coupon_rear** is the bottom of the real rear wall, board side.
 
-- [ ] It slides down over the laptop cable at the rubber boot without pinching it. *The real wall goes in exactly like this.*
+- [ ] It slides down over the thick laptop cable without pinching it. *The real wall goes in exactly like this.*
 - [ ] A USB-C plug goes through the small hole.
 - [ ] An HDMI plug goes into the bottom of the big window.
 
-**If something fails:** note which fit binds or rattles. One number changes in the model, and only
-the coupon is reprinted.
+**coupon_grommet** has three small clips with slots of 10.5, 11.5 and 12.5 mm, the number printed
+beside each. The clip's thin wall goes into the gap between the grommet's round disc and square plate,
+and the rubber neck clicks down into the slot.
+
+- [ ] One of the three holds the grommet firmly: pushing it in takes a little force, it doesn't fall out, and the rubber isn't badly squashed. *Tell me which number.*
+
+**If something fails:** note which fit binds or rattles, or which clip held the grommet best. One
+number changes in the model, and only the coupon is reprinted.
 
 ---
 

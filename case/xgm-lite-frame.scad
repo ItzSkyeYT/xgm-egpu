@@ -60,6 +60,16 @@ x_mid = 145;  y_mid = -40;      // mid posts (panels split here)
 x_seam = 135; y_seam = -50;     // floor and lid pieces split here (jigsaw tabs)
 lid_split_y = false;            // true: lid in 4 pieces for small beds
 xg_exit_y = [board_w-5, board_w+15];   // laptop cable leaves through the rear wall here, beside the board's fan-side edge
+// the laptop cable's rubber grommet clicks into a thin wall on the floor: a pull on the cable lands on the case, not the micro-coax connectors
+grommet_x = 41.5 + 2.5;        // MEASURED 41.5: board's rear edge -> the grommet's gap, harness gently straight; +2.5 of slack
+grommet_y = board_w + 12;      // MEASURED 12.7: board's long edge -> grommet centre, lying relaxed
+grommet_d = 14.8;              // MEASURED: the round disc (the square plate is 14.7 across flats)
+grommet_gap = 1.4;             // MEASURED: the gap between disc and plate
+grommet_slot = 11.5;           // the rubber neck in the gap, about 11-13: confirm with coupon_grommet (10.5 / 11.5 / 12.5)
+grommet_zc = 8;                // grommet axis above the floor (the disc clears the floor by 0.6)
+clip_t = 1.2;                  // clip wall, inside the 1.4 gap
+clip_hw = 9;                   // clip half-width
+cable_d = 9;                   // the thick cable, generous
 vent_w = 3;  vent_pitch = 6;  vent_h = 20;  vent_row = 24;
 $fn = 40;  eps = 0.01;
 
@@ -151,8 +161,14 @@ module ghost_zones() {   // volumes that must stay free for plugs and cables
   color("orange", 0.25) {
     box(atx_hdr_x[0]-2, atx_hdr_x[1]+2, -atx_bend_reach, 0, zb-1, zb+28);              // 24-pin plug + the whole bend (reaches into the bay)
     box(card_x1-110, card_x1, card_y0, card_y1, card_top, card_top+plug8_clear-0.1);    // 8-pin plug + cable bend
-    box(30, xg_conn_x[1]+2, board_w+0.5, board_w+11, zb-1, zb+7);                        // taped micro-coax harness along the fan-side edge
-    box(xo0-10, 37, board_w-2, board_w+13, 3.5, 21);                                     // the cable's strain-relief boot (O15.1 x 37), leaving through the rear wall
+    // laptop cable: harness along the fan-side edge, grommet in its clip, thick cable out through the rear notch
+    box(grommet_x+20, xg_conn_x[1]+2, board_w+0.5, board_w+11, 1, 15);                               // harness along the edge
+    box(grommet_x+2.8, grommet_x+20, grommet_y-5.5, grommet_y+5.5, 1, 15);                            // harness entering the grommet
+    box(grommet_x+0.7, grommet_x+2.8, grommet_y-7.6, grommet_y+7.6, grommet_zc-7.6, grommet_zc+7.6);  // square plate
+    box(grommet_x-2.8, grommet_x-0.7, grommet_y-7.6, grommet_y+7.6, grommet_zc-7.6, grommet_zc+7.6);  // round disc
+    box(grommet_x-15, grommet_x-2.8, grommet_y-5.5, grommet_y+5.5, grommet_zc-5.5, grommet_zc+5.5);   // cone and sleeve
+    box(12, grommet_x-15, grommet_y-5.5, grommet_y+4.5, grommet_zc-cable_d/2, grommet_zc+cable_d/2);  // thick cable, easing toward the notch
+    box(xo0-10, 12, 69, 78, grommet_zc-cable_d/2, grommet_zc+cable_d/2);                               // ... and out, clear of the corner post
     if (psu_iec_at_far) box(bay_x0, psu_x0+1, -atx_bend_reach-10, psu_y1-8, 7, 34);     // bundles running from the bend to the modular face (above the 6 mm PSU stop)
     else                box(atx_hdr_x[0], psu_x1+10, psu_y1+5, psu_y1+33, 3.5, 34);
     box(xi0, xb-1, bracket_y0+0.5, bracket_y1-0.5, zb+6.5, tab_z-5.5);                  // DP/HDMI plugs reaching the bracket (top port ~9 mm under the tab)
@@ -250,6 +266,7 @@ module floor_full() {
         cylinder(d = hole_d - pin_fit, h = standoff + board_t + 1.0);
       }
       board_clip(150, +1); board_clip(186, +1);      // fan-side edge, beyond the harness (x < 138)
+      translate([grommet_x, grommet_y, 0]) grommet_clip();   // the laptop cable's grommet clicks in here
       board_clip(100, -1); board_clip(186, -1);      // 24-pin edge: the two gaps between header and power inputs
       board_clip_rear(34);                           // rear edge, between the USB-C and the corner
       // PSU stops: in front of the modular face (bottom edge only) and along the plug-zone side
@@ -261,6 +278,7 @@ module floor_full() {
     for (p = post_centers()) translate([p[0]-(peg+peg_fit)/2, p[1]-(peg+peg_fit)/2, -floor_t-1]) cube([peg+peg_fit, peg+peg_fit, floor_t+2]);
     cradle_peg_centres() translate([-(peg+peg_fit)/2, -(peg+peg_fit)/2, -floor_t-1]) cube([peg+peg_fit, peg+peg_fit, floor_t+2]);
     box(foot_slot_x-2.7, foot_slot_x+2.7, 16, board_w+1, -floor_t-1, 1);                        // relief for the bracket's foot
+    box(xi0-0.2, xi0+2, xg_exit_y[0], xg_exit_y[1], -0.1, 3.2);                                  // floor lip opened under the cable notch
     for (y = holder_holes_y) box(holder_hole_x-1.5, holder_hole_x+1.5, y-2, y+2, -floor_t-1, 1); // sockets for the holder's pegs
     // cable-tie slots in the cable bay
     for (x = [bay_x0+10, (bay_x0+bay_x1)/2-5, bay_x1-20]) for (y = [psu_y0+20, psu_y0+55]) { box(x, x+1.8, y, y+6, -floor_t-1, 1); box(x+8, x+9.8, y, y+6, -floor_t-1, 1); }
@@ -373,7 +391,7 @@ arm_h  = 4.5;                                               // thin: the top dis
 module bracket_holder() {
   z0 = zb + 0.3;
   box(hx0, hx1, 17.2, 61.5, z0, z0+4.5);                              // base beam over the three pegs, below the lowest port
-  box(hx0, hx1, 40, 61.5, z0, tab_z-0.1);                             // column beside the ports (the laptop cable's boot passes 1.5 mm beyond it)
+  box(hx0, hx1, 40, 61.5, z0, tab_z-0.1);                             // column beside the ports
   box(hx0, hx1, 37, 61.5, tab_z-30, tab_z-0.1);                       // wider head
   box(hx0, arm_x1, bracket_y0-0.4, 61.5, tab_z-0.1-arm_h, tab_z-0.1);  // arm: its top face is the seat for the bracket's tab (shim up to touch)
   for (y = holder_holes_y) box(holder_hole_x-1.3, holder_hole_x+1.3, y-1.8, y+1.8, -(floor_t-0.6), z0+eps);   // pegs through the board into the floor
@@ -420,6 +438,31 @@ module coupon() {
   }
 }
 
+/* ================= laptop-cable grommet clip, and its test piece ================= */
+module grommet_clip(slot = grommet_slot) {   // a thin wall that sits in the grommet's gap; U-slot open at the top, small snap lips
+  h = grommet_zc + slot/2 + 2.5;
+  difference() {
+    union() {
+      translate([-clip_t/2, -clip_hw, 0]) cube([clip_t, 2*clip_hw, h]);
+      for (s = [-1, 1]) hull() {                                   // gussets at both ends, outside the disc and the plate
+        translate([-5, s > 0 ? clip_hw-1.1 : -clip_hw, 0]) cube([10, 1.1, 0.01]);
+        translate([-clip_t/2, s > 0 ? clip_hw-1.1 : -clip_hw, 0]) cube([clip_t, 1.1, h*0.7]);
+      }
+    }
+    translate([0, 0, grommet_zc]) rotate([0, 90, 0]) cylinder(d = slot, h = 20, center = true, $fn = 60);
+    translate([-10, -slot/2, grommet_zc]) cube([20, slot, h]);
+  }
+  for (s = [-1, 1]) translate([-clip_t/2, s > 0 ? slot/2 - 0.6 : -slot/2, h - 2.5]) cube([clip_t, 0.6, 2.5]);   // snap lips
+}
+module coupon_grommet() {   // three clips, slots 10.5 / 11.5 / 12.5: the one that grips the neck sets grommet_slot
+  for (i = [0:2]) translate([i*20, 0, 0]) {
+    sl = 10.5 + i;
+    translate([-7, -12, 0]) cube([14, 24, 2]);
+    translate([0, 0, 2]) grommet_clip(sl);
+    translate([5, 0, 2]) linear_extrude(0.6) rotate(90) text(str(sl), size = 3, font = "Liberation Sans:style=Bold", halign = "center", valign = "center");
+  }
+}
+
 /* ================= 1:1 paper plan (2D, for SVG/PDF export) ================= */
 module ln(x0, y0, x1, y1, w = 0.4) { hull() { translate([x0, y0]) circle(d = w, $fn = 8); translate([x1, y1]) circle(d = w, $fn = 8); } }
 module rect_o(x0, x1, y0, y1, w = 0.4) { ln(x0,y0,x1,y0,w); ln(x1,y0,x1,y1,w); ln(x1,y1,x0,y1,w); ln(x0,y1,x0,y0,w); }
@@ -450,8 +493,9 @@ module plan_shapes() {
   rect_o(hx0, hx1, 11, 61.5, 0.3);
   rect_o(psu_x0, psu_x1, psu_y0, psu_y1, 0.5);
   rect_o(atx_hdr_x[0]-2, atx_hdr_x[1]+2, -atx_bend_reach, 0, 0.25);
-  rect_o(30, xg_conn_x[1]+2, board_w+0.5, board_w+11, 0.25);
-  rect_o(xo0-10, 37, board_w-2, board_w+13, 0.25);
+  rect_o(grommet_x+20, xg_conn_x[1]+2, board_w+0.5, board_w+11, 0.25);
+  rect_o(grommet_x-2.8, grommet_x+2.8, grommet_y-7.4, grommet_y+7.4, 0.3);
+  rect_o(grommet_x-clip_t/2, grommet_x+clip_t/2, grommet_y-clip_hw, grommet_y+clip_hw, 0.7);
   ln(xo0, usbc_y[0]-3.5, xo0, usbc_y[1]+3.5, 1.5);
   ln(xo0, bracket_y0-1.5, xo0, bracket_y1+1.5, 1.5);
   ln(xo0, xg_exit_y[0], xo0, xg_exit_y[1], 1.5);
@@ -461,7 +505,8 @@ module plan_labels() {
   lbl(xb+30, card_y0+14, "GPU footprint, fans face this edge", 3.2);
   lbl(xb+30, card_y0+5, str("bracket at x = ", xb, "   card ", gpu_len, " x ", gpu_w), 2.8);
   lbl(60, 36, "board 220 x 65, five pegs", 3);
-  lbl(xg_conn_x[0], board_w+13, "laptop-cable harness along this edge, boot at the rear corner", 2.6);
+  lbl(xg_conn_x[0], board_w+13, "laptop-cable harness along this edge", 2.6);
+  lbl(grommet_x+4, grommet_y+11, "grommet clip", 2.6);
   lbl(psu_x0+10, psu_y0+40, str("PSU on its side  ", psu_l, " x ", psu_w, " x ", psu_h, "  (fan -> outer wall)"), 3.2);
   lbl(psu_x0+10, psu_y0+30, psu_iec_at_far ? "<- modular face      IEC inlet at the far wall ->" : "modular face ->", 3);
   lbl((bay_x0+bay_x1)/2-6, psu_y0+70, "cable bay", 3.2, 90);
@@ -575,6 +620,7 @@ else if (part == "panel_right_f") flat_xz(yi1) panel_right_f();
 else if (part == "cradle") rotate([0,90,0]) translate([-card_x1, 0, 0]) cradle();   // on its side: the pegs become short horizontal stubs
 else if (part == "coupon") { coupon(); translate([0, 45, 0]) coupon(); }   // two: tab, peg and slot are tested against the other piece
 else if (part == "coupon_rear") flat_yz(xo0) coupon_rear();
+else if (part == "coupon_grommet") mirror([0, 1, 0]) coupon_grommet();   // pre-mirrored so M() leaves the labels readable
 else if (part == "bracket_holder") rotate([0,90,0]) translate([-hx1, 0, 0]) bracket_holder();   // on its side, pegs horizontal
 else if (part == "shim_05") shim(0.5);
 else if (part == "shim_10") shim(1.0);

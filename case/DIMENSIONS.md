@@ -14,7 +14,7 @@ All numbers in mm, read from the rendered STLs in `stl/` (as laid out for printi
 | Part | Qty | X | Y | Z | What it is |
 |---|---|---|---|---|---|
 | `floor_rl` | 1 | 150.5 | 106.5 | 9.0 | floor quarter, rear / PSU side: cable bay floor with tie slots |
-| `floor_rr` | 1 | 150.5 | 144.0 | 13.4 | floor quarter, rear / board side: 5 board pegs, 3 clips, holder sockets, foot relief |
+| `floor_rr` | 1 | 150.5 | 144.0 | 19.2 | floor quarter, rear / board side: 5 board pegs, 3 clips, holder sockets, foot relief |
 | `floor_fl` | 1 | 126.7 | 106.5 | 6.0 | floor quarter, far / PSU side: PSU stops |
 | `floor_fr` | 1 | 126.7 | 144.0 | 13.4 | floor quarter, far / board side: cradle sockets, clip |
 | `lid_l` | 1 | 150.5 | 244.0 | 75.3 | lid, rear half: lip, 4 pegs, card ribs, bracket guides |
@@ -51,7 +51,7 @@ All numbers in mm, read from the rendered STLs in `stl/` (as laid out for printi
 | floor_fl | 135.0 … 261.7 | 43.5 … 150.0 | -3.0 … 3.0 |
 | floor_fr | 135.0 … 261.7 | -94.0 … 50.0 | -3.0 … 10.4 |
 | floor_rl | -9.0 … 141.5 | 43.5 … 150.0 | -3.0 … 6.0 |
-| floor_rr | -9.0 … 141.5 | -94.0 … 50.0 | -3.0 … 10.4 |
+| floor_rr | -9.0 … 141.5 | -94.0 … 50.0 | -3.0 … 16.2 |
 | lid_l | -9.0 … 141.5 | -94.0 … 150.0 | 105.6 … 180.9 |
 | lid_r | 135.0 … 261.7 | -94.0 … 150.0 | 173.9 … 180.9 |
 | panel_far_l | 256.7 … 259.7 | 42.3 … 141.7 | 0.0 … 177.4 |
@@ -71,7 +71,7 @@ All numbers in mm, read from the rendered STLs in `stl/` (as laid out for printi
 | post_mid_rear | -9.0 … 6.0 | 33.0 … 47.0 | -2.4 … 177.9 |
 | post_mid_right | 138.0 … 152.0 | -94.0 … -79.0 | -2.4 … 177.9 |
 | psu | 85.7 … 245.7 | 48.0 … 134.0 | 0.1 … 150.0 |
-| zones | -17.0 … 284.7 | -78.0 … 134.0 | 3.5 … 177.8 |
+| zones | -17.0 … 284.7 | -84.6 … 134.0 | 0.4 … 177.8 |
 
 ## Measured inputs (from the real parts)
 
@@ -83,7 +83,9 @@ All numbers in mm, read from the rendered STLs in `stl/` (as laid out for printi
 | board top → lowest point of the card near its far end | 18.9 | `card_bottom_clear` |
 | board edge → outside of the sleeved 24-pin bend | 86.8 | `atx_bend_reach` (92 with margin) |
 | 24-pin sleeved bundle diameter | 15.4 | — |
-| laptop-cable boot | Ø15.1 × 37.1, starting 37 from the rear edge | exit opening in the rear wall |
+| cable grommet: round disc / square plate / gap | Ø14.8 / 14.7 / 1.4 | `grommet_d`, `grommet_gap`, `clip_t` |
+| board's rear edge → grommet gap, harness straight | 41.5 | `grommet_x` (44 with 2.5 slack) |
+| board's long edge → grommet centre, relaxed | 12.7 | `grommet_y` (12) |
 
 ## Features
 

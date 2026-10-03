@@ -44,9 +44,11 @@ its arm, which is how a PC chassis carries a card's front end.
   an adapter.
 - The IEC power cord comes in at the far end; the laptop cable leaves at the rear.
 - The laptop cable: its taped micro-coax harness runs along the board's fan-side edge, in the 24 mm
-  gap between board and intake wall, and the thick cable with its boot leaves through a notch at the
-  bottom of the rear wall at that corner. The notch is open at the bottom, so the rear panel drops over
-  the cable: the laptop plug never has to pass through a hole and nothing gets unplugged.
+  gap between board and intake wall. Its rubber grommet clicks into a thin printed clip on the floor,
+  44 mm in from the board's rear edge, so a pull on the cable lands on the case instead of the
+  micro-coax connectors. The thick cable then leaves through a notch at the bottom of the rear wall.
+  The notch is open at the bottom, so the rear panel drops over the cable: the laptop plug never has
+  to pass through a hole and nothing gets unplugged.
 
 ## Orientation
 
@@ -60,8 +62,9 @@ fan side. The clue was the rear photo: 24-pin and USB-C on the left, fans on the
 
 The defaults are now the real parts, measured with calipers (see the table in `DIMENSIONS.md`): card
 thickness 42.2, bracket tab 109.0 above the board, foot 9.7 below it, card's lowest point 18.9 above
-the board at its far end, the sleeved 24-pin bend reaching 86.8 from the board edge, boot Ø15.1 × 37.1.
-For another card or PSU, those are the numbers to re-measure; each is a single parameter at the top of
+the board at its far end, the sleeved 24-pin bend reaching 86.8 from the board edge, and the cable
+grommet: disc Ø14.8, plate 14.7, gap 1.4, sitting 41.5 from the board's rear edge and 12.7 out from its
+long edge. For another card or PSU, those are the numbers to re-measure; each is a single parameter at the top of
 the file. The holder's arm is printed 0.1 mm low on purpose; `shim_05/10/15` go on it if the tab floats.
 
 Then print `coupon` first (5 g, twenty minutes). It has a jigsaw tab and slot, a 6 mm peg and
@@ -115,6 +118,7 @@ Exact sizes of every part, where each one sits, and the feature dimensions are i
 | `cradle` | 1 | 55 × 49 × 18 | on its side, as exported | supports the card's far end; height from `card_bottom_clear` |
 | `coupon` | 1 file, 2 pieces | 60 × 82 × 9 | flat | fit test: the two pieces are tested against each other |
 | `coupon_rear` | 1 | 58 × 89 × 3 | flat | bottom of the rear wall: laptop-cable notch, USB-C hole, bottom of the port window |
+| `coupon_grommet` | 1 file, 3 pieces | 54 × 24 × 19 | flat | three grommet clips, slots 10.5 / 11.5 / 12.5: the one that grips sets `grommet_slot` |
 | `_assembly_structure`, `_assembly_ghosts` | — | — | not for printing | the whole thing, for viewers |
 
 Roughly 1.1 to 1.3 kg of PETG depending on infill. Every part fits a 180 × 180 mm bed except the
@@ -129,8 +133,8 @@ Everything to take to a printer is in [`print-pack/`](print-pack/), one folder p
 [README](print-pack/README.md): settings, a picture of each stage, what it checks, and a pass checklist.
 In short:
 
-1. **Tests**: `coupon` (two pieces) and `coupon_rear`, about 20 g. Your printer's fits, and the real
-   plugs in the real openings.
+1. **Tests**: `coupon` (two pieces), `coupon_rear` and `coupon_grommet`, about 25 g. Your printer's
+   fits, the real plugs in the real openings, and which clip grips the cable's grommet.
 2. **Board and card**: `floor_rr`, `floor_fr`, `bracket_holder`, `cradle` and the shims. The board on
    its five pegs and five clips, the card on the holder and the cradle.
 3. **Structure sample**: one `post_corner`, one `post_mid`, `panel_rear_r`. Full-height posts, a wall
@@ -151,11 +155,12 @@ model.
    forward against the stops.
 5. Card into the slot: foot in the board's slot, tab on the holder's arm, far end on the cradle. Then
    the 24-pin (its bundle leaves the plug, bends inside the bay and reaches the modular face; the spare
-   length lies in the bay as one loop), the 8-pin over the top of the card into the same bay, and the
-   laptop cable laid over the floor edge at the fan-side rear corner, boot at the wall line.
+   length lies in the bay as one loop), the 8-pin over the top of the card into the same bay. Press
+   the laptop cable's grommet down into the clip beside the board, the clip's thin wall going into the
+   gap between the grommet's round disc and square plate, and lay the thick cable toward the rear corner.
 6. Slide the eight panels down into the post slots. The panel with the big opening is the far wall on
    the PSU side. The board-side rear panel goes down over the laptop cable: its bottom notch straddles
-   the boot.
+   the cable.
 7. Lid: the pegs drop into the posts, the two ribs straddle the card's top edge and the two guides
    straddle the top of the bracket.
 
