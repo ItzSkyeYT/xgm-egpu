@@ -1,28 +1,17 @@
 #!/usr/bin/env python3
-"""Build print-pack/: one folder per stage, a README.md with settings, pictures and pass checklists.
+"""Build print-pack/: one folder per stage with its batch plates (the OrcaSlicer projects from make_plates.py)
+and its loose STLs, and a README.md with the print order, settings, pictures and pass checklists.
 usage: make_print_pack.py [destination]   (default: ./print-pack next to this script)"""
 import json, os, shutil, subprocess, sys
+from stages import STAGES, NOTES, LID_QUARTERS, SUBDIR_LIDQ
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STL = os.path.join(HERE, 'stl')
+PLATES = os.path.join(HERE, 'plates')
 DEST = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.path.join(HERE, 'print-pack')
-WEIGHTS = {}                                                  # real slices from slice_weights.py, when it has been run
+WEIGHTS = {}                                                  # real slices from make_plates.py, when it has been run
 if os.path.exists(os.path.join(HERE, 'weights.json')):
     WEIGHTS = json.load(open(os.path.join(HERE, 'weights.json')))
-
-# (file, quantity shown, copies printed)
-STAGES = [
-    ('1-tests', 'Tests', [('coupon', '1 file, 2 pieces', 1), ('coupon_rear', '1', 1), ('coupon_grommet', '1 file, 3 pieces', 1), ('coupon_inserts', '1', 1)]),
-    ('2-board-and-card', 'Board and card', [('floor_rr', '1', 1), ('floor_fr', '1', 1), ('bracket_holder', '1', 1),
-                                            ('cradle', '1', 1), ('shim_05', '1', 1), ('shim_10', '1', 1), ('shim_15', '1', 1)]),
-    ('3-structure-sample', 'Structure sample', [('post_corner', '1', 1), ('post_mid', '1', 1), ('panel_rear_r', '1', 1)]),
-    ('4-final', 'The rest', [('floor_rl', '1', 1), ('floor_fl', '1', 1), ('post_corner', '3 more', 3), ('post_mid', '3 more', 3),
-                             ('panel_rear_l', '1', 1), ('panel_far_l', '1', 1), ('panel_far_r', '1', 1), ('panel_left_r', '1', 1),
-                             ('panel_left_f', '1', 1), ('panel_right_r', '1', 1), ('panel_right_f', '1', 1),
-                             ('lid_l', '1', 1), ('lid_r', '1', 1)]),
-]
-LID_QUARTERS = ['lid_rl', 'lid_rr', 'lid_fl', 'lid_fr']
-SUBDIR_LIDQ = 'lid-quarters-if-bed-under-250mm'
 
 def stl_info(name):
     xs, ys, zs, tri, vol = [], [], [], [], 0.0
@@ -40,46 +29,19 @@ def stl_info(name):
     fill = 0.6 if name.startswith('post') else 0.9          # fallback estimate from the volume; it runs about a quarter high
     return size, sliced['g'] if sliced else abs(vol) / 1000.0 * 1.27 * fill
 
-def read_stl(name):
-    verts, index, tris, cur = [], {}, [], []
-    for line in open(os.path.join(STL, name + '.stl')):
-        t = line.split()
-        if t and t[0] == 'vertex':
-            v = (float(t[1]), float(t[2]), float(t[3])); i = index.get(v)
-            if i is None: i = len(verts); index[v] = i; verts.append(v)
-            cur.append(i)
-            if len(cur) == 3: tris.append(tuple(cur)); cur = []
-    return verts, tris
-
-def write_stage_3mf(rows, out):
-    """Every file of the stage, copies included, laid flat in a grid: one File > Open Project loads the whole stage."""
-    import zipfile
-    objs, x, y, row_h = [], 0.0, 0.0, 0.0
-    for n, _, copies in rows:
-        verts, tris = read_stl(n); (sx, sy, sz), _ = stl_info(n)
-        for c in range(copies):
-            if x > 0 and x + sx > 250: x, y, row_h = 0.0, y + row_h + 10, 0.0
-            objs.append((n + (f' ({c+1})' if copies > 1 else ''), [(vx + x, vy - y - sy, vz) for vx, vy, vz in verts], tris))
-            x += sx + 10; row_h = max(row_h, sy)
-    xml = ['<?xml version="1.0" encoding="UTF-8"?>',
-           '<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">', ' <resources>']
-    for i, (n, verts, tris) in enumerate(objs, start=1):
-        xml.append(f'  <object id="{i}" name="{n}" type="model"><mesh><vertices>')
-        xml += [f'<vertex x="{a:.4f}" y="{b:.4f}" z="{c:.4f}"/>' for a, b, c in verts]
-        xml.append('</vertices><triangles>')
-        xml += [f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in tris]
-        xml.append('</triangles></mesh></object>')
-    xml += [' </resources>', ' <build>'] + [f'  <item objectid="{i}"/>' for i in range(1, len(objs) + 1)] + [' </build>', '</model>']
-    def put(z, name, data):           # fixed timestamp: an unchanged stage rebuilds byte for byte, so git only sees real changes
-        zi = zipfile.ZipInfo(name, (1980, 1, 1, 0, 0, 0)); zi.external_attr = 0o644 << 16
-        z.writestr(zi, data, zipfile.ZIP_DEFLATED)
-    with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
-        put(z, '[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>\n')
-        put(z, '_rels/.rels', '<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>\n')
-        put(z, '3D/3dmodel.model', '\n'.join(xml) + '\n')
-
 def grams(g):
     return f"≈ {max(1, round(g))} g" if g < 10 else f"≈ {int(5 * round(g / 5))} g"
+
+def hm(minutes):
+    return f"{minutes // 60} h {minutes % 60:02d}"
+
+def batch_grams(batch, rows):
+    known = WEIGHTS.get('batches', {}).get(batch)
+    return known['g'] if known else sum(stl_info(n)[1] * c for n, c in rows)
+
+def batch_time(batch):
+    known = WEIGHTS.get('batches', {}).get(batch)
+    return hm(known['min']) if known else '?'
 
 def render_stage(names, png):
     """Lay the stage's files out on a virtual bed, as they print, and render a picture."""
@@ -106,26 +68,60 @@ def render_stage(names, png):
     w = 1400
     im.resize((w, round(im.height * w / im.width)), Image.LANCZOS).save(png, optimize=True)
 
-def table(rows):
-    lines = ['| File | Qty | Size (mm) | Plastic |', '|---|:-:|---|--:|']
-    for n, q, copies in rows:
-        (sx, sy, sz), g = stl_info(n)
-        d = lambda v: f"{v:.1f}" if v < 10 and abs(v - round(v)) > 0.05 else f"{v:.0f}"
-        lines.append(f"| `{n}.stl` | {q} | {d(sx)} × {d(sy)} × {d(sz)} | {grams(g * copies)} |")
+def batch_table(stage, batches):
+    lines = ['| Order | Open this file | Pieces | Time | Plastic |', '|:-:|---|---|--:|--:|']
+    for i, (batch, _, _, rows) in enumerate(batches, start=1):
+        pieces = ', '.join(f'`{n}`' if c == 1 else f'{c} × `{n}`' for n, c in rows)
+        lines.append(f"| {i} | [`{batch}.3mf`]({stage}/{batch}.3mf) | {pieces} | {batch_time(batch)} | {grams(batch_grams(batch, rows))} |")
     return '\n'.join(lines)
+
+def tree():
+    """The whole print order as a tree: stages, their batches top first, and the pieces on each plate."""
+    out = []
+    for key, title, batches in STAGES:
+        known = all(b in WEIGHTS.get('batches', {}) for b, *_ in batches)
+        spent = hm(sum(WEIGHTS['batches'][b]['min'] for b, *_ in batches)) + ' · ' if known else ''
+        head = f'{key[0]} · {title}'
+        out.append(f"{head:42}{spent}{grams(sum(batch_grams(b, rows) for b, _, _, rows in batches))[2:]}")
+        for bi, (batch, _, _, rows) in enumerate(batches):
+            last = bi == len(batches) - 1
+            line = ('└── ' if last else '├── ') + batch + '.3mf'
+            out.append(f"{line:42}{batch_time(batch)} · {grams(batch_grams(batch, rows))[2:]}")
+            groups = []                                   # consecutive pieces that share a note go on one line
+            for n, c in rows:
+                label = n if c == 1 else f'{c} × {n}'
+                if groups and groups[-1][1] == NOTES[n]:
+                    groups[-1][0].append(label)
+                else:
+                    groups.append(([label], NOTES[n]))
+            for gi, (labels, note) in enumerate(groups):
+                branch = ('    ' if last else '│   ') + ('└── ' if gi == len(groups) - 1 else '├── ')
+                out.append(f"{branch}{', '.join(labels):28}{note}")
+        out.append('')
+    return '\n'.join(out).rstrip()
 
 # ---------------------------------------------------------------- build the folders
 if os.path.isdir(DEST):
     shutil.rmtree(DEST)
 os.makedirs(os.path.join(DEST, 'img'))
-totals = {}
-for key, title, rows in STAGES:
-    os.makedirs(os.path.join(DEST, key))
-    for n, _, _ in rows:
-        shutil.copy(os.path.join(STL, n + '.stl'), os.path.join(DEST, key))
-    totals[key] = sum(stl_info(n)[1] * c for n, _, c in rows)
-    write_stage_3mf(rows, os.path.join(DEST, key, f"stage-{key[0]}.3mf"))
-    render_stage([n for n, _, _ in rows], os.path.join(DEST, "img", f"stage-{key[0]}.png"))
+totals, missing = {}, []
+for key, title, batches in STAGES:
+    os.makedirs(os.path.join(DEST, key, 'stl'))
+    names = []
+    for batch, _, _, rows in batches:
+        plate = os.path.join(PLATES, key, batch + '.3mf')
+        if os.path.exists(plate):
+            shutil.copy(plate, os.path.join(DEST, key))
+        else:
+            missing.append(batch)
+        for n, _ in rows:
+            if n not in names:
+                names.append(n)
+                shutil.copy(os.path.join(STL, n + '.stl'), os.path.join(DEST, key, 'stl'))
+    totals[key] = sum(batch_grams(b, rows) for b, _, _, rows in batches)
+    render_stage(names, os.path.join(DEST, 'img', f'stage-{key[0]}.png'))
+if missing:
+    sys.exit('no plate for ' + ', '.join(missing) + ': run make_plates.py first')
 os.makedirs(os.path.join(DEST, '4-final', SUBDIR_LIDQ))
 for n in LID_QUARTERS:
     shutil.copy(os.path.join(STL, n + '.stl'), os.path.join(DEST, '4-final', SUBDIR_LIDQ))
@@ -136,17 +132,19 @@ shutil.copy(os.path.join(HERE, 'img', 'outside.png'), os.path.join(DEST, 'img', 
 shutil.copy(os.path.join(HERE, 'img', 'inside.png'), os.path.join(DEST, 'img', 'inside.png'))
 grand = sum(totals.values())
 walls, infill = (str(WEIGHTS['walls']), WEIGHTS['infill'].replace('%', ' %')) if WEIGHTS else ('3', '15 %')
-if WEIGHTS:
-    basis = (f"The weights are real slices, not estimates: {WEIGHTS['slicer']}, {WEIGHTS['printer'].replace(' 0.4 nozzle', '')}, "
-             f"{WEIGHTS['filament'].split(' @')[0]}, {walls} walls, {infill} infill. ")
+sliced = WEIGHTS.get('batches', {})
+stage_time = {key: hm(sum(sliced[b]['min'] for b, *_ in batches)) if all(b in sliced for b, *_ in batches) else '?' for key, _, batches in STAGES}
+if sliced:
+    longest = max(sliced, key=lambda b: sliced[b]['min'])
+    basis = (f"The times and weights are real slices of these very files, not estimates: {WEIGHTS['slicer']}, "
+             f"{WEIGHTS['printer'].replace(' 0.4 nozzle', '')}, {WEIGHTS['filament'].split(' @')[0]}, {walls} walls, {infill} infill. ")
     basis += (f"At these settings **one 1 kg spool covers the whole pack**, tests included, with about {int(5 * round((1000 - grand) / 5))} g "
               "to spare; 4 walls and 40 % infill push it just past a kilo. " if grand < 1000 else
               "At these settings the pack needs more than one 1 kg spool. ")
-    basis += ("Allow about 33 hours of printing in all on that machine, as the slicer arranges the plates: roughly 1 h for stage 1, "
-              "3 h over two plates for stage 2, 5 h for stage 3 and 24 h over six plates for stage 4. The posts are what takes long: "
-              "the plate that carries them runs for more than 7 h.")
+    basis += (f"Allow about {round(sum(b['min'] for b in sliced.values()) / 60)} hours of printing in all. The longest single batch is "
+              f"`{longest}`, at {hm(sliced[longest]['min'])}: tall, thin posts print slowly, one small layer at a time.")
 else:
-    basis = "The weights are estimates from each part's volume; run `slice_weights.py` for real ones."
+    basis = "The weights are estimates from each part's volume; run `make_plates.py` for real ones."
 
 # ---------------------------------------------------------------- README.md
 md = f"""# XGM Lite frame · print pack
@@ -166,26 +164,46 @@ by M3 screws in heat-set inserts.
 | Walls | {walls} |
 | Infill | {infill} |
 | Plate | Textured PEI. Bambu's PETG profile refuses the smooth Cool Plate. Let the plate cool before removing parts. |
+| Brim | None, so that the jigsaw edges come off the plate clean. The posts alone get 5 mm: they are 180 mm tall on a 15 mm foot. |
+| Avoid crossing walls | On. PETG strings, and this keeps travel moves inside the part instead of across the vents. |
 | Supports | **None.** Nothing in this pack needs them. |
 | Orientation | As exported. Every file is already laid out for the bed. |
 | Bed | 180 × 180 mm, except the two-piece lid, which needs 250 mm. On a Bambu X1 Carbon (256 mm) every part fits whole. |
 | Height | 182 mm, for the posts |
 
-> **Pick a PETG filament profile in the slicer.** The default is PLA.
+> **The batch files already carry all of this**, on top of Bambu's stock profile for the X1 Carbon and PETG Basic. The table
+> is there to check against, and for another slicer or printer. The tests use exactly the same settings as the case, so
+> what fits in stage 1 fits in stage 4.
 
 ## The plan
 
-| Stage | Folder | What it proves | Plastic |
-|:-:|---|---|--:|
-| 1 | [`1-tests`](1-tests/) | your printer's fits, the real plugs in the real openings, the grommet clip, the insert holes | {grams(totals['1-tests'])} |
-| 2 | [`2-board-and-card`](2-board-and-card/) | the board screwed down on its five inserts, the card on its two supports | {grams(totals['2-board-and-card'])} |
-| 3 | [`3-structure-sample`](3-structure-sample/) | full-height posts, and a wall in its slots | {grams(totals['3-structure-sample'])} |
-| 4 | [`4-final`](4-final/) | the rest of the box | {grams(totals['4-final'])} |
+| Stage | Folder | What it proves | Batches | Time | Plastic |
+|:-:|---|---|:-:|--:|--:|
+| 1 | [`1-tests`](1-tests/) | your printer's fits, the real plugs in the real openings, the grommet clip, the insert holes | {len(STAGES[0][2])} | {stage_time['1-tests']} | {grams(totals['1-tests'])} |
+| 2 | [`2-board-and-card`](2-board-and-card/) | the board screwed down on its five inserts, the card on its two supports | {len(STAGES[1][2])} | {stage_time['2-board-and-card']} | {grams(totals['2-board-and-card'])} |
+| 3 | [`3-structure-sample`](3-structure-sample/) | full-height posts, and a wall in its slots | {len(STAGES[2][2])} | {stage_time['3-structure-sample']} | {grams(totals['3-structure-sample'])} |
+| 4 | [`4-final`](4-final/) | the rest of the box | {len(STAGES[3][2])} | {stage_time['4-final']} | {grams(totals['4-final'])} |
 
-**Opening a stage in OrcaSlicer:** each folder has a `stage-N.3mf` holding all of that stage's parts,
-copies included. File → Open Project loads the whole stage at once; then press **A** to arrange it on
-the plate. If it doesn't all fit, put the leftover parts on a second plate. Single STL files come in with
-File → Import (Ctrl+I), or by dragging them onto the Orca window.
+### Print order
+
+A batch is one plate on the printer. Print them from the top down: each one is the next thing worth knowing, and
+nothing below it is worth the plastic until it has passed.
+
+```
+{tree()}
+```
+
+### Printing a batch
+
+1. In OrcaSlicer, **File → Open Project** and pick the batch's `.3mf`. The parts come in already arranged, with the
+   printer (Bambu Lab X1 Carbon, 0.4 nozzle), the filament (Bambu PETG Basic), the textured plate and the settings above.
+2. Check that the filament slot matches where your spool sits in the AMS, then **Slice plate**.
+3. **Print plate**, or export the sliced file to the printer's card.
+
+The parts are placed clear of the front 14 mm of the bed, where the X1 Carbon draws its purge and flow-calibration lines
+before every print: leave them where they are. Bambu Studio may offer to load only the geometry of a file made by
+OrcaSlicer; if it does, set the values from the table by hand. For any other slicer, the loose STLs are in each stage's
+`stl/` folder.
 
 Print the stages in order, and start a stage only when the previous one passed. Only the stage 1 tests
 are throwaway: everything else ends up in the finished case. About **{grams(grand)[2:]}** of PETG in total.
@@ -198,7 +216,7 @@ are throwaway: everything else ends up in the finished case. About **{grams(gran
 
 ![Stage 1 on the bed](img/stage-1.png)
 
-{table(STAGES[0][2])}
+{batch_table(STAGES[0][0], STAGES[0][2])}
 
 **coupon** holds two identical pieces that you test against each other. Each fit should go together
 by hand and stay put: neither forced nor loose.
@@ -234,7 +252,7 @@ number changes in the model, and only the coupon is reprinted.
 
 ![Stage 2 on the bed](img/stage-2.png)
 
-{table(STAGES[1][2])}
+{batch_table(STAGES[1][0], STAGES[1][2])}
 
 - [ ] The two floor pieces press together on their jigsaw tabs and lie flat on the table.
 - [ ] The five inserts are melted into the round bosses, straight and flush: three on `floor_rr`, two on `floor_fr`.
@@ -256,16 +274,17 @@ number changes in the model, and only the coupon is reprinted.
 
 ![Stage 3 on the bed](img/stage-3.png)
 
-{table(STAGES[2][2])}
+{batch_table(STAGES[2][0], STAGES[2][2])}
 
 These go on the floor from stage 2: the corner post at the board's rear corner, the mid post in the
-middle of the rear edge, and the wall between them.
+middle of the rear edge, and `panel_rear_r` between them. The other half of the rear wall,
+`panel_rear_l`, waits for its corner post in stage 4.
 
 - [ ] The posts came out clean at full height, with no wobble or shifted layers near the top.
 - [ ] The corner post takes an insert in its top end, straight and flush.
 - [ ] Each post's peg drops into its square hole in the floor, and the post stands upright on its own.
-- [ ] The wall slides down into both posts' slots, all the way to the floor.
-- [ ] The wall's bottom notch drops over the thick laptop cable.
+- [ ] `panel_rear_r` slides down into both posts' slots, all the way to the floor.
+- [ ] Its bottom notch drops over the thick laptop cable.
 
 ---
 
@@ -273,13 +292,16 @@ middle of the rear edge, and the wall between them.
 
 ![Stage 4 on the bed](img/stage-4.png)
 
-{table(STAGES[3][2])}
+{batch_table(STAGES[3][0], STAGES[3][2])}
+
+Print the floor first, then the posts: every wall needs a post on each side before it can go in, and the
+lid goes on last.
 
 **Screws:** melt an insert into the top end of each of the other three corner posts. The lid is held by
 four M3×8 or M3×10 screws through its corners.
 
 **On a bed under 250 mm**, print the four files in [`4-final/{SUBDIR_LIDQ}`](4-final/{SUBDIR_LIDQ}/)
-instead of `lid_l` and `lid_r`.
+instead of the two lid batches.
 
 ![Inside the finished case](img/inside.png)
 
@@ -288,10 +310,14 @@ instead of `lid_l` and `lid_r`.
 ```
 print-pack/
 ├── README.md                  this file
-├── 1-tests/                   stage-1.3mf (everything below in one project), coupon, coupon_rear
-├── 2-board-and-card/          stage-2.3mf, floor_rr, floor_fr, bracket_holder, cradle, shim_05, shim_10, shim_15
-├── 3-structure-sample/        stage-3.3mf, post_corner, post_mid, panel_rear_r
-├── 4-final/                   stage-4.3mf, the remaining floor, posts, walls and lid
+├── 1-tests/                   1A-tests.3mf
+│   └── stl/                   the same pieces as loose STLs
+├── 2-board-and-card/          2A and 2B
+│   └── stl/
+├── 3-structure-sample/        3A and 3B
+│   └── stl/
+├── 4-final/                   4A to 4G
+│   ├── stl/
 │   └── {SUBDIR_LIDQ}/   lid_rl, lid_rr, lid_fl, lid_fr
 ├── reference/                 assembled 3MF, 1:1 floor plans, full notes, every dimension
 └── img/                       the pictures in this file

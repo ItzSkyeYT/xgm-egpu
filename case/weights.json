@@ -16,60 +16,60 @@
    "min": 30
   },
   "coupon_grommet": {
-   "g": 3.8,
-   "min": 29
+   "g": 3.5,
+   "min": 28
   },
   "coupon_inserts": {
    "g": 3.3,
-   "min": 20
+   "min": 21
   },
   "coupon_rear": {
    "g": 8.7,
    "min": 23
   },
   "cradle": {
-   "g": 13.7,
-   "min": 33
+   "g": 13.3,
+   "min": 32
   },
   "floor_fl": {
-   "g": 31.0,
-   "min": 49
+   "g": 30.4,
+   "min": 47
   },
   "floor_fr": {
-   "g": 44.9,
-   "min": 72
+   "g": 43.4,
+   "min": 69
   },
   "floor_rl": {
-   "g": 37.6,
-   "min": 63
+   "g": 36.6,
+   "min": 61
   },
   "floor_rr": {
-   "g": 52.7,
-   "min": 85
+   "g": 50.0,
+   "min": 80
   },
   "lid_fl": {
-   "g": 31.6,
-   "min": 50
+   "g": 31.0,
+   "min": 48
   },
   "lid_fr": {
-   "g": 42.0,
-   "min": 78
+   "g": 41.1,
+   "min": 77
   },
   "lid_l": {
-   "g": 102.0,
-   "min": 209
+   "g": 99.4,
+   "min": 205
   },
   "lid_r": {
-   "g": 72.6,
-   "min": 113
+   "g": 71.1,
+   "min": 110
   },
   "lid_rl": {
-   "g": 36.1,
-   "min": 55
+   "g": 35.2,
+   "min": 53
   },
   "lid_rr": {
-   "g": 67.6,
-   "min": 170
+   "g": 64.9,
+   "min": 166
   },
   "panel_far_l": {
    "g": 15.9,
@@ -77,39 +77,39 @@
   },
   "panel_far_r": {
    "g": 47.4,
-   "min": 84
+   "min": 85
   },
   "panel_left_f": {
    "g": 39.6,
-   "min": 79
+   "min": 81
   },
   "panel_left_r": {
    "g": 56.2,
-   "min": 87
+   "min": 88
   },
   "panel_rear_l": {
    "g": 37.6,
-   "min": 75
+   "min": 76
   },
   "panel_rear_r": {
    "g": 42.1,
-   "min": 81
+   "min": 82
   },
   "panel_right_f": {
    "g": 40.2,
-   "min": 77
+   "min": 79
   },
   "panel_right_r": {
    "g": 54.1,
-   "min": 101
+   "min": 103
   },
   "post_corner": {
-   "g": 24.1,
-   "min": 204
+   "g": 23.7,
+   "min": 202
   },
   "post_mid": {
-   "g": 22.2,
-   "min": 201
+   "g": 21.8,
+   "min": 200
   },
   "shim_05": {
    "g": 0.4,
@@ -122,6 +122,56 @@
   "shim_15": {
    "g": 0.5,
    "min": 9
+  }
+ },
+ "batches": {
+  "1A-tests": {
+   "g": 23.9,
+   "min": 66
+  },
+  "2A-floor-board-rear": {
+   "g": 60.1,
+   "min": 95
+  },
+  "2B-floor-board-far": {
+   "g": 56.4,
+   "min": 87
+  },
+  "3A-posts-sample": {
+   "g": 45.4,
+   "min": 220
+  },
+  "3B-rear-wall": {
+   "g": 79.4,
+   "min": 150
+  },
+  "4A-floor-psu-side": {
+   "g": 66.7,
+   "min": 98
+  },
+  "4B-posts": {
+   "g": 135.6,
+   "min": 342
+  },
+  "4C-far-wall": {
+   "g": 63.0,
+   "min": 108
+  },
+  "4D-psu-side-wall": {
+   "g": 95.5,
+   "min": 161
+  },
+  "4E-card-side-wall": {
+   "g": 93.9,
+   "min": 174
+  },
+  "4F-lid-rear": {
+   "g": 99.4,
+   "min": 205
+  },
+  "4G-lid-far": {
+   "g": 71.1,
+   "min": 111
   }
  }
 }

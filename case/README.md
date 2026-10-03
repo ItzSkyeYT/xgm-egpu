@@ -131,9 +131,10 @@ Exact sizes of every part, where each one sits, and the feature dimensions are i
 | `coupon_inserts` | 1 | 52 × 17 × 9 | flat | three board bosses, insert holes 3.8 / 4.0 / 4.2: the one that takes an insert cleanly sets `insert_hole` |
 | `_assembly_structure`, `_assembly_ghosts` | — | — | not for printing | the whole thing, for viewers |
 
-About 910 g of PETG, tests included, so one 1 kg spool: that is a real slice of every part for a Bambu
-X1 Carbon at 3 walls and 15 % infill, which `./slice_weights.py` writes to `weights.json` for the print
-pack. A volume estimate runs about a quarter high, and 4 walls with 40 % infill go just past a kilo.
+About 890 g of PETG, tests included, so one 1 kg spool, and about 30 hours of printing: those are real
+slices of the print pack's batches for a Bambu X1 Carbon at 3 walls and 15 % infill, which
+`./make_plates.py` writes to `weights.json`. A volume estimate runs about a quarter high, and 4 walls
+with 40 % infill go just past a kilo.
 Every part fits a 180 × 180 mm bed except the two-piece lid; the posts need 182 mm of Z.
 
 Print settings: PETG (PLA softens next to a hot GPU and creeps under the PSU), 0.2 mm layers, 3 walls,
@@ -142,20 +143,22 @@ Print settings: PETG (PLA softens next to a hot GPU and creeps under the PSU), 0
 ## Printing
 
 Everything to take to a printer is in [`print-pack/`](print-pack/), one folder per stage, with its own
-[README](print-pack/README.md): settings, a picture of each stage, what it checks, and a pass checklist.
-In short:
+[README](print-pack/README.md): the print order, settings, a picture of each stage, what it checks, and
+a pass checklist. Each stage is a few **batches**, one plate each: an OrcaSlicer project with the parts
+already arranged on an X1 Carbon's bed and the settings saved in it. In short:
 
 1. **Tests**: `coupon` (two pieces), `coupon_rear`, `coupon_grommet` and `coupon_inserts`, about 25 g.
    Your printer's fits, the real plugs in the real openings, which clip grips the cable's grommet, and
    which hole takes the heat-set inserts.
 2. **Board and card**: `floor_rr`, `floor_fr`, `bracket_holder`, `cradle` and the shims. The board
    screwed down on its five bosses, the card on the holder and the cradle.
-3. **Structure sample**: one `post_corner`, one `post_mid`, `panel_rear_r`. Full-height posts, a wall
-   in its slots, and the wall's notch over the laptop cable.
-4. **The rest.**
+3. **Structure sample**: one `post_corner`, one `post_mid`, and both halves of the rear wall.
+   Full-height posts, a wall in its slots, and the wall's notch over the laptop cable.
+4. **The rest**: the floor under the PSU, the other six posts, the three remaining walls, the lid.
 
-Only the stage 1 tests are throwaway. `./make-print-pack.sh` rebuilds the folder after any change to the
-model.
+Only the stage 1 tests are throwaway. The plan itself, stages and batches in print order, is
+`stages.py`. After any change to the model: `./render.sh`, then `./make_plates.py` (a quarter of an
+hour: it arranges and slices every batch with OrcaSlicer's command line), then `./make-print-pack.sh`.
 
 ## Assembly
 
