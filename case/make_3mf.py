@@ -8,6 +8,7 @@ COLOURS = {   # name prefix -> RGBA
     "floor": "4A6FA5FF", "lid": "7FA3D1FF", "post": "2F4F7FFF", "panel": "9DBBE0FF",
     "cradle": "2E4A7AFF", "bracket_holder": "2E4A7AFF",
     "board": "2E8B57FF", "card": "8A8A8AFF", "psu": "303030FF", "zones": "FFA50080",
+    "screws": "D8402CFF", "inserts": "D9A520FF",
 }
 def colour(name):
     for k, v in COLOURS.items():

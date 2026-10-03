@@ -125,6 +125,7 @@ for stl in [] if parts else sorted(glob.glob(os.path.join(HERE, 'stl', '*.stl'))
     print(f"{name:20} {result[0][1]:6.1f} g", flush=True)
 
 # ---- every batch: arrange, save as a project with its settings, then slice that project as a check
+shutil.rmtree(os.path.join(HERE, 'plates'), ignore_errors=True)       # no stale plate from an earlier plan
 for stage, _, stage_batches in STAGES:
     os.makedirs(os.path.join(HERE, 'plates', stage), exist_ok=True)
     for batch, _, brim, rows in stage_batches:
@@ -163,7 +164,7 @@ for stage, _, stage_batches in STAGES:
         code, error = orca(['--slice', '0', '--outputdir', check, '--export-3mf', 'x.gcode.3mf', project], check)
         result = sliced(check)
         if code != 0 or len(result) != 1:
-            failed.append((batch, error or f'{len(result)} plates: it does not fit on one'))
+            failed.append((batch, (error or f'exit {code}') if code else f'{len(result)} plates: it does not fit on one'))
             continue
         mins, grams, text = result[0]
         want = dict(overrides, curr_bed_type=PLATE, printer_model=machine['printer_model'], filament_settings_id=FILAMENT)

@@ -130,6 +130,8 @@ for f in ['xgm-lite-frame-assembled.3mf', 'plan/floor-plan-A3.pdf', 'plan/floor-
     shutil.copy(os.path.join(HERE, f), ref)
 shutil.copy(os.path.join(HERE, 'img', 'outside.png'), os.path.join(DEST, 'img', 'case.png'))
 shutil.copy(os.path.join(HERE, 'img', 'inside.png'), os.path.join(DEST, 'img', 'inside.png'))
+for f in ['screws-floor.png', 'screws-lid.png', 'screws-closeups.png']:
+    shutil.copy(os.path.join(HERE, 'img', f), os.path.join(DEST, 'img', f))
 grand = sum(totals.values())
 walls, infill = (str(WEIGHTS['walls']), WEIGHTS['infill'].replace('%', ' %')) if WEIGHTS else ('3', '15 %')
 sliced = WEIGHTS.get('batches', {})
@@ -150,8 +152,8 @@ else:
 md = f"""# XGM Lite frame · print pack
 
 A print-only case for the **XG Mobile Station Lite** board, an **Inno3D RTX 3060 Twin X2 OC** and a
-**Corsair RM850**. No glue: the parts peg, slot and slide together, and the board and the lid are held
-by M3 screws in heat-set inserts.
+**Corsair RM850**. No glue: the parts peg, slot and slide together, and 27 M3×8 screws in heat-set
+inserts hold the board, the posts and the lid.
 
 ![The finished case](img/case.png)
 
@@ -276,15 +278,20 @@ number changes in the model, and only the coupon is reprinted.
 
 {batch_table(STAGES[2][0], STAGES[2][2])}
 
-These go on the floor from stage 2: the corner post at the board's rear corner, the mid post in the
-middle of the rear edge, and `panel_rear_r` between them. The other half of the rear wall,
-`panel_rear_l`, waits for its corner post in stage 4.
+These go on the floor from stage 2: the corner post at the rear corner on the card side, the mid post
+in the middle of the card-side wall, and `panel_right_r` between them. The other half of that wall,
+`panel_right_f`, waits for its corner post in stage 4.
+
+Inserts for these two posts: one in each top end; one in the corner post's higher side hole; one in
+each of the mid post's two foot bosses.
 
 - [ ] The posts came out clean at full height, with no wobble or shifted layers near the top.
-- [ ] The corner post takes an insert in its top end, straight and flush.
+- [ ] Every insert went in straight and flush, the ones in the side holes included.
 - [ ] Each post's peg drops into its square hole in the floor, and the post stands upright on its own.
-- [ ] `panel_rear_r` slides down into both posts' slots, all the way to the floor.
-- [ ] Its bottom notch drops over the thick laptop cable.
+- [ ] An M3×8 through each floor tab pulls its post up against the tab without tilting it: one screw
+      for the corner post, two for the mid post.
+- [ ] With the mid post's two screws tight, the seam between the two floor pieces beside it is closed.
+- [ ] `panel_right_r` slides down into both posts' slots, all the way to the floor.
 
 ---
 
@@ -297,13 +304,30 @@ middle of the rear edge, and `panel_rear_r` between them. The other half of the 
 Print the floor first, then the posts: every wall needs a post on each side before it can go in, and the
 lid goes on last.
 
-**Screws:** melt an insert into the top end of each of the other three corner posts. The lid is held by
-four M3×8 or M3×10 screws through its corners.
+**Inserts for the six posts of this stage**, 15 in all: one in every top end; one in each corner
+post's higher side hole, and one in the lower side hole of the two that go to the corners with two
+tabs (rear wall on the PSU side, far wall on the card side); for the mid posts, one in a foot boss
+of the rear-wall and far-wall ones, and one in each foot boss of the PSU-side one. The two mid posts
+beside the lid's seam, PSU side and card side, also take one in a top boss, facing the rear.
+
+**Screws:** every post to the floor tab or tabs beside it, then the lid: eight screws down into the
+posts and two sideways through the tabs under its rear half. All M3×8.
 
 **On a bed under 250 mm**, print the four files in [`4-final/{SUBDIR_LIDQ}`](4-final/{SUBDIR_LIDQ}/)
 instead of the two lid batches.
 
 ![Inside the finished case](img/inside.png)
+
+## Where every insert and screw goes
+
+27 inserts and 27 M3×8 socket-head screws. The horizontal ones must be M3×8: a longer screw bottoms out
+in the post before it clamps.
+
+![The 17 screws at floor level](img/screws-floor.png)
+
+![The 10 screws of the lid](img/screws-lid.png)
+
+![The three kinds of joint](img/screws-closeups.png)
 
 ## Folder layout
 

@@ -32,44 +32,44 @@
    "min": 32
   },
   "floor_fl": {
-   "g": 30.4,
-   "min": 47
+   "g": 37.2,
+   "min": 70
   },
   "floor_fr": {
-   "g": 43.4,
-   "min": 69
+   "g": 39.0,
+   "min": 74
   },
   "floor_rl": {
-   "g": 36.6,
-   "min": 61
+   "g": 44.6,
+   "min": 82
   },
   "floor_rr": {
-   "g": 50.0,
-   "min": 80
+   "g": 44.6,
+   "min": 83
   },
   "lid_fl": {
-   "g": 31.0,
-   "min": 48
+   "g": 36.5,
+   "min": 56
   },
   "lid_fr": {
-   "g": 41.1,
-   "min": 77
+   "g": 35.2,
+   "min": 70
   },
   "lid_l": {
-   "g": 99.4,
-   "min": 205
+   "g": 99.9,
+   "min": 207
   },
   "lid_r": {
-   "g": 71.1,
+   "g": 70.8,
    "min": 110
   },
   "lid_rl": {
-   "g": 35.2,
-   "min": 53
+   "g": 42.3,
+   "min": 66
   },
   "lid_rr": {
-   "g": 64.9,
-   "min": 166
+   "g": 58.6,
+   "min": 159
   },
   "panel_far_l": {
    "g": 15.9,
@@ -104,11 +104,11 @@
    "min": 103
   },
   "post_corner": {
-   "g": 23.7,
+   "g": 23.9,
    "min": 202
   },
   "post_mid": {
-   "g": 21.8,
+   "g": 23.1,
    "min": 200
   },
   "shim_05": {
@@ -130,48 +130,52 @@
    "min": 66
   },
   "2A-floor-board-rear": {
-   "g": 60.1,
-   "min": 95
+   "g": 54.7,
+   "min": 98
   },
   "2B-floor-board-far": {
-   "g": 56.4,
+   "g": 52.0,
    "min": 87
   },
   "3A-posts-sample": {
-   "g": 45.4,
-   "min": 220
+   "g": 46.7,
+   "min": 221
   },
-  "3B-rear-wall": {
-   "g": 79.4,
-   "min": 150
-  },
-  "4A-floor-psu-side": {
-   "g": 66.7,
-   "min": 98
-  },
-  "4B-posts": {
-   "g": 135.6,
-   "min": 342
-  },
-  "4C-far-wall": {
-   "g": 63.0,
-   "min": 108
-  },
-  "4D-psu-side-wall": {
-   "g": 95.5,
-   "min": 161
-  },
-  "4E-card-side-wall": {
+  "3B-card-side-wall": {
    "g": 93.9,
    "min": 174
   },
-  "4F-lid-rear": {
-   "g": 99.4,
-   "min": 205
+  "4A-floor-cable-bay": {
+   "g": 44.6,
+   "min": 82
   },
-  "4G-lid-far": {
-   "g": 71.1,
-   "min": 111
+  "4B-floor-psu": {
+   "g": 37.2,
+   "min": 70
+  },
+  "4C-posts": {
+   "g": 139.4,
+   "min": 351
+  },
+  "4D-rear-wall": {
+   "g": 79.4,
+   "min": 150
+  },
+  "4E-far-wall": {
+   "g": 63.0,
+   "min": 108
+  },
+  "4F-psu-side-wall": {
+   "g": 95.5,
+   "min": 161
+  },
+  "4G-lid-rear": {
+   "g": 99.9,
+   "min": 207
+  },
+  "4H-lid-far": {
+   "g": 70.8,
+   "min": 110
   }
  }
 }

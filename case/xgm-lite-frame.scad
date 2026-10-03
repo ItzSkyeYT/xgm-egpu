@@ -55,13 +55,23 @@ pin_fit = 0.3;        // board pegs vs the O3.2 holes (on diameter)
 tab_fit = 0.2;        // jigsaw tabs between floor / lid pieces (per side)
 standoff = 7;         // board underside above the floor (the bracket foot reaches 9.7 below the board top: it ends inside the floor's slot)
 boss_d = 7;
-use_inserts = true;   // M3x5x4.5 heat-set inserts + M3 socket-head screws: 5 for the board, 4 for the lid. false = print-only pegs and clips
+use_inserts = true;   // M3x5x4.5 heat-set inserts + M3 socket-head screws: 5 for the board, 10 for the lid, 12 between posts and floor. false = print-only pegs and clips
 insert_hole = 4.0;    // hole for the M3x5x4.5 inserts (4.5 across): confirm with coupon_inserts (3.8 / 4.0 / 4.2)
 insert_depth = 5.6;   // insert length 5 + 0.6
 boss_d_ins = 8.5;     // board boss with an insert
 gap_y = 24;           // board +Y (fan-side) edge -> wall: the laptop-cable harness and its boot run along this edge
 x_mid = 145;  y_mid = -40;      // mid posts (panels split here)
-x_seam = 135; y_seam = -50;     // floor and lid pieces split here (jigsaw tabs)
+x_seam = 135; y_seam = -30;     // floor and lid pieces split here (jigsaw tabs), 3 mm from a mid post's side: its screw tab stands across the seam
+// screw ties: a horizontal M3 through an upright tab on the floor (or under the lid) into an insert in the post's side
+tie_z = 8;            // screw axis above the floor, and below the lid's underside
+tie_z2 = 16;          // a corner post's tie on its +Y face: higher, so that the two inserts do not meet inside the post, and so that
+                      // its head passes over the laptop cable at the rear corner (the cable's zone ends at 12.5)
+tie_t = 3;            // tab thickness
+tie_y0 = 1.8;         // tabs and bosses start this far from the wall's inner face, clear of the floor's and the lid's lips
+tie_gap = 3;          // a mid post's side face to the seam
+tie_c = (tie_y0 + core) / 2;    // the screw's distance from the wall's inner face
+assert(abs((x_mid - 7 - x_seam) - tie_gap) < 0.01 && abs((y_seam - y_mid - 7) - tie_gap) < 0.01,
+       "a mid post's side face must stand tie_gap from the seam, so that its tab is on the neighbouring piece");
 lid_split_y = false;            // true: lid in 4 pieces for small beds
 xg_exit_y = [board_w-5, board_w+15];   // laptop cable leaves through the rear wall here, beside the board's fan-side edge
 // the laptop cable's rubber grommet clicks into a thin wall on the floor: a pull on the cable lands on the case, not the micro-coax connectors
@@ -192,6 +202,70 @@ function post_centers() = [
 
 module top_socket(h) { translate([-(peg+peg_fit)/2, -(peg+peg_fit)/2, h-4]) cube([peg+peg_fit, peg+peg_fit, 5]); }
 module bottom_peg()  { translate([-peg/2, -peg/2, -(floor_t-0.6)]) cube([peg, peg, floor_t-0.6+eps]); }
+module lid_insert(h) {                                    // insert in a post's top end for the lid screw, clearance below it
+  translate([0, 0, h - insert_depth]) cylinder(d = insert_hole, h = insert_depth + 1, $fn = 40);
+  translate([0, 0, h - insert_depth - 5]) cylinder(d = 3.2, h = 6, $fn = 30);
+}
+
+// Where each post stands. One corner post and one mid post are printed four times each, so they are placed by rotation, never mirrored.
+// A corner post's local frame has the interior toward +X and +Y; a mid post's has the wall along Y and the interior toward +X.
+module at_corner(i) {   // 0 rl, 1 rr, 2 fl, 3 fr, as in post_centers()
+  if (i == 0) translate([xi0, yi0, 0]) children();
+  if (i == 1) translate([xi0, yi1, 0]) rotate([0, 0, -90]) children();
+  if (i == 2) translate([xi1, yi0, 0]) rotate([0, 0, 90]) children();
+  if (i == 3) translate([xi1, yi1, 0]) rotate([0, 0, 180]) children();
+}
+module at_mid(i) {      // 0 rear, 1 far, 2 left, 3 right
+  if (i == 0) translate([xi0, y_mid, 0]) children();
+  if (i == 1) translate([xi1, y_mid, 0]) rotate([0, 0, 180]) children();
+  if (i == 2) translate([x_mid, yi0, 0]) rotate([0, 0, 90]) children();
+  if (i == 3) translate([x_mid, yi1, 0]) rotate([0, 0, -90]) children();
+}
+
+// One screw tie, in the frame of the face it is screwed to: that face is the plane y = 0, x runs from the wall's inner face,
+// the screw is at height zs above the floor (top: below the lid's underside). face: how far the post's own surface stands
+// out from y = 0 (a mid post's boss). what: the upright "tab", the insert "hole" in the post, or the screw's "head",
+// "screw" and "insert" for the collision check and the pictures.
+module tie_piece(zs, what, face = 0, top = false) {
+  z0 = top ? zi1 - zs - 5 : 0;
+  z1 = top ? zi1 + eps : zs + 5;
+  zc = top ? zi1 - zs : zs;
+  y0 = face + 0.1;
+  if (what == "tab") difference() {
+    translate([tie_y0, y0, z0]) cube([core - tie_y0, tie_t, z1 - z0]);
+    translate([tie_c, y0 - 1, zc]) rotate([-90, 0, 0]) cylinder(d = 3.4, h = tie_t + 2, $fn = 30);
+  }
+  if (what == "hole")   translate([tie_c, face + 0.01, zc]) rotate([90, 0, 0]) cylinder(d = insert_hole, h = insert_depth + 0.01, $fn = 40);
+  if (what == "head")   translate([tie_c, y0 + tie_t, zc]) rotate([-90, 0, 0]) cylinder(d = 5.6, h = 3.2, $fn = 24);
+  if (what == "screw")  translate([tie_c, y0 + tie_t, zc]) rotate([-90, 0, 0]) { cylinder(d = 5.5, h = 3, $fn = 24); translate([0, 0, -8]) cylinder(d = 3, h = 8, $fn = 20); }
+  if (what == "insert") translate([tie_c, face, zc]) rotate([90, 0, 0]) cylinder(d = 4.5, h = 5, $fn = 24);
+}
+// a corner post's ties: "y" on its +Y interior face, "x" on its +X one
+module corner_tie(f, what) {
+  if (f == "y") translate([0, core, 0]) tie_piece(tie_z2, what);
+  else          translate([core, 0, 0]) rotate([0, 0, -90]) mirror([1, 0, 0]) tie_piece(tie_z, what);
+}
+// a mid post's ties, on its side faces at y = +7 and -7: the tab stands tie_gap away, where the neighbouring floor piece begins
+module mid_tie(side, what, top = false) { mirror([0, side < 0 ? 1 : 0, 0]) translate([0, 7, 0]) tie_piece(tie_z, what, tie_gap, top); }
+module tie_boss(top = false) {   // on a mid post's side face (the plane y = 0 here), out to the seam
+  w = core - tie_y0;
+  if (top) translate([tie_y0, -eps, zi1 - tie_z - 5]) cube([w, tie_gap + eps, tie_z + 5]);
+  else hull() {                  // 45 degrees above it: the posts are printed standing on their top end
+    translate([tie_y0, -eps, 0]) cube([w, tie_gap + eps, tie_z + 5]);
+    translate([tie_y0, -eps, 0]) cube([w, eps, tie_z + 5 + tie_gap]);
+  }
+}
+// Twelve ties between the posts and the floor. The corner posts' "x" face is used at rl and fr only: at rr the laptop cable
+// passes there, at fl the mains plug. Each mid post stands on one floor piece and is screwed to the next one.
+module floor_ties(what) {
+  for (i = [0:3]) at_corner(i) corner_tie("y", what);
+  for (i = [0, 3]) at_corner(i) corner_tie("x", what);
+  at_mid(0) mid_tie(+1, what);                              // rear: stands on floor_rl, screwed to floor_rr
+  at_mid(1) mid_tie(-1, what);                              // far: stands on floor_fl, screwed to floor_fr
+  at_mid(2) { mid_tie(+1, what); mid_tie(-1, what); }       // left: stands on floor_fl, +1 is screwed to floor_rl
+  at_mid(3) { mid_tie(-1, what); mid_tie(+1, what); }       // right: stands on floor_fr, -1 is screwed to floor_rr
+}
+module lid_ties(what) { at_mid(2) mid_tie(+1, what, top = true); at_mid(3) mid_tie(-1, what, top = true); }   // lid_l to the two mid posts beside the lid's seam
 
 // corner post, local frame: interior toward +X,+Y; the two panels occupy x in [-wall,0] and y in [-wall,0]
 module corner_post_local(h = zi1) {
@@ -199,33 +273,39 @@ module corner_post_local(h = zi1) {
     translate([-wall-lip, -wall-lip, 0]) cube([wall+lip+core, wall+lip+core, h]);
     translate([-wall-slot_fit/2, core-slot_d, -1]) cube([slot_w, slot_d+2, h+2]);      // slot for the YZ panel
     translate([core-slot_d, -wall-slot_fit/2, -1]) cube([slot_d+2, slot_w, h+2]);      // slot for the XZ panel
-    if (use_inserts) translate([core/2, core/2, 0]) {                  // insert for the lid screw, clearance below it
-      translate([0, 0, h - insert_depth]) cylinder(d = insert_hole, h = insert_depth + 1, $fn = 40);
-      translate([0, 0, h - insert_depth - 5]) cylinder(d = 3.2, h = 6, $fn = 30);
+    if (use_inserts) {
+      translate([core/2, core/2, 0]) lid_insert(h);
+      corner_tie("y", "hole"); corner_tie("x", "hole");
     } else translate([core/2, core/2, 0]) top_socket(h);
   }
   translate([core/2, core/2, 0]) bottom_peg();
 }
-// mid post for a YZ wall (thin in X), local frame: interior toward +X, centred on the wall seam in Y
+// mid post, local frame: the wall runs along Y (thin in X), interior toward +X, centred on the wall's seam.
+// The same on both sides, so that one part serves all four: a boss low down and one at the top on each side face.
 module midpost_yz_local(h = zi1) {
   difference() {
-    translate([-wall-lip, -7, 0]) cube([wall+lip+core, 14, h]);
+    union() {
+      translate([-wall-lip, -7, 0]) cube([wall+lip+core, 14, h]);
+      if (use_inserts) for (s = [0, 1]) mirror([0, s, 0]) translate([0, 7, 0]) { tie_boss(); tie_boss(top = true); }
+    }
     translate([-wall-slot_fit/2, -8, -1]) cube([slot_w, 6, h+2]);
     translate([-wall-slot_fit/2,  2, -1]) cube([slot_w, 6, h+2]);
-    translate([core/2, 0, 0]) top_socket(h);
+    if (use_inserts) {
+      translate([core/2, 0, 0]) lid_insert(h);
+      for (s = [+1, -1]) { mid_tie(s, "hole"); mid_tie(s, "hole", top = true); }
+    } else translate([core/2, 0, 0]) top_socket(h);
   }
   translate([core/2, 0, 0]) bottom_peg();
 }
-module midpost_xz_local(h = zi1) { rotate([0,0,-90]) mirror([1,0,0]) midpost_yz_local(h); }
 
-module post_corner_rl() { translate([xi0, yi0, 0]) corner_post_local(); }
-module post_corner_rr() { translate([xi0, yi1, 0]) mirror([0,1,0]) corner_post_local(); }
-module post_corner_fl() { translate([xi1, yi0, 0]) mirror([1,0,0]) corner_post_local(); }
-module post_corner_fr() { translate([xi1, yi1, 0]) mirror([1,0,0]) mirror([0,1,0]) corner_post_local(); }
-module post_mid_rear()  { translate([xi0, y_mid, 0]) midpost_yz_local(); }
-module post_mid_far()   { translate([xi1, y_mid, 0]) mirror([1,0,0]) midpost_yz_local(); }
-module post_mid_left()  { translate([x_mid, yi0, 0]) midpost_xz_local(); }
-module post_mid_right() { translate([x_mid, yi1, 0]) mirror([0,1,0]) midpost_xz_local(); }
+module post_corner_rl() { at_corner(0) corner_post_local(); }
+module post_corner_rr() { at_corner(1) corner_post_local(); }
+module post_corner_fl() { at_corner(2) corner_post_local(); }
+module post_corner_fr() { at_corner(3) corner_post_local(); }
+module post_mid_rear()  { at_mid(0) midpost_yz_local(); }
+module post_mid_far()   { at_mid(1) midpost_yz_local(); }
+module post_mid_left()  { at_mid(2) midpost_yz_local(); }
+module post_mid_right() { at_mid(3) midpost_yz_local(); }
 module posts() { post_corner_rl(); post_corner_rr(); post_corner_fl(); post_corner_fr(); post_mid_rear(); post_mid_far(); post_mid_left(); post_mid_right(); }
 
 /* ================= lips (floor and lid), broken at the posts ================= */
@@ -279,6 +359,7 @@ module floor_full() {
         board_clip_rear(34);                           // rear edge, between the USB-C and the corner
       }
       translate([grommet_x, grommet_y, 0]) grommet_clip();   // the laptop cable's grommet clicks in here
+      if (use_inserts) floor_ties("tab");                    // upright tabs: the posts are screwed down through them
       // PSU stops: in front of the modular face (bottom edge only) and along the plug-zone side
       if (psu_iec_at_far) box(psu_x0-3.5, psu_x0-0.5, psu_y0+6, psu_y1-6, 0, 6);
       else                box(psu_x1+0.5, psu_x1+3.5, psu_y0+6, psu_y1-6, 0, 6);
@@ -300,17 +381,21 @@ module floor_full() {
 }
 
 /* ================= lid ================= */
+// no vent over a post: a lid screw's head needs a flat seat, and a mid post's top bosses reach 11 mm along the wall on each side
+function near_post(x0, x1, y0, y1) = len([for (i = [0:7]) let(p = post_centers()[i], mx = i >= 6 ? 11 : 5, my = (i == 4 || i == 5) ? 11 : 5)
+  if (x1 > p[0]-mx && x0 < p[0]+mx && y1 > p[1]-my && y0 < p[1]+my) 1]) > 0;
 module lid_full() {
   difference() {
     box(xp0, xp1, yp0, yp1, zi1, zi1+lid_t);
     // vents over the card, but never within 3 mm of a jigsaw slot: keep clear of both seams
     if (vents) for (p = grid(xb-4, card_x1+2, card_y0-4, yi1-5, vent_w, vent_pitch, vent_h, vent_row))
-      if (!(p[0]+vent_w > x_seam-4 && p[0] < x_seam+10) && !(p[1]+vent_h > y_seam-4 && p[1] < y_seam+10))
+      if (!(p[0]+vent_w > x_seam-4 && p[0] < x_seam+10) && !(p[1]+vent_h > y_seam-4 && p[1] < y_seam+10) && !near_post(p[0], p[0]+vent_w, p[1], p[1]+vent_h))
         box(p[0], p[0]+vent_w, p[1], p[1]+vent_h, zi1-1, zi1+lid_t+1);
-    if (use_inserts) for (i = [0:3]) translate([post_centers()[i][0], post_centers()[i][1], zi1-1]) cylinder(d = 3.4, h = lid_t + 2, $fn = 30);   // lid screws into the corner posts
+    if (use_inserts) for (p = post_centers()) translate([p[0], p[1], zi1-1]) cylinder(d = 3.4, h = lid_t + 2, $fn = 30);   // a lid screw into every post
   }
   lip_ring(zi1-4, zi1);
-  for (i = [(use_inserts ? 4 : 0) : 7]) translate([post_centers()[i][0]-peg/2, post_centers()[i][1]-peg/2, zi1-3.6]) cube([peg, peg, 3.6+eps]);   // pegs: mid posts (and corners when print-only)
+  if (!use_inserts) for (p = post_centers()) translate([p[0]-peg/2, p[1]-peg/2, zi1-3.6]) cube([peg, peg, 3.6+eps]);   // print-only: pegs into the posts
+  if (use_inserts) lid_ties("tab");                                                      // lid_l's tabs beside the two mid posts at the seam
   // ribs straddling the card's top edge (front half of the card, clear of the 8-pin plug)
   for (y = [[card_y0-3.5, card_y0-0.5], [card_y1+0.5, card_y1+3.5]]) box(xb+14, xb+64, y[0], y[1], card_top+1, zi1+eps);
   // guides beside the bracket's top end
@@ -528,7 +613,41 @@ module coupon_rear() { intersection() { panel_rear_r(); box(xo0-1, xi0+1, -3, bo
 module structure() { floor_full(); posts(); panels(); lid_full(); cradle(); bracket_holder(); }
 module assembly()  { structure(); ghosts(); }
 module inside()    { floor_full(); posts(); panel_rear_l(); panel_rear_r(); panel_far_l(); panel_far_r(); panel_left_r(); panel_left_f(); cradle(); bracket_holder(); ghosts(); }   // lid and +Y wall removed
-module collision() { intersection() { structure(); ghosts_hard(); } }
+module tie_heads()  { floor_ties("head"); lid_ties("head"); }
+module collision() { intersection() { union() { structure(); if (use_inserts) tie_heads(); } ghosts_hard(); } }
+
+/* ================= pictures: where every insert and screw goes ================= */
+module m3(len = 8) { cylinder(d = 5.5, h = 3, $fn = 24); translate([0, 0, -len]) cylinder(d = 3, h = len, $fn = 20); }   // head up, shank down
+module hardware(what, where) {   // what: "screw" or "insert"; where: "floor" (the ties and the board), "lid"
+  if (where == "floor") {
+    floor_ties(what);
+    for (h = holes) translate([h[0], h[1], 0]) {
+      if (what == "screw")  translate([0, 0, zb]) m3();
+      if (what == "insert") translate([0, 0, standoff - 5]) cylinder(d = 4.5, h = 5, $fn = 24);
+    }
+  }
+  if (where == "lid") {
+    lid_ties(what);
+    for (p = post_centers()) translate([p[0], p[1], 0]) {
+      if (what == "screw")  translate([0, 0, zi1 + lid_t]) m3();
+      if (what == "insert") translate([0, 0, zi1 - 5]) cylinder(d = 4.5, h = 5, $fn = 24);
+    }
+  }
+}
+// render(): the preview gives up on cutting shapes this busy and would draw the whole floor four times, in one colour
+module pic_floor() { color("#f1f3f6") render() floor_rl(); color("#bcc7d5") render() floor_rr(); color("#bcc7d5") render() floor_fl(); color("#f1f3f6") render() floor_fr(); }
+module pic_frame() {             // floor and posts, no walls, no lid
+  pic_floor(); color("#7fa3d1") posts();
+  color("#d8402c") hardware("screw", "floor"); color("#d9a520") hardware("insert", "floor");
+}
+module pic_lid() {               // the lid on its posts, seen from above
+  color("#f1f3f6") render() lid_l(); color("#bcc7d5") render() lid_r(); color("#7fa3d1") posts();
+  color("#d8402c") hardware("screw", "lid"); color("#d9a520") hardware("insert", "lid");
+}
+module pic_lid_under() {         // the same without the lid's plate: the posts' top ends, the lid's two tabs and their screws
+  color("#7fa3d1") posts(); color("#e3e8ee") lid_ties("tab");
+  color("#d8402c") lid_ties("screw"); color("#d9a520") hardware("insert", "lid");
+}
 
 /* ================= part selector (parts are laid out for printing) ================= */
 module flat_yz(x0) { rotate([0, 90, 0]) translate([-x0 - wall, 0, 0]) children(); }   // YZ panel -> lying flat, exterior face down
@@ -582,7 +701,12 @@ else if (part == "asm_board") ghost_board();
 else if (part == "asm_card") ghost_card_detail();
 else if (part == "asm_psu") ghost_psu();
 else if (part == "asm_zones") ghost_zones();
+else if (part == "asm_screws")  { hardware("screw", "floor");  hardware("screw", "lid"); }     // every M3 screw in place
+else if (part == "asm_inserts") { hardware("insert", "floor"); hardware("insert", "lid"); }    // and every heat-set insert
 else if (part == "inside") inside();
+else if (part == "pic_frame") pic_frame();
+else if (part == "pic_lid") pic_lid();
+else if (part == "pic_lid_under") pic_lid_under();
 else if (part == "collision") collision();
 else if (part == "floor_rl") translate([0,0,floor_t]) floor_rl();
 else if (part == "floor_rr") translate([0,0,floor_t]) floor_rr();

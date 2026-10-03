@@ -1,8 +1,8 @@
 # XGM Lite frame · print pack
 
 A print-only case for the **XG Mobile Station Lite** board, an **Inno3D RTX 3060 Twin X2 OC** and a
-**Corsair RM850**. No glue: the parts peg, slot and slide together, and the board and the lid are held
-by M3 screws in heat-set inserts.
+**Corsair RM850**. No glue: the parts peg, slot and slide together, and 27 M3×8 screws in heat-set
+inserts hold the board, the posts and the lid.
 
 ![The finished case](img/case.png)
 
@@ -31,9 +31,9 @@ by M3 screws in heat-set inserts.
 | Stage | Folder | What it proves | Batches | Time | Plastic |
 |:-:|---|---|:-:|--:|--:|
 | 1 | [`1-tests`](1-tests/) | your printer's fits, the real plugs in the real openings, the grommet clip, the insert holes | 1 | 1 h 06 | ≈ 25 g |
-| 2 | [`2-board-and-card`](2-board-and-card/) | the board screwed down on its five inserts, the card on its two supports | 2 | 3 h 02 | ≈ 115 g |
-| 3 | [`3-structure-sample`](3-structure-sample/) | full-height posts, and a wall in its slots | 2 | 6 h 10 | ≈ 125 g |
-| 4 | [`4-final`](4-final/) | the rest of the box | 7 | 19 h 59 | ≈ 625 g |
+| 2 | [`2-board-and-card`](2-board-and-card/) | the board screwed down on its five inserts, the card on its two supports | 2 | 3 h 05 | ≈ 105 g |
+| 3 | [`3-structure-sample`](3-structure-sample/) | full-height posts, and a wall in its slots | 2 | 6 h 35 | ≈ 140 g |
+| 4 | [`4-final`](4-final/) | the rest of the box | 8 | 20 h 39 | ≈ 630 g |
 
 ### Print order
 
@@ -48,42 +48,43 @@ nothing below it is worth the plastic until it has passed.
     ├── coupon_grommet              three clips, slots of 10.5, 11.5 and 12.5 mm
     └── coupon_rear                 a slice of the rear wall: cable notch, USB-C hole, port window
 
-2 · Board and card                        3 h 02 · 115 g
-├── 2A-floor-board-rear.3mf               1 h 35 · 60 g
-│   ├── floor_rr                    three of the five board bosses, the holder's holes, the grommet clip
+2 · Board and card                        3 h 05 · 105 g
+├── 2A-floor-board-rear.3mf               1 h 38 · 55 g
+│   ├── floor_rr                    three of the five board bosses, the holder's holes, the grommet clip, three post tabs
 │   ├── bracket_holder              stands in the board's three small holes, carries the bracket's tab
 │   └── shim_05, shim_10, shim_15   shims for the holder's arm
-└── 2B-floor-board-far.3mf                1 h 27 · 55 g
-    ├── floor_fr                    the other two board bosses
+└── 2B-floor-board-far.3mf                1 h 27 · 50 g
+    ├── floor_fr                    the other two board bosses, four post tabs
     └── cradle                      under the card's far end
 
-3 · Structure sample                      6 h 10 · 125 g
-├── 3A-posts-sample.3mf                   3 h 40 · 45 g
-│   ├── post_corner                 takes an insert in its top end, for a lid screw
-│   └── post_mid                    between two wall panels
-└── 3B-rear-wall.3mf                      2 h 30 · 80 g
-    ├── panel_rear_r                USB-C opening, display-port window, laptop-cable notch
-    └── panel_rear_l                vents over the cable bay
+3 · Structure sample                      6 h 35 · 140 g
+├── 3A-posts-sample.3mf                   3 h 41 · 45 g
+│   ├── post_corner                 inserts in its top end and in its side, near the foot
+│   └── post_mid                    between two wall panels; inserts in its top end and its sides
+└── 3B-card-side-wall.3mf                 2 h 54 · 95 g
+    ├── panel_right_r               intake grille for the card's fans, rear half
+    └── panel_right_f               intake grille for the card's fans, far half
 
-4 · The rest                              19 h 59 · 625 g
-├── 4A-floor-psu-side.3mf                 1 h 38 · 65 g
-│   ├── floor_rl                    under the cable bay and the near end of the PSU
-│   └── floor_fl                    under most of the PSU
-├── 4B-posts.3mf                          5 h 42 · 135 g
-│   ├── 3 × post_corner             takes an insert in its top end, for a lid screw
-│   └── 3 × post_mid                between two wall panels
-├── 4C-far-wall.3mf                       1 h 48 · 65 g
+4 · The rest                              20 h 39 · 630 g
+├── 4A-floor-cable-bay.3mf                1 h 22 · 45 g
+│   └── floor_rl                    under the cable bay and the near end of the PSU, three post tabs
+├── 4B-floor-psu.3mf                      1 h 10 · 35 g
+│   └── floor_fl                    under most of the PSU, two post tabs
+├── 4C-posts.3mf                          5 h 51 · 140 g
+│   ├── 3 × post_corner             inserts in its top end and in its side, near the foot
+│   └── 3 × post_mid                between two wall panels; inserts in its top end and its sides
+├── 4D-rear-wall.3mf                      2 h 30 · 80 g
+│   ├── panel_rear_r                USB-C opening, display-port window, laptop-cable notch
+│   └── panel_rear_l                vents over the cable bay
+├── 4E-far-wall.3mf                       1 h 48 · 65 g
 │   ├── panel_far_l                 opening for the PSU's power inlet and switch
 │   └── panel_far_r                 exhaust grille for the card
-├── 4D-psu-side-wall.3mf                  2 h 41 · 95 g
+├── 4F-psu-side-wall.3mf                  2 h 41 · 95 g
 │   ├── panel_left_r                PSU intake grille, rear half
 │   └── panel_left_f                PSU intake grille, far half
-├── 4E-card-side-wall.3mf                 2 h 54 · 95 g
-│   ├── panel_right_r               intake grille for the card's fans, rear half
-│   └── panel_right_f               intake grille for the card's fans, far half
-├── 4F-lid-rear.3mf                       3 h 25 · 100 g
-│   └── lid_l                       with the guides that steady the card's bracket and top edge
-└── 4G-lid-far.3mf                        1 h 51 · 70 g
+├── 4G-lid-rear.3mf                       3 h 27 · 100 g
+│   └── lid_l                       with the guides that steady the card's bracket and top edge, and two post tabs
+└── 4H-lid-far.3mf                        1 h 50 · 70 g
     └── lid_r                       vents only
 ```
 
@@ -100,9 +101,9 @@ OrcaSlicer; if it does, set the values from the table by hand. For any other sli
 `stl/` folder.
 
 Print the stages in order, and start a stage only when the previous one passed. Only the stage 1 tests
-are throwaway: everything else ends up in the finished case. About **890 g** of PETG in total.
+are throwaway: everything else ends up in the finished case. About **900 g** of PETG in total.
 
-The times and weights are real slices of these very files, not estimates: OrcaSlicer 2.4.2, Bambu Lab X1 Carbon, Bambu PETG Basic, 3 walls, 15 % infill. At these settings **one 1 kg spool covers the whole pack**, tests included, with about 110 g to spare; 4 walls and 40 % infill push it just past a kilo. Allow about 30 hours of printing in all. The longest single batch is `4B-posts`, at 5 h 42: tall, thin posts print slowly, one small layer at a time.
+The times and weights are real slices of these very files, not estimates: OrcaSlicer 2.4.2, Bambu Lab X1 Carbon, Bambu PETG Basic, 3 walls, 15 % infill. At these settings **one 1 kg spool covers the whole pack**, tests included, with about 100 g to spare; 4 walls and 40 % infill push it just past a kilo. Allow about 31 hours of printing in all. The longest single batch is `4C-posts`, at 5 h 51: tall, thin posts print slowly, one small layer at a time.
 
 ---
 
@@ -150,8 +151,8 @@ number changes in the model, and only the coupon is reprinted.
 
 | Order | Open this file | Pieces | Time | Plastic |
 |:-:|---|---|--:|--:|
-| 1 | [`2A-floor-board-rear.3mf`](2-board-and-card/2A-floor-board-rear.3mf) | `floor_rr`, `bracket_holder`, `shim_05`, `shim_10`, `shim_15` | 1 h 35 | ≈ 60 g |
-| 2 | [`2B-floor-board-far.3mf`](2-board-and-card/2B-floor-board-far.3mf) | `floor_fr`, `cradle` | 1 h 27 | ≈ 55 g |
+| 1 | [`2A-floor-board-rear.3mf`](2-board-and-card/2A-floor-board-rear.3mf) | `floor_rr`, `bracket_holder`, `shim_05`, `shim_10`, `shim_15` | 1 h 38 | ≈ 55 g |
+| 2 | [`2B-floor-board-far.3mf`](2-board-and-card/2B-floor-board-far.3mf) | `floor_fr`, `cradle` | 1 h 27 | ≈ 50 g |
 
 - [ ] The two floor pieces press together on their jigsaw tabs and lie flat on the table.
 - [ ] The five inserts are melted into the round bosses, straight and flush: three on `floor_rr`, two on `floor_fr`.
@@ -175,18 +176,23 @@ number changes in the model, and only the coupon is reprinted.
 
 | Order | Open this file | Pieces | Time | Plastic |
 |:-:|---|---|--:|--:|
-| 1 | [`3A-posts-sample.3mf`](3-structure-sample/3A-posts-sample.3mf) | `post_corner`, `post_mid` | 3 h 40 | ≈ 45 g |
-| 2 | [`3B-rear-wall.3mf`](3-structure-sample/3B-rear-wall.3mf) | `panel_rear_r`, `panel_rear_l` | 2 h 30 | ≈ 80 g |
+| 1 | [`3A-posts-sample.3mf`](3-structure-sample/3A-posts-sample.3mf) | `post_corner`, `post_mid` | 3 h 41 | ≈ 45 g |
+| 2 | [`3B-card-side-wall.3mf`](3-structure-sample/3B-card-side-wall.3mf) | `panel_right_r`, `panel_right_f` | 2 h 54 | ≈ 95 g |
 
-These go on the floor from stage 2: the corner post at the board's rear corner, the mid post in the
-middle of the rear edge, and `panel_rear_r` between them. The other half of the rear wall,
-`panel_rear_l`, waits for its corner post in stage 4.
+These go on the floor from stage 2: the corner post at the rear corner on the card side, the mid post
+in the middle of the card-side wall, and `panel_right_r` between them. The other half of that wall,
+`panel_right_f`, waits for its corner post in stage 4.
+
+Inserts for these two posts: one in each top end; one in the corner post's higher side hole; one in
+each of the mid post's two foot bosses.
 
 - [ ] The posts came out clean at full height, with no wobble or shifted layers near the top.
-- [ ] The corner post takes an insert in its top end, straight and flush.
+- [ ] Every insert went in straight and flush, the ones in the side holes included.
 - [ ] Each post's peg drops into its square hole in the floor, and the post stands upright on its own.
-- [ ] `panel_rear_r` slides down into both posts' slots, all the way to the floor.
-- [ ] Its bottom notch drops over the thick laptop cable.
+- [ ] An M3×8 through each floor tab pulls its post up against the tab without tilting it: one screw
+      for the corner post, two for the mid post.
+- [ ] With the mid post's two screws tight, the seam between the two floor pieces beside it is closed.
+- [ ] `panel_right_r` slides down into both posts' slots, all the way to the floor.
 
 ---
 
@@ -196,24 +202,42 @@ middle of the rear edge, and `panel_rear_r` between them. The other half of the 
 
 | Order | Open this file | Pieces | Time | Plastic |
 |:-:|---|---|--:|--:|
-| 1 | [`4A-floor-psu-side.3mf`](4-final/4A-floor-psu-side.3mf) | `floor_rl`, `floor_fl` | 1 h 38 | ≈ 65 g |
-| 2 | [`4B-posts.3mf`](4-final/4B-posts.3mf) | 3 × `post_corner`, 3 × `post_mid` | 5 h 42 | ≈ 135 g |
-| 3 | [`4C-far-wall.3mf`](4-final/4C-far-wall.3mf) | `panel_far_l`, `panel_far_r` | 1 h 48 | ≈ 65 g |
-| 4 | [`4D-psu-side-wall.3mf`](4-final/4D-psu-side-wall.3mf) | `panel_left_r`, `panel_left_f` | 2 h 41 | ≈ 95 g |
-| 5 | [`4E-card-side-wall.3mf`](4-final/4E-card-side-wall.3mf) | `panel_right_r`, `panel_right_f` | 2 h 54 | ≈ 95 g |
-| 6 | [`4F-lid-rear.3mf`](4-final/4F-lid-rear.3mf) | `lid_l` | 3 h 25 | ≈ 100 g |
-| 7 | [`4G-lid-far.3mf`](4-final/4G-lid-far.3mf) | `lid_r` | 1 h 51 | ≈ 70 g |
+| 1 | [`4A-floor-cable-bay.3mf`](4-final/4A-floor-cable-bay.3mf) | `floor_rl` | 1 h 22 | ≈ 45 g |
+| 2 | [`4B-floor-psu.3mf`](4-final/4B-floor-psu.3mf) | `floor_fl` | 1 h 10 | ≈ 35 g |
+| 3 | [`4C-posts.3mf`](4-final/4C-posts.3mf) | 3 × `post_corner`, 3 × `post_mid` | 5 h 51 | ≈ 140 g |
+| 4 | [`4D-rear-wall.3mf`](4-final/4D-rear-wall.3mf) | `panel_rear_r`, `panel_rear_l` | 2 h 30 | ≈ 80 g |
+| 5 | [`4E-far-wall.3mf`](4-final/4E-far-wall.3mf) | `panel_far_l`, `panel_far_r` | 1 h 48 | ≈ 65 g |
+| 6 | [`4F-psu-side-wall.3mf`](4-final/4F-psu-side-wall.3mf) | `panel_left_r`, `panel_left_f` | 2 h 41 | ≈ 95 g |
+| 7 | [`4G-lid-rear.3mf`](4-final/4G-lid-rear.3mf) | `lid_l` | 3 h 27 | ≈ 100 g |
+| 8 | [`4H-lid-far.3mf`](4-final/4H-lid-far.3mf) | `lid_r` | 1 h 50 | ≈ 70 g |
 
 Print the floor first, then the posts: every wall needs a post on each side before it can go in, and the
 lid goes on last.
 
-**Screws:** melt an insert into the top end of each of the other three corner posts. The lid is held by
-four M3×8 or M3×10 screws through its corners.
+**Inserts for the six posts of this stage**, 15 in all: one in every top end; one in each corner
+post's higher side hole, and one in the lower side hole of the two that go to the corners with two
+tabs (rear wall on the PSU side, far wall on the card side); for the mid posts, one in a foot boss
+of the rear-wall and far-wall ones, and one in each foot boss of the PSU-side one. The two mid posts
+beside the lid's seam, PSU side and card side, also take one in a top boss, facing the rear.
+
+**Screws:** every post to the floor tab or tabs beside it, then the lid: eight screws down into the
+posts and two sideways through the tabs under its rear half. All M3×8.
 
 **On a bed under 250 mm**, print the four files in [`4-final/lid-quarters-if-bed-under-250mm`](4-final/lid-quarters-if-bed-under-250mm/)
 instead of the two lid batches.
 
 ![Inside the finished case](img/inside.png)
+
+## Where every insert and screw goes
+
+27 inserts and 27 M3×8 socket-head screws. The horizontal ones must be M3×8: a longer screw bottoms out
+in the post before it clamps.
+
+![The 17 screws at floor level](img/screws-floor.png)
+
+![The 10 screws of the lid](img/screws-lid.png)
+
+![The three kinds of joint](img/screws-closeups.png)
 
 ## Folder layout
 

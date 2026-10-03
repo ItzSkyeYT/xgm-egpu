@@ -2,9 +2,10 @@
 
 `xgm-lite-frame.scad` is a parametric OpenSCAD enclosure for an **XG Mobile Station Lite** board
 (osy's open-source XG Mobile dock, "Lite" variant), a **desktop graphics card** and an **ATX power
-supply**. It needs no glue, magnets or 90° power adapters. Screws are optional: by default five M3
-screws in heat-set inserts hold the board and four hold the lid (`use_inserts = false` gives the
-print-only version, with pegs and snap clips instead). The panels slide into printed posts, the PSU is
+supply**. It needs no glue, magnets or 90° power adapters. By default 27 M3×8 screws in heat-set
+inserts hold it together: five for the board, twelve between the posts and the floor, ten for the lid
+(`use_inserts = false` gives the print-only version, with pegs and snap clips instead, and nothing
+tying the posts down). The panels slide into printed posts, the PSU is
 held by its own weight and a few stops, and the card is held by the PCIe slot plus a printed cradle
 under its far end.
 
@@ -116,10 +117,10 @@ Exact sizes of every part, where each one sits, and the feature dimensions are i
 
 | Part | Qty | Size (mm) | Prints | Notes |
 |---|---|---|---|---|
-| `floor_rl`, `floor_rr`, `floor_fl`, `floor_fr` | 1 each | ≤ 151 × 144 × 25 | flat, as exported | the four floor quarters; jigsaw tabs join them. `floor_rr` (three) and `floor_fr` (two) carry the board bosses with their inserts; `floor_rr` also the foot relief, the holder sockets and the grommet clip |
+| `floor_rl`, `floor_rr`, `floor_fl`, `floor_fr` | 1 each | ≤ 151 × 127 × 24 | flat, as exported | the four floor quarters; jigsaw tabs join them, and twelve upright tabs take the screws that tie the posts down. `floor_rr` (three) and `floor_fr` (two) carry the board bosses with their inserts; `floor_rr` also the foot relief, the holder sockets and the grommet clip |
 | `lid_l`, `lid_r` | 1 each | ≤ 151 × 244 × 75 | upside down, as exported | two-piece lid (needs a 250 mm bed). For smaller beds print `lid_rl`, `lid_rr`, `lid_fl`, `lid_fr` instead (≤ 151 × 144) |
-| `post_corner` | 4 | 15 × 15 × 180 | upright, as exported (socket on the bed, peg up) | identical; mirrors are the same part |
-| `post_mid` | 4 | 15 × 14 × 180 | upright | one per wall, where the panels split |
+| `post_corner` | 4 | 15 × 15 × 180 | upright, as exported (top end on the bed, peg up) | identical: each is turned, not mirrored. Insert holes in the top end and in the two inner faces near the foot |
+| `post_mid` | 4 | 15 × 20 × 180 | upright | one per wall, where the panels split; identical and symmetric. Insert holes in the top end and in a small boss on each side, at the foot and at the top |
 | `panel_rear_l`, `panel_rear_r`, `panel_far_l`, `panel_far_r` | 1 each | ≤ 178 × 111 × 3 | flat | rear wall: bay vents, USB-C hole, display-port opening, laptop-cable exit; far wall: PSU opening and GPU exhaust vents |
 | `panel_left_r`, `panel_left_f`, `panel_right_r`, `panel_right_f` | 1 each | ≤ 144 × 178 × 3 | flat | left = PSU intake grille; right = GPU intake grille |
 | `bracket_holder` | 1 | 116 × 51 × 6 | on its side, as exported | stands in the board's three holes; the bracket tab rests on its arm |
@@ -152,9 +153,10 @@ already arranged on an X1 Carbon's bed and the settings saved in it. In short:
    which hole takes the heat-set inserts.
 2. **Board and card**: `floor_rr`, `floor_fr`, `bracket_holder`, `cradle` and the shims. The board
    screwed down on its five bosses, the card on the holder and the cradle.
-3. **Structure sample**: one `post_corner`, one `post_mid`, and both halves of the rear wall.
-   Full-height posts, a wall in its slots, and the wall's notch over the laptop cable.
-4. **The rest**: the floor under the PSU, the other six posts, the three remaining walls, the lid.
+3. **Structure sample**: one `post_corner`, one `post_mid`, and both halves of the card-side wall.
+   Full-height posts screwed to the floor, a seam pulled shut by a mid post, a wall in its slots.
+4. **The rest**: the two floor pieces under the PSU, the other six posts, the three remaining walls,
+   the lid.
 
 Only the stage 1 tests are throwaway. The plan itself, stages and batches in print order, is
 `stages.py`. After any change to the model: `./render.sh`, then `./make_plates.py` (a quarter of an
@@ -162,12 +164,27 @@ hour: it arranges and slices every batch with OrcaSlicer's command line), then `
 
 ## Assembly
 
-1. Heat-set inserts first, while the parts are loose: five into the round board bosses (three on
-   `floor_rr`, two on `floor_fr`) and one into the top end of each of the four corner posts. A soldering
-   iron at about 230 °C, pressed straight down until the insert sits flush.
+Where the 27 inserts and screws go, all M3×8:
+
+![The 17 screws at floor level](img/screws-floor.png)
+![The 10 screws of the lid](img/screws-lid.png)
+![The three kinds of joint](img/screws-closeups.png)
+
+1. Heat-set inserts first, while the parts are loose, with a soldering iron at about 230 °C, pressed
+   straight in until the insert sits flush:
+   - five into the round board bosses (three on `floor_rr`, two on `floor_fr`);
+   - one into the top end of each of the eight posts;
+   - corner posts: one into the higher side hole of all four, and one into the lower side hole of two
+     of them. Those two go to the corners with two tabs: rear wall on the PSU side, far wall on the
+     card side;
+   - mid posts: the two for the PSU-side and card-side walls take one in each foot boss and one in a
+     top boss; the two for the rear and far walls take one in a foot boss.
 2. Join the four floor quarters (press the jigsaw tabs down into their slots).
-3. Push the eight posts into the square holes in the floor. Corner posts have two slots at 90°, mid
-   posts two slots in line.
+3. Push the eight posts into the square holes in the floor: corner posts have two slots at 90°, mid
+   posts two slots in line. Turn each mid post so that its inserts face the tabs (and, on the PSU-side
+   and card-side walls, so that its top insert faces the rear). Screw every post to the tab or tabs
+   beside it, twelve screws: four of them go into a tab on the neighbouring floor piece and pull that
+   seam shut.
 4. Board on its five bosses, screwed down with five M3×8 socket-head screws (M3×6 also works; nothing
    longer than 8, or the tips reach the floor). Bracket holder into its three holes.
 5. PSU on its side, fan toward the outer wall on the PSU side, IEC inlet toward the far wall, slid
@@ -180,12 +197,15 @@ hour: it arranges and slices every batch with OrcaSlicer's command line), then `
 7. Slide the eight panels down into the post slots. The panel with the big opening is the far wall on
    the PSU side. The board-side rear panel goes down over the laptop cable: its bottom notch straddles
    the cable.
-8. Lid: the mid-post pegs drop into their posts, the two ribs straddle the card's top edge and the two
-   guides straddle the top of the bracket. Four M3×8 or M3×10 screws go through the lid's corners into
-   the corner posts.
+8. Lid: join its two halves, then lower it: the two ribs straddle the card's top edge, the two guides
+   straddle the top of the bracket, and the rear half's two tabs come down beside the mid posts. Eight
+   screws go down through the lid into the posts, and two go sideways through those tabs.
 
-Tie points: there are pairs of slots in the floor of the cable bay for zip ties, if you have them. The
-box is lifted by its floor, not by the lid.
+The horizontal screws are M3×8 exactly: a longer one bottoms out in the post before it clamps.
+
+Tie points: there are pairs of slots in the floor of the cable bay for zip ties, if you have them. With
+every post screwed to the floor and to the lid the frame holds together when it is picked up; carry it
+with a hand under the floor all the same, since that is what the PSU and the card sit on.
 
 ## What this case does not do
 
