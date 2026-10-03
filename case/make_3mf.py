@@ -59,13 +59,16 @@ for f in files:
     print(f"{name}: {len(verts)} vertices, {len(tris)} triangles")
     oid += 1
 xml += [' </resources>', ' <build>'] + items + [' </build>', '</model>']
+def put(z, name, data):           # fixed timestamp: an unchanged model rebuilds byte for byte, so git only sees real changes
+    zi = zipfile.ZipInfo(name, (1980, 1, 1, 0, 0, 0)); zi.external_attr = 0o644 << 16
+    z.writestr(zi, data, zipfile.ZIP_DEFLATED)
 with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
-    z.writestr("[Content_Types].xml", '<?xml version="1.0" encoding="UTF-8"?>\n'
+    put(z, "[Content_Types].xml", '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n'
         ' <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\n'
         ' <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>\n</Types>\n')
-    z.writestr("_rels/.rels", '<?xml version="1.0" encoding="UTF-8"?>\n'
+    put(z, "_rels/.rels", '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n'
         ' <Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>\n</Relationships>\n')
-    z.writestr("3D/3dmodel.model", "\n".join(xml) + "\n")
+    put(z, "3D/3dmodel.model", "\n".join(xml) + "\n")
 print(f"wrote {out}: {len(items)} objects, {os.path.getsize(out)//1024} KB")

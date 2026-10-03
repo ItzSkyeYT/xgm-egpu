@@ -66,10 +66,13 @@ def write_stage_3mf(rows, out):
         xml += [f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in tris]
         xml.append('</triangles></mesh></object>')
     xml += [' </resources>', ' <build>'] + [f'  <item objectid="{i}"/>' for i in range(1, len(objs) + 1)] + [' </build>', '</model>']
+    def put(z, name, data):           # fixed timestamp: an unchanged stage rebuilds byte for byte, so git only sees real changes
+        zi = zipfile.ZipInfo(name, (1980, 1, 1, 0, 0, 0)); zi.external_attr = 0o644 << 16
+        z.writestr(zi, data, zipfile.ZIP_DEFLATED)
     with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
-        z.writestr('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>\n')
-        z.writestr('_rels/.rels', '<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>\n')
-        z.writestr('3D/3dmodel.model', '\n'.join(xml) + '\n')
+        put(z, '[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>\n')
+        put(z, '_rels/.rels', '<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>\n')
+        put(z, '3D/3dmodel.model', '\n'.join(xml) + '\n')
 
 def grams(g):
     return f"≈ {max(1, round(g))} g" if g < 10 else f"≈ {int(5 * round(g / 5))} g"
@@ -280,7 +283,8 @@ print-pack/
   every part a separate object. File → Open Project in Orca, then hide parts in the object list to look
   inside. **Not for printing.**
 - [`floor-plan-A3.pdf`](reference/floor-plan-A3.pdf) and [`floor-plan-A4-2pages.pdf`](reference/floor-plan-A4-2pages.pdf):
-  the floor plan at 1:1. Print at 100 % and lay the real parts on it.
+  the floor plan at 1:1. Print at 100 % and lay the real parts on it. For the A4 pair, cut sheet 1 along
+  its dashed line and lay it on sheet 2, cut edge on the dashed line there, crosses on crosses.
 - [`README.md`](reference/README.md): the full notes, including the assembly order.
 - [`DIMENSIONS.md`](reference/DIMENSIONS.md): every part's size and position.
 """

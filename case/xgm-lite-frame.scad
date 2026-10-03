@@ -490,18 +490,10 @@ module coupon_grommet() {   // three clips, slots 10.5 / 11.5 / 12.5: the one th
   }
 }
 
-/* ================= 1:1 paper plan (2D, for SVG/PDF export) ================= */
+/* ================= 1:1 paper plan: 2D outlines, laid out on pages by make_plan.py ================= */
 module ln(x0, y0, x1, y1, w = 0.4) { hull() { translate([x0, y0]) circle(d = w, $fn = 8); translate([x1, y1]) circle(d = w, $fn = 8); } }
 module rect_o(x0, x1, y0, y1, w = 0.4) { ln(x0,y0,x1,y0,w); ln(x1,y0,x1,y1,w); ln(x1,y1,x0,y1,w); ln(x0,y1,x0,y0,w); }
 module ring(x, y, d, w = 0.4) { translate([x, y]) difference() { circle(d = d + w, $fn = 48); circle(d = d - w, $fn = 48); } }
-module cross(x, y, r = 6) { ln(x-r, y, x+r, y, 0.3); ln(x, y-r, x, y+r, 0.3); ring(x, y, r, 0.3); }
-function my(y) = MIRROR ? -y : y;                    // design-frame Y -> paper Y
-// a label anchored at a design-frame point; the glyphs are never mirrored
-module lbl(x, y, t, sz = 3.2, rot = 0) {
-  if (rot == 0)        translate([x, my(y) - (MIRROR ? sz : 0)]) text(t, size = sz, font = "Liberation Sans");
-  else if (MIRROR)     translate([x + sz, my(y)]) rotate(-90) text(t, size = sz, font = "Liberation Sans");
-  else                 translate([x, y]) rotate(90) text(t, size = sz, font = "Liberation Sans");
-}
 module plan_shapes() {
   rect_o(xp0, xp1, yp0, yp1, 0.6);
   rect_o(xi0, xi1, yi0, yi1, 0.25);
@@ -528,47 +520,6 @@ module plan_shapes() {
   ln(xo0, xg_exit_y[0], xo0, xg_exit_y[1], 1.5);
   if (psu_iec_at_far) ln(xo1, psu_y0+3, xo1, psu_y1-3, 1.5); else ln(xo0, psu_y0+3, xo0, psu_y1-3, 1.5);
 }
-module plan_labels() {
-  lbl(xb+30, card_y0+14, "GPU footprint, fans face this edge", 3.2);
-  lbl(xb+30, card_y0+5, str("bracket at x = ", xb, "   card ", gpu_len, " x ", gpu_w), 2.8);
-  lbl(60, 36, "board 220 x 65, five pegs", 3);
-  lbl(xg_conn_x[0], board_w+13, "laptop-cable harness along this edge", 2.6);
-  lbl(grommet_x+4, grommet_y+11, "grommet clip", 2.6);
-  lbl(psu_x0+10, psu_y0+40, str("PSU on its side  ", psu_l, " x ", psu_w, " x ", psu_h, "  (fan -> outer wall)"), 3.2);
-  lbl(psu_x0+10, psu_y0+30, psu_iec_at_far ? "<- modular face      IEC inlet at the far wall ->" : "modular face ->", 3);
-  lbl((bay_x0+bay_x1)/2-6, psu_y0+70, "cable bay", 3.2, 90);
-  lbl(atx_hdr_x[0]+2, -22, "24-pin plug + bend", 2.6);
-  lbl(atx_hdr_x[0]+2, -75, "sleeved bundle reaches 87 from the edge", 2.6);
-  lbl(card_x1-16, card_y1+6, "cradle", 2.6);
-  lbl(hx1+2, 50, "holder", 2.6, 90);
-  lbl(xo0+2, -60, psu_iec_at_far ? "rear wall: vents over the bay" : "rear wall: PSU opening", 2.6, 90);
-  lbl(xo0+2, 14, "ports", 2.6, 90);
-  lbl(xo0-9, 2, "USB-C", 2.6, 90);
-  lbl(xo0+2, board_w-4, "cable exit", 2.6, 90);
-  lbl(xi1-6, 10, "far wall: GPU exhaust grille", 2.6, 90);
-  lbl(xi0+20, yi1-7, "wall on the fan side: GPU intake grille", 3);
-  lbl(xi0+20, yi0+2.5, "wall on the PSU side: PSU intake grille", 3);
-}
-PY0 = MIRROR ? -yp1 : yp0;  PY1 = MIRROR ? -yp0 : yp1;   // the plan's Y extent on paper
-module plan2d() {
-  mirror([0, MIRROR ? 1 : 0]) plan_shapes();
-  plan_labels();
-  translate([xp0, PY1+6]) text(str("xgm-lite-frame  floor plan 1:1   outside ", xp1-xp0, " x ", yp1-yp0, " mm   (as seen from above, component side up)"), size = 3.6, font = "Liberation Sans");
-  ln(xp0, PY0-8, xp0+100, PY0-8, 0.8); ln(xp0, PY0-11, xp0, PY0-5, 0.6); ln(xp0+100, PY0-11, xp0+100, PY0-5, 0.6);
-  translate([xp0+38, PY0-16]) text("100 mm", size = 3.2, font = "Liberation Sans");
-}
-// pages: A3 portrait (297 x 420) with the whole plan, or two A4 landscape tiles (297 x 210) with an overlap band and crosses
-cross_y = (PY0 + PY1) / 2;
-module page(x0, y0, w, h) {
-  intersection() { plan2d(); translate([x0, y0]) square([w, h]); }
-  rect_o(x0, x0+w, y0, y0+h, 0.3);
-  for (x = [40, 140, 240]) if (y0 < cross_y && y0+h > cross_y) cross(x, cross_y);
-}
-// frames are 2 mm smaller than the paper: the SVG exporter pads the page by 1 mm, and "actual size" must stay 1:1
-a4x = xp0 - (295 - (xp1-xp0))/2;
-module plan_a3()  { translate([-a4x, -(PY0-26)]) page(a4x, PY0-26, 295, 418); }
-module plan_a4a() { translate([-a4x, -(PY0-9)])  page(a4x, PY0-9, 295, 208); }
-module plan_a4b() { translate([-a4x, -(PY1+9-208)]) page(a4x, PY1+9-208, 295, 208); }
 
 // a slice of the real rear wall: the laptop-cable exit, the USB-C hole and the bottom of the port window (HDMI)
 module coupon_rear() { intersection() { panel_rear_r(); box(xo0-1, xi0+1, -3, board_w+22, 0, 58); } }
@@ -584,9 +535,18 @@ module flat_yz(x0) { rotate([0, 90, 0]) translate([-x0 - wall, 0, 0]) children()
 module flat_xz(y0) { rotate([-90, 0, 0]) translate([0, -y0 - wall, 0]) children(); }
 module M() { mirror([0, MIRROR ? 1 : 0, 0]) children(); }                              // design frame -> real world
 
-if (part == "plan_a3")        plan_a3();
-else if (part == "plan_a4a")  plan_a4a();
-else if (part == "plan_a4b")  plan_a4b();
+if (part == "plan_shapes")    mirror([0, MIRROR ? 1 : 0]) plan_shapes();     // 2D outlines only, for make_plan.py
+else if (part == "plan_meta") {                                                // dimensions for make_plan.py's labels
+  echo(PLAN = [["xb", xb], ["card_x1", card_x1], ["card_y0", card_y0], ["card_y1", card_y1], ["psu_x0", psu_x0], ["psu_x1", psu_x1],
+    ["psu_y0", psu_y0], ["psu_y1", psu_y1], ["bay_x0", bay_x0], ["bay_x1", bay_x1], ["xo0", xo0], ["xo1", xo1], ["yo0", yo0], ["yo1", yo1],
+    ["xi0", xi0], ["xi1", xi1], ["yi0", yi0], ["yi1", yi1], ["xp0", xp0], ["xp1", xp1], ["yp0", yp0], ["yp1", yp1],
+    ["usbc_y0", usbc_y[0]], ["usbc_y1", usbc_y[1]], ["bracket_y0", bracket_y0], ["bracket_y1", bracket_y1], ["exit_y0", xg_exit_y[0]], ["exit_y1", xg_exit_y[1]],
+    ["hdr_x0", atx_hdr_x[0]], ["hdr_x1", atx_hdr_x[1]], ["bend", atx_bend_reach], ["hx0", hx0], ["hx1", hx1], ["foot_slot_x", foot_slot_x],
+    ["grommet_x", grommet_x], ["grommet_y", grommet_y], ["conn_x1", xg_conn_x[1]], ["board_w", board_w], ["board_l", board_l],
+    ["gpu_len", gpu_len], ["gpu_w", gpu_w], ["psu_l", psu_l], ["psu_w", psu_w], ["psu_h", psu_h],
+    ["use_inserts", use_inserts ? 1 : 0], ["iec_far", psu_iec_at_far ? 1 : 0], ["mirror", MIRROR ? 1 : 0]]);
+  square(0.01);
+}
 else M() selected();
 
 module selected() {

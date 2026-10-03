@@ -76,15 +76,17 @@ the cheap place to find out.
 
 ## Check the fit on paper first
 
-`plan/floor-plan-A3.pdf` (one A3 page) and `plan/floor-plan-A4-2pages.pdf` (two A4 landscape pages,
-tape them together along the alignment crosses) are the floor plan at 1:1: the frame, the posts, the
-board with its holes, the card's footprint and bracket plane, the PSU, the cable channel with its two
-saddles, the cradle, the holder, and the openings in the rear wall. Print at **actual size / 100 %**,
-then check the 100 mm bar with a ruler. Lay the board, the card and the PSU on it, plug the 24-pin in
-and see where the bundle wants to go. This costs nothing and catches the mistakes a render can't:
-a cable that is stiffer than I think, a plug that sticks out further, a PSU that isn't the one on the
-label. Re-export after changing parameters: `openscad -o plan/plan_a3.svg -D 'part="plan_a3"'
-xgm-lite-frame.scad`, then `rsvg-convert -f pdf`.
+`plan/floor-plan-A3.pdf` (one A3 page) and `plan/floor-plan-A4-2pages.pdf` (two A4 landscape pages)
+are the floor plan at 1:1: the frame and its posts, the board with its holes, the card's footprint and
+bracket line, the PSU and its 24-pin bend, the cradle, the holder, the grommet clip and the openings
+in the walls, with numbered markers explained in a legend. Print at **actual size / 100 %**, never
+"fit to page", then check the 100 mm bar with a ruler. For the A4 pair, cut sheet 1 along its dashed
+line, lay it on sheet 2 with the cut edge on the dashed line there and the crosses lined up, and tape.
+
+Lay the board, the card and the PSU on it, plug the 24-pin in and see where the bundle wants to go.
+This costs nothing and catches the mistakes a render can't: a cable that is stiffer than I think, a
+plug that sticks out further, a PSU that isn't the one on the label. Re-export after changing
+parameters with `./make_plan.py`, which runs OpenSCAD for the outlines and `rsvg-convert` for the PDFs.
 
 ## Viewing the model in 3D
 
