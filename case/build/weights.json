@@ -1,193 +1,193 @@
 {
  "slicer": "OrcaSlicer 2.4.2",
- "printer": "Bambu Lab X1 Carbon 0.4 nozzle",
- "filament": "Bambu PETG Basic @BBL X1C",
- "process": "0.20mm Standard @BBL X1C",
+ "printer": "Bambu Lab H2D 0.4 nozzle",
+ "filament": "Bambu PETG Basic @BBL H2D 0.4 nozzle",
+ "process": "0.20mm Standard @BBL H2D",
  "walls": 3,
  "infill": "15%",
  "plate": "Textured PEI Plate",
  "parts": {
   "bracket_holder": {
-   "g": 10.8,
-   "min": 24
-  },
-  "bracket_washer": {
-   "g": 0.4,
-   "min": 9
-  },
-  "bridge_centre": {
-   "g": 2.5,
-   "min": 13
-  },
-  "bridge_strap": {
-   "g": 1.1,
-   "min": 11
-  },
-  "coupon": {
-   "g": 9.5,
-   "min": 30
-  },
-  "coupon_grommet": {
-   "g": 3.5,
-   "min": 28
-  },
-  "coupon_inserts": {
-   "g": 3.3,
-   "min": 21
-  },
-  "coupon_rear": {
-   "g": 8.7,
+   "g": 10.5,
    "min": 23
   },
+  "bracket_washer": {
+   "g": 0.1,
+   "min": 7
+  },
+  "bridge_centre": {
+   "g": 2.2,
+   "min": 11
+  },
+  "bridge_strap": {
+   "g": 0.8,
+   "min": 9
+  },
+  "coupon": {
+   "g": 9.2,
+   "min": 28
+  },
+  "coupon_grommet": {
+   "g": 3.2,
+   "min": 27
+  },
+  "coupon_inserts": {
+   "g": 3.1,
+   "min": 19
+  },
+  "coupon_rear": {
+   "g": 8.4,
+   "min": 21
+  },
   "cradle": {
-   "g": 13.3,
-   "min": 32
-  },
-  "floor_fl": {
-   "g": 37.7,
-   "min": 71
-  },
-  "floor_fr": {
-   "g": 39.5,
-   "min": 76
-  },
-  "floor_rl": {
-   "g": 45.2,
-   "min": 84
-  },
-  "floor_rr": {
-   "g": 45.1,
-   "min": 85
-  },
-  "lid_fl": {
-   "g": 36.9,
-   "min": 59
-  },
-  "lid_fr": {
-   "g": 35.4,
-   "min": 72
-  },
-  "lid_l": {
-   "g": 82.7,
-   "min": 135
-  },
-  "lid_r": {
-   "g": 71.4,
-   "min": 114
-  },
-  "lid_rl": {
-   "g": 42.7,
-   "min": 68
-  },
-  "lid_rr": {
-   "g": 41.0,
-   "min": 84
-  },
-  "panel_far_l": {
-   "g": 15.9,
+   "g": 13.0,
    "min": 31
   },
-  "panel_far_r": {
-   "g": 47.4,
-   "min": 85
+  "floor_fl": {
+   "g": 37.5,
+   "min": 67
   },
-  "panel_left_f": {
-   "g": 39.6,
+  "floor_fr": {
+   "g": 39.2,
+   "min": 72
+  },
+  "floor_rl": {
+   "g": 44.9,
+   "min": 80
+  },
+  "floor_rr": {
+   "g": 44.8,
    "min": 81
   },
+  "lid_fl": {
+   "g": 36.6,
+   "min": 55
+  },
+  "lid_fr": {
+   "g": 35.1,
+   "min": 70
+  },
+  "lid_l": {
+   "g": 82.4,
+   "min": 130
+  },
+  "lid_r": {
+   "g": 71.1,
+   "min": 109
+  },
+  "lid_rl": {
+   "g": 42.4,
+   "min": 63
+  },
+  "lid_rr": {
+   "g": 40.8,
+   "min": 82
+  },
+  "panel_far_l": {
+   "g": 15.6,
+   "min": 29
+  },
+  "panel_far_r": {
+   "g": 47.1,
+   "min": 82
+  },
+  "panel_left_f": {
+   "g": 39.4,
+   "min": 80
+  },
   "panel_left_r": {
-   "g": 56.2,
-   "min": 88
+   "g": 55.9,
+   "min": 84
   },
   "panel_rear_l": {
-   "g": 37.6,
-   "min": 76
+   "g": 37.3,
+   "min": 75
   },
   "panel_rear_r": {
-   "g": 42.6,
-   "min": 92
+   "g": 42.3,
+   "min": 90
   },
   "panel_right_f": {
-   "g": 40.2,
-   "min": 79
+   "g": 39.9,
+   "min": 77
   },
   "panel_right_r": {
-   "g": 54.1,
-   "min": 103
+   "g": 53.8,
+   "min": 101
   },
   "post_corner": {
-   "g": 23.9,
-   "min": 202
+   "g": 23.6,
+   "min": 201
   },
   "post_mid": {
-   "g": 23.1,
-   "min": 200
+   "g": 22.8,
+   "min": 199
   },
   "shim_05": {
-   "g": 0.4,
-   "min": 8
+   "g": 0.1,
+   "min": 6
   },
   "shim_10": {
-   "g": 0.5,
-   "min": 9
+   "g": 0.2,
+   "min": 7
   },
   "shim_15": {
-   "g": 0.5,
-   "min": 9
+   "g": 0.3,
+   "min": 7
   }
  },
  "batches": {
   "1A-tests": {
-   "g": 23.9,
+   "g": 23.7,
    "min": 66
   },
   "2A-floor-board-rear": {
-   "g": 55.7,
-   "min": 102
+   "g": 55.4,
+   "min": 98
   },
   "2B-floor-board-far": {
-   "g": 52.5,
-   "min": 89
+   "g": 52.2,
+   "min": 86
   },
   "3A-posts-sample": {
-   "g": 46.7,
-   "min": 221
+   "g": 46.4,
+   "min": 223
   },
   "3B-card-side-wall": {
-   "g": 93.9,
-   "min": 174
+   "g": 93.7,
+   "min": 173
   },
   "4A-floor-cable-bay": {
-   "g": 45.2,
-   "min": 84
+   "g": 44.9,
+   "min": 80
   },
   "4B-floor-psu": {
-   "g": 42.9,
-   "min": 84
+   "g": 42.6,
+   "min": 81
   },
   "4C-posts": {
-   "g": 139.4,
-   "min": 352
+   "g": 139.1,
+   "min": 369
   },
   "4D-rear-wall": {
-   "g": 79.9,
-   "min": 161
+   "g": 79.6,
+   "min": 159
   },
   "4E-far-wall": {
-   "g": 63.0,
-   "min": 108
+   "g": 62.7,
+   "min": 105
   },
   "4F-psu-side-wall": {
-   "g": 95.5,
-   "min": 161
+   "g": 95.2,
+   "min": 158
   },
   "4G-lid-rear": {
-   "g": 82.7,
-   "min": 135
+   "g": 82.4,
+   "min": 130
   },
   "4H-lid-far": {
-   "g": 71.4,
-   "min": 114
+   "g": 71.1,
+   "min": 109
   }
  }
 }

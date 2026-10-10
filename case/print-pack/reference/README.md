@@ -152,7 +152,7 @@ in-place set and the 3MF.
 | `coupon_inserts` | 1 | 52 × 17 × 9 | flat | three board bosses, insert holes 3.8 / 4.0 / 4.2: the one that takes an insert cleanly sets `insert_hole` |
 
 About 895 g of PETG, tests included, so one 1 kg spool, and about 31 hours of printing: those are real
-slices of the print pack's batches for a Bambu X1 Carbon at 3 walls and 15 % infill, which
+slices of the print pack's batches for a Bambu H2D at 3 walls and 15 % infill, which
 `tools/make_plates.py` writes to `build/weights.json`. A volume estimate runs about a quarter high, and 4 walls
 with 40 % infill go just past a kilo.
 Every part fits a 180 × 180 mm bed except the two-piece lid; the posts need 182 mm of Z.
@@ -165,7 +165,7 @@ Print settings: PETG (PLA softens next to a hot GPU and creeps under the PSU), 0
 Everything to take to a printer is in [`print-pack/`](../), one folder per stage, with its own
 [README](../README.md): the print order, settings, a picture of each stage, what it checks, and
 a pass checklist. Each stage is a few **batches**, one plate each: an OrcaSlicer project with the parts
-already arranged on an X1 Carbon's bed and the settings saved in it. In short:
+already arranged on an H2D's bed and the settings saved in it. In short:
 
 1. **Tests**: `coupon` (two pieces), `coupon_rear`, `coupon_grommet` and `coupon_inserts`, about 25 g.
    Your printer's fits, the real plugs in the real openings, which clip grips the cable's grommet, and

@@ -4,7 +4,7 @@ OrcaSlicer project with the batch's parts arranged on the bed and the print sett
 File > Open Project, Slice, Print. Each project is then sliced to check that it fits one plate and that the
 settings took, and its real print time and filament go into build/weights.json for make_print_pack.py.
 
-The profile is the machine the case is printed on: Bambu Lab X1 Carbon 0.4, Bambu PETG Basic, 0.20 mm,
+The profile is the machine the case is printed on: Bambu Lab H2D 0.4, Bambu PETG Basic, 0.20 mm,
 textured PEI plate. Takes a minute or two; run it after render.sh whenever the model changes.
 usage: make_plates.py [--batches-only]     (ORCA=/path/to/orca-slicer to use another install)"""
 import sys
@@ -15,7 +15,7 @@ from stages import STAGES
 
 ORCA = os.environ.get('ORCA', '/opt/orca-slicer/AppRun')
 PROFILES = os.path.join(os.path.dirname(os.path.realpath(ORCA)), 'resources', 'profiles', 'BBL')
-MACHINE, PROCESS, FILAMENT = 'Bambu Lab X1 Carbon 0.4 nozzle', '0.20mm Standard @BBL X1C', 'Bambu PETG Basic @BBL X1C'
+MACHINE, PROCESS, FILAMENT = 'Bambu Lab H2D 0.4 nozzle', '0.20mm Standard @BBL H2D', 'Bambu PETG Basic @BBL H2D 0.4 nozzle'
 PLATE = 'Textured PEI Plate'          # Bambu's PETG profile refuses the smooth Cool Plate, and so does the slicer
 
 # On top of Bambu's stock profile, for every batch. The tests get exactly the same, so that their fits carry over.
@@ -26,7 +26,12 @@ SETTINGS = {
     'brim_type': 'no_brim',           # jigsaw edges and wall edges must come off the plate clean
 }
 POSTS = {'brim_type': 'outer_only', 'brim_width': '5'}   # 15 mm square, 180 mm tall: a brim keeps them standing
-FRONT_STRIP = 14                  # the X1 Carbon's start sequence prints its purge and flow-calibration lines at X 18 to 240, Y 1 to 12
+# The H2D has two nozzles 25 mm apart: the left one reaches X 0 to 325 of its 350 x 320 bed, the right one X 25 to 350. Everything stays in the
+# strip both can reach, so a batch prints whichever nozzle the spool is loaded on, and in front of the strip the printer keeps free at the back
+# (X 145 to 256, from Y 310). Its start line is drawn off the front edge of the bed, so nothing has to keep clear of that.
+ZONE = (25, 0, 325, 308)          # min x, min y, max x, max y
+def inside(box):
+    return box[0] >= ZONE[0] and box[1] >= ZONE[1] and box[2] <= ZONE[2] and box[3] <= ZONE[3]
 
 def flat(kind, name):
     """A system profile with its whole "inherits" chain merged in. The command line does not resolve the chain,
@@ -146,14 +151,14 @@ for stage, _, stage_batches in STAGES:
         arrange = load_args(process_file(batch, overrides)) + ['--clone-objects', ','.join(str(c) for _, c in rows),
                    '--avoid-extrusion-cali-region', '--arrange', '1', '--outputdir', out, '--export-3mf', 'raw.3mf']
         stls = [os.path.join(STL, n + '.stl') for n, _ in rows]
-        # the arranger may lay a long part front to back, across the front strip: if so, turn the parts a quarter and forbid it to turn them back
+        # the arranger may lay the parts out wider than the zone: if so, turn them a quarter and forbid it to turn them back
         for attempt in (['--allow-rotations'] + stls, [turned(stl, os.path.join(out, 'turned')) for stl in stls]):
             code, error = orca(arrange + attempt, out)
             box = footprint(os.path.join(out, 'raw.3mf')) if code == 0 else None
-            if box and box[1] >= FRONT_STRIP:
+            if box and inside(box):
                 break
-        if code != 0 or box[1] < FRONT_STRIP:
-            failed.append((batch, (error or f'exit {code}') if code else f'it reaches y = {box[1]:.1f}, into the strip where the printer draws its start lines'))
+        if code != 0 or not inside(box):
+            failed.append((batch, (error or f'exit {code}') if code else 'it covers x %.1f..%.1f, y %.1f..%.1f: outside what both nozzles reach' % (box[0], box[2], box[1], box[3])))
             continue
         # The project names Bambu's stock presets. The slicer's window only applies the values listed as different from them.
         project = os.path.join(PLATES, stage, batch + '.3mf')

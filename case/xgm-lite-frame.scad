@@ -58,7 +58,7 @@ tab_fit = 0.2;        // jigsaw tabs between floor / lid pieces (per side)
 standoff = 7;         // board underside above the floor (the bracket foot reaches 9.7 below the board top: it ends inside the floor's slot)
 boss_d = 7;
 use_inserts = true;   // M3x5x4.5 heat-set inserts + M3 socket-head screws: 5 board, 12 posts to floor, 8 floor bridges, 10 lid, 4 lid bridges, 1 bracket tab, 1 holder to rear wall. false = print-only pegs and clips
-insert_hole = 4.0;    // hole for the M3x5x4.5 inserts (4.5 across): confirm with coupon_inserts (3.8 / 4.0 / 4.2)
+insert_hole = 4.2;    // hole for the M3x5x4.5 inserts (4.5 across). TESTED with coupon_inserts in PETG on the H2D: 4.2 takes one flush and clean, 4.0 only just and pushes plastic up around it
 insert_depth = 5.6;   // insert length 5 + 0.6
 boss_d_ins = 8.5;     // board boss with an insert
 gap_y = 24;           // board +Y (fan-side) edge -> wall: the laptop-cable harness and its boot run along this edge
@@ -89,7 +89,7 @@ grommet_x = 41.5 + 2.5;        // MEASURED 41.5: board's rear edge -> the gromme
 grommet_y = board_w + 12;      // MEASURED 12.7: board's long edge -> grommet centre, lying relaxed
 grommet_d = 14.8;              // MEASURED: the round disc (the square plate is 14.7 across flats)
 grommet_gap = 1.4;             // MEASURED: the gap between disc and plate
-grommet_slot = 11.5;           // the rubber neck in the gap, about 11-13: confirm with coupon_grommet (10.5 / 11.5 / 12.5)
+grommet_slot = 10.5;           // the rubber neck in the gap. TESTED with coupon_grommet (10.5 / 11.5 / 12.5): all three take the grommet, 10.5 holds it closely
 grommet_zc = 8;                // grommet axis above the floor (the disc clears the floor by 0.6)
 clip_t = 1.2;                  // clip wall, inside the 1.4 gap
 clip_hw = 9;                   // clip half-width

@@ -20,10 +20,10 @@ the card's bracket.
 | Avoid crossing walls | On. PETG strings, and this keeps travel moves inside the part instead of across the vents. |
 | Supports | **None.** Nothing in this pack needs them. |
 | Orientation | As exported. Every file is already laid out for the bed. |
-| Bed | 180 × 180 mm, except the two-piece lid, which needs 250 mm. On a Bambu X1 Carbon (256 mm) every part fits whole. |
+| Bed | 180 × 180 mm, except the two-piece lid, which needs 250 mm. On a Bambu H2D (350 × 320 mm) every part fits whole. |
 | Height | 182 mm, for the posts |
 
-> **The batch files already carry all of this**, on top of Bambu's stock profile for the X1 Carbon and PETG Basic. The table
+> **The batch files already carry all of this**, on top of Bambu's stock profile for the H2D and PETG Basic. The table
 > is there to check against, and for another slicer or printer. The tests use exactly the same settings as the case, so
 > what fits in stage 1 fits in stage 4.
 
@@ -32,9 +32,9 @@ the card's bracket.
 | Stage | Folder | What it proves | Batches | Time | Plastic |
 |:-:|---|---|:-:|--:|--:|
 | 1 | [`1-tests`](1-tests/) | your printer's fits, the real plugs in the real openings, the grommet clip, the insert holes | 1 | 1 h 06 | ≈ 25 g |
-| 2 | [`2-board-and-card`](2-board-and-card/) | the board screwed down on its five inserts, the card on its two supports | 2 | 3 h 11 | ≈ 110 g |
-| 3 | [`3-structure-sample`](3-structure-sample/) | full-height posts, and a wall in its slots | 2 | 6 h 35 | ≈ 140 g |
-| 4 | [`4-final`](4-final/) | the rest of the box | 8 | 19 h 59 | ≈ 620 g |
+| 2 | [`2-board-and-card`](2-board-and-card/) | the board screwed down on its five inserts, the card on its two supports | 2 | 3 h 04 | ≈ 110 g |
+| 3 | [`3-structure-sample`](3-structure-sample/) | full-height posts, and a wall in its slots | 2 | 6 h 36 | ≈ 140 g |
+| 4 | [`4-final`](4-final/) | the rest of the box | 8 | 19 h 51 | ≈ 620 g |
 
 ### Print order
 
@@ -49,64 +49,64 @@ nothing below it is worth the plastic until it has passed.
     ├── coupon_grommet              three clips, slots of 10.5, 11.5 and 12.5 mm
     └── coupon_rear                 a slice of the rear wall: cable notch, USB-C hole, port window
 
-2 · Board and card                        3 h 11 · 110 g
-├── 2A-floor-board-rear.3mf               1 h 42 · 55 g
+2 · Board and card                        3 h 04 · 110 g
+├── 2A-floor-board-rear.3mf               1 h 38 · 55 g
 │   ├── floor_rr                    three of the five board bosses, the holder's holes, the grommet clip, three post tabs
 │   ├── bracket_holder              stands in the board's three small holes; the bracket's tab is screwed to its top edge
 │   └── 2 × bracket_washer          goes under the head of the bracket's screw; the second one is a spare
-└── 2B-floor-board-far.3mf                1 h 29 · 50 g
+└── 2B-floor-board-far.3mf                1 h 26 · 50 g
     ├── floor_fr                    the other two board bosses, four post tabs
     └── cradle                      under the card's far end
 
-3 · Structure sample                      6 h 35 · 140 g
-├── 3A-posts-sample.3mf                   3 h 41 · 45 g
+3 · Structure sample                      6 h 36 · 140 g
+├── 3A-posts-sample.3mf                   3 h 43 · 45 g
 │   ├── post_corner                 inserts in its top end and in its side, near the foot
 │   └── post_mid                    between two wall panels; inserts in its top end and its sides
-└── 3B-card-side-wall.3mf                 2 h 54 · 95 g
+└── 3B-card-side-wall.3mf                 2 h 53 · 95 g
     ├── panel_right_r               intake grille for the card's fans, rear half
     └── panel_right_f               intake grille for the card's fans, far half
 
-4 · The rest                              19 h 59 · 620 g
-├── 4A-floor-cable-bay.3mf                1 h 24 · 45 g
+4 · The rest                              19 h 51 · 620 g
+├── 4A-floor-cable-bay.3mf                1 h 20 · 45 g
 │   └── floor_rl                    under the cable bay and the near end of the PSU, three post tabs
-├── 4B-floor-psu.3mf                      1 h 24 · 45 g
+├── 4B-floor-psu.3mf                      1 h 21 · 45 g
 │   ├── floor_fl                    under most of the PSU, two post tabs
 │   ├── bridge_centre               the plate over the point where the four floor pieces meet
 │   └── 4 × bridge_strap            two across the floor's long seam, two under the lid's seam
-├── 4C-posts.3mf                          5 h 52 · 140 g
+├── 4C-posts.3mf                          6 h 09 · 140 g
 │   ├── 3 × post_corner             inserts in its top end and in its side, near the foot
 │   └── 3 × post_mid                between two wall panels; inserts in its top end and its sides
-├── 4D-rear-wall.3mf                      2 h 41 · 80 g
+├── 4D-rear-wall.3mf                      2 h 39 · 80 g
 │   ├── panel_rear_r                USB-C opening, display-port window, laptop-cable notch, and the boss that is screwed to the bracket holder
 │   └── panel_rear_l                vents over the cable bay
-├── 4E-far-wall.3mf                       1 h 48 · 65 g
+├── 4E-far-wall.3mf                       1 h 45 · 65 g
 │   ├── panel_far_l                 opening for the PSU's power inlet and switch
 │   └── panel_far_r                 exhaust grille for the card
-├── 4F-psu-side-wall.3mf                  2 h 41 · 95 g
+├── 4F-psu-side-wall.3mf                  2 h 38 · 95 g
 │   ├── panel_left_r                PSU intake grille, rear half
 │   └── panel_left_f                PSU intake grille, far half
-├── 4G-lid-rear.3mf                       2 h 15 · 85 g
+├── 4G-lid-rear.3mf                       2 h 10 · 80 g
 │   └── lid_l                       with the two tabs that are screwed to the mid posts
-└── 4H-lid-far.3mf                        1 h 54 · 70 g
+└── 4H-lid-far.3mf                        1 h 49 · 70 g
     └── lid_r                       vents only
 ```
 
 ### Printing a batch
 
 1. In OrcaSlicer, **File → Open Project** and pick the batch's `.3mf`. The parts come in already arranged, with the
-   printer (Bambu Lab X1 Carbon, 0.4 nozzle), the filament (Bambu PETG Basic), the textured plate and the settings above.
+   printer (Bambu Lab H2D, 0.4 nozzle), the filament (Bambu PETG Basic), the textured plate and the settings above.
 2. Check that the filament slot matches where your spool sits in the AMS, then **Slice plate**.
 3. **Print plate**, or export the sliced file to the printer's card.
 
-The parts are placed clear of the front 14 mm of the bed, where the X1 Carbon draws its purge and flow-calibration lines
-before every print: leave them where they are. Bambu Studio may offer to load only the geometry of a file made by
+The parts sit in the middle 300 mm of the bed, the part that both of the H2D's nozzles can reach, so a batch prints
+whichever nozzle your spool is loaded on: leave them where they are. Bambu Studio may offer to load only the geometry of a file made by
 OrcaSlicer; if it does, set the values from the table by hand. For any other slicer, the loose STLs are in each stage's
 `stl/` folder.
 
 Print the stages in order, and start a stage only when the previous one passed. Only the stage 1 tests
-are throwaway: everything else ends up in the finished case. About **895 g** of PETG in total.
+are throwaway: everything else ends up in the finished case. About **890 g** of PETG in total.
 
-The times and weights are real slices of these very files, not estimates: OrcaSlicer 2.4.2, Bambu Lab X1 Carbon, Bambu PETG Basic, 3 walls, 15 % infill. At these settings **one 1 kg spool covers the whole pack**, tests included, with about 105 g to spare; 4 walls and 40 % infill push it just past a kilo. Allow about 31 hours of printing in all. The longest single batch is `4C-posts`, at 5 h 52: tall, thin posts print slowly, one small layer at a time.
+The times and weights are real slices of these very files, not estimates: OrcaSlicer 2.4.2, Bambu Lab H2D, Bambu PETG Basic, 3 walls, 15 % infill. At these settings **one 1 kg spool covers the whole pack**, tests included, with about 110 g to spare; 4 walls and 40 % infill push it just past a kilo. Allow about 31 hours of printing in all. The longest single batch is `4C-posts`, at 6 h 09: tall, thin posts print slowly, one small layer at a time.
 
 ---
 
@@ -154,8 +154,8 @@ number changes in the model, and only the coupon is reprinted.
 
 | Order | Open this file | Pieces | Time | Plastic |
 |:-:|---|---|--:|--:|
-| 1 | [`2A-floor-board-rear.3mf`](2-board-and-card/2A-floor-board-rear.3mf) | `floor_rr`, `bracket_holder`, 2 × `bracket_washer` | 1 h 42 | ≈ 55 g |
-| 2 | [`2B-floor-board-far.3mf`](2-board-and-card/2B-floor-board-far.3mf) | `floor_fr`, `cradle` | 1 h 29 | ≈ 50 g |
+| 1 | [`2A-floor-board-rear.3mf`](2-board-and-card/2A-floor-board-rear.3mf) | `floor_rr`, `bracket_holder`, 2 × `bracket_washer` | 1 h 38 | ≈ 55 g |
+| 2 | [`2B-floor-board-far.3mf`](2-board-and-card/2B-floor-board-far.3mf) | `floor_fr`, `cradle` | 1 h 26 | ≈ 50 g |
 
 - [ ] The two floor pieces press together on their jigsaw tabs and lie flat on the table.
 - [ ] The five inserts are melted into the round bosses, straight and flush: three on `floor_rr`, two on `floor_fr`.
@@ -180,8 +180,8 @@ number changes in the model, and only the coupon is reprinted.
 
 | Order | Open this file | Pieces | Time | Plastic |
 |:-:|---|---|--:|--:|
-| 1 | [`3A-posts-sample.3mf`](3-structure-sample/3A-posts-sample.3mf) | `post_corner`, `post_mid` | 3 h 41 | ≈ 45 g |
-| 2 | [`3B-card-side-wall.3mf`](3-structure-sample/3B-card-side-wall.3mf) | `panel_right_r`, `panel_right_f` | 2 h 54 | ≈ 95 g |
+| 1 | [`3A-posts-sample.3mf`](3-structure-sample/3A-posts-sample.3mf) | `post_corner`, `post_mid` | 3 h 43 | ≈ 45 g |
+| 2 | [`3B-card-side-wall.3mf`](3-structure-sample/3B-card-side-wall.3mf) | `panel_right_r`, `panel_right_f` | 2 h 53 | ≈ 95 g |
 
 These go on the floor from stage 2: the corner post at the rear corner on the card side, the mid post
 in the middle of the card-side wall, and `panel_right_r` between them. The other half of that wall,
@@ -206,14 +206,14 @@ each of the mid post's two foot bosses.
 
 | Order | Open this file | Pieces | Time | Plastic |
 |:-:|---|---|--:|--:|
-| 1 | [`4A-floor-cable-bay.3mf`](4-final/4A-floor-cable-bay.3mf) | `floor_rl` | 1 h 24 | ≈ 45 g |
-| 2 | [`4B-floor-psu.3mf`](4-final/4B-floor-psu.3mf) | `floor_fl`, `bridge_centre`, 4 × `bridge_strap` | 1 h 24 | ≈ 45 g |
-| 3 | [`4C-posts.3mf`](4-final/4C-posts.3mf) | 3 × `post_corner`, 3 × `post_mid` | 5 h 52 | ≈ 140 g |
-| 4 | [`4D-rear-wall.3mf`](4-final/4D-rear-wall.3mf) | `panel_rear_r`, `panel_rear_l` | 2 h 41 | ≈ 80 g |
-| 5 | [`4E-far-wall.3mf`](4-final/4E-far-wall.3mf) | `panel_far_l`, `panel_far_r` | 1 h 48 | ≈ 65 g |
-| 6 | [`4F-psu-side-wall.3mf`](4-final/4F-psu-side-wall.3mf) | `panel_left_r`, `panel_left_f` | 2 h 41 | ≈ 95 g |
-| 7 | [`4G-lid-rear.3mf`](4-final/4G-lid-rear.3mf) | `lid_l` | 2 h 15 | ≈ 85 g |
-| 8 | [`4H-lid-far.3mf`](4-final/4H-lid-far.3mf) | `lid_r` | 1 h 54 | ≈ 70 g |
+| 1 | [`4A-floor-cable-bay.3mf`](4-final/4A-floor-cable-bay.3mf) | `floor_rl` | 1 h 20 | ≈ 45 g |
+| 2 | [`4B-floor-psu.3mf`](4-final/4B-floor-psu.3mf) | `floor_fl`, `bridge_centre`, 4 × `bridge_strap` | 1 h 21 | ≈ 45 g |
+| 3 | [`4C-posts.3mf`](4-final/4C-posts.3mf) | 3 × `post_corner`, 3 × `post_mid` | 6 h 09 | ≈ 140 g |
+| 4 | [`4D-rear-wall.3mf`](4-final/4D-rear-wall.3mf) | `panel_rear_r`, `panel_rear_l` | 2 h 39 | ≈ 80 g |
+| 5 | [`4E-far-wall.3mf`](4-final/4E-far-wall.3mf) | `panel_far_l`, `panel_far_r` | 1 h 45 | ≈ 65 g |
+| 6 | [`4F-psu-side-wall.3mf`](4-final/4F-psu-side-wall.3mf) | `panel_left_r`, `panel_left_f` | 2 h 38 | ≈ 95 g |
+| 7 | [`4G-lid-rear.3mf`](4-final/4G-lid-rear.3mf) | `lid_l` | 2 h 10 | ≈ 80 g |
+| 8 | [`4H-lid-far.3mf`](4-final/4H-lid-far.3mf) | `lid_r` | 1 h 49 | ≈ 70 g |
 
 Print the floor first, then the posts: every wall needs a post on each side before it can go in, and the
 lid goes on last.
