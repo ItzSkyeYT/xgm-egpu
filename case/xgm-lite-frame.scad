@@ -634,6 +634,7 @@ holder_gap = use_inserts ? 0.8 : 0.3;                       // base beam above t
 holder_y1  = use_inserts ? 66 : 61.5;                       // the head reaches past the tab's far end, where the screw from the rear wall can get at it
 wall_tie = [holder_y1 - 4.5, tab_z - 17.6];                 // y, z of that screw: clear of the tab's footprint (the panel slides down past it), between two rows of vents
 tie_tip = hx0 - 0.5;                                        // the rear panel's boss stops 0.5 short of the holder's back face
+tie_relief = 1.3;                                           // ... and is hollowed this deep around the insert in that face, which in practice is left about 1 mm proud
 module bracket_holder() {
   z0 = zb + holder_gap;  top = tab_z - 0.1;
   difference() {
@@ -662,8 +663,9 @@ module wall_tie_shape(grow = 0, x0, x1) {   // an upright oblong around the scre
 }
 module wall_tie_boss() { wall_tie_shape(3.2, xo0, tie_tip); }             // through the wall too: it fills the vent slots it lands on
 module wall_tie_cut() {
-  wall_tie_shape(0, xo0-1, tie_tip-3);                                    // well for the screw's head: 3 mm of boss left under it
+  wall_tie_shape(0, xo0-1, tie_tip-3-tie_relief);                         // well for the screw's head: 3 mm of boss left under it
   hull() for (dz = [-0.7, 0.7]) translate([xo0, wall_tie[0], wall_tie[1]+dz]) rotate([0, 90, 0]) cylinder(d = 3.6, h = tie_tip-xo0+1, $fn = 30);
+  hull() for (dz = [-14, 0.7]) translate([tie_tip-tie_relief, wall_tie[0], wall_tie[1]+dz]) rotate([0, 90, 0]) cylinder(d = 5.8, h = 3, $fn = 40);   // room for the proud insert, open downward: the panel slides down past it
 }
 
 /* ================= splitting plates into bed-sized pieces (jigsaw tabs) ================= */
@@ -784,7 +786,7 @@ module assembly()  { structure(); ghosts(); }
 module inside()    { floor_full(); posts(); panel_rear_l(); panel_rear_r(); panel_far_l(); panel_far_r(); panel_left_r(); panel_left_f(); cradle(); bracket_holder(); ghosts(); }   // lid and +Y wall removed
 module bracket_heads() {
   translate([tab_screw[0], tab_screw[1], tab_z+2.55]) cylinder(d = 5.6, h = 3.2, $fn = 24);                                  // on the washer
-  translate([tie_tip-3-3.2, wall_tie[0], wall_tie[1]]) rotate([0, 90, 0]) cylinder(d = 5.6, h = 3.2, $fn = 24);            // down the well in the rear wall's boss
+  translate([tie_tip-3-tie_relief-3.2, wall_tie[0], wall_tie[1]]) rotate([0, 90, 0]) cylinder(d = 5.6, h = 3.2, $fn = 24);   // down the well in the rear wall's boss
 }
 module tie_heads()  { floor_ties("head"); lid_ties("head"); bridge_heads(); bracket_heads(); if (handle) handle_heads(); }
 module collision() { intersection() { union() { structure(); if (use_inserts) tie_heads(); } ghosts_hard(); } }
@@ -804,7 +806,7 @@ module hardware(what, where) {   // what: "screw" or "insert"; where: "floor" (t
     }
   }
   if (where == "bracket") {   // the tab screw, down through the washer and the tab's oval hole; the screw from the rear wall into the holder's back
-    if (what == "screw")  { translate([tab_screw[0], tab_screw[1], tab_z+2.55]) m3(); translate([tie_tip-3, wall_tie[0], wall_tie[1]]) rotate([0, -90, 0]) m3(); }
+    if (what == "screw")  { translate([tab_screw[0], tab_screw[1], tab_z+2.55]) m3(); translate([tie_tip-3-tie_relief, wall_tie[0], wall_tie[1]]) rotate([0, -90, 0]) m3(); }
     if (what == "insert") { translate([tab_screw[0], tab_screw[1], tab_z-0.1-5]) cylinder(d = 4.5, h = 5, $fn = 24); translate([hx0, wall_tie[0], wall_tie[1]]) rotate([0, 90, 0]) cylinder(d = 4.5, h = 5, $fn = 24); }
   }
   if (where == "lid") {

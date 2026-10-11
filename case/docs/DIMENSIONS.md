@@ -82,7 +82,7 @@ All numbers in mm, read from the rendered STLs in `build/stl/` (as laid out for 
 | post_mid_right | 135.0 … 155.0 | -94.0 … -79.0 | -2.4 … 177.9 |
 | psu | 94.8 … 254.8 | 48.0 … 134.0 | 0.1 … 150.0 |
 | psu_spacer | 79.9 … 94.6 | 51.7 … 130.3 | 0.0 … 6.0 |
-| screws | -1.8 … 254.4 | -86.8 … 142.8 | -0.5 … 185.9 |
+| screws | -2.0 … 254.4 | -86.8 … 142.8 | -0.5 … 185.9 |
 | zones | -17.0 … 284.7 | -84.6 … 134.0 | 0.4 … 177.8 |
 
 ## Measured inputs (from the real parts)
