@@ -666,6 +666,9 @@ module wall_tie_cut() {
   wall_tie_shape(0, xo0-1, tie_tip-3-tie_relief);                         // well for the screw's head: 3 mm of boss left under it
   hull() for (dz = [-0.7, 0.7]) translate([xo0, wall_tie[0], wall_tie[1]+dz]) rotate([0, 90, 0]) cylinder(d = 3.6, h = tie_tip-xo0+1, $fn = 30);
   hull() for (dz = [-14, 0.7]) translate([tie_tip-tie_relief, wall_tie[0], wall_tie[1]+dz]) rotate([0, 90, 0]) cylinder(d = 5.8, h = 3, $fn = 40);   // room for the proud insert, open downward: the panel slides down past it
+  w0 = tie_tip-3-tie_relief;                                              // the screw's seat is a ledge round the slot, printed in mid-air (the panel prints outer face down):
+  translate([w0-eps, wall_tie[0]-1.8, wall_tie[1]-3.8]) cube([0.2+eps, 3.6, 7.6]);       // its first layer goes down as two bridges beside the slot,
+  translate([w0+0.2-eps, wall_tie[0]-1.8, wall_tie[1]-2.5]) cube([0.2+eps, 3.6, 5.0]);   // the next as two more across them. No support needed
 }
 
 /* ================= splitting plates into bed-sized pieces (jigsaw tabs) ================= */
