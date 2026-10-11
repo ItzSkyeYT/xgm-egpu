@@ -14,13 +14,13 @@ with tempfile.TemporaryDirectory() as tmp:      # the model prints its own numbe
     echo=subprocess.run(['openscad','-o',os.path.join(tmp,'none.stl'),'-D','part="none"',SCAD],capture_output=True,text=True).stderr
 nums=lambda key: re.search(key+r'[^"]*',echo).group(0)
 inside=re.search(r'interior ([\d.]+) x ([\d.]+) x ([\d.]+) mm; outside ([\d.]+) x ([\d.]+) x ([\d.]+)',echo).groups()
-qty={'post_corner':4,'post_mid':4,'bridge_strap':4,'bracket_washer':2,'shim_05':'print-only','shim_10':'print-only','shim_15':'print-only'}
+qty={'post_corner':4,'post_mid':3,'post_mid_psu':1,'bridge_strap':4,'bracket_washer':2,'shim_05':'print-only','shim_10':'print-only','shim_15':'print-only'}
 desc={
  'floor_rl':'floor quarter, rear / PSU side: cable bay floor with tie slots','floor_rr':'floor quarter, rear / board side: 3 board bosses (inserts), holder sockets, foot relief, grommet clip',
  'floor_fl':'floor quarter, far / PSU side: PSU stops','floor_fr':'floor quarter, far / board side: 2 board bosses (inserts), cradle sockets',
  'lid_l':'lid, rear half: lip, strap bosses, two tabs for the mid posts','lid_r':'lid, far half: lip, strap bosses',
  'lid_rl':'lid quarter (small-bed alternative)','lid_rr':'lid quarter (small-bed alternative)','lid_fl':'lid quarter (small-bed alternative)','lid_fr':'lid quarter (small-bed alternative)',
- 'post_corner':'corner post: two panel slots at 90°, peg below, insert holes in the top end and the sides','post_mid':'mid post: two panel slots in line, peg below, insert holes in the top end and the side bosses',
+ 'post_corner':'corner post: two panel slots at 90°, peg below, insert holes in the top end and the sides','post_mid':'mid post: two panel slots in line, peg below, insert holes in the top end and the side bosses','post_mid_psu':"the far wall's mid post, beside the PSU: as post_mid, with one foot boss instead of two",'psu_spacer':"fills the gap between the floor's stop bar and the PSU's cable end; the PSU stands against the far wall",
  'panel_rear_l':'rear wall, bay side: vents','panel_rear_r':'rear wall, board side: USB-C, port window, cable exit, vents, boss for the screw into the bracket holder',
  'panel_far_l':'far wall, PSU side: PSU opening (IEC, switch, grille)','panel_far_r':'far wall, board side: GPU exhaust vents',
  'panel_left_r':'-Y wall, rear part: bay vents / PSU intake','panel_left_f':'-Y wall, far part: PSU intake grille',
@@ -28,8 +28,8 @@ desc={
  'cradle':"support under the card's far end",'bracket_holder':"stands in the board's 3 holes; the bracket tab is screwed to its top edge, its back to the rear wall",
  'bracket_washer':"under the head of the bracket's screw",'bridge_centre':'plate over the point where the four floor pieces meet','bridge_strap':'strap across a seam: two on the floor, two under the lid',
  'shim_05':'0.5 mm shim for the holder (print-only variant)','shim_10':'1.0 mm shim','shim_15':'1.5 mm shim','coupon':'fit test'}
-order=['floor_rl','floor_rr','floor_fl','floor_fr','lid_l','lid_r','lid_rl','lid_rr','lid_fl','lid_fr','post_corner','post_mid',
-       'panel_rear_l','panel_rear_r','panel_far_l','panel_far_r','panel_left_r','panel_left_f','panel_right_r','panel_right_f','cradle','bracket_holder','bracket_washer','bridge_centre','bridge_strap','shim_05','shim_10','shim_15','coupon']
+order=['floor_rl','floor_rr','floor_fl','floor_fr','lid_l','lid_r','lid_rl','lid_rr','lid_fl','lid_fr','post_corner','post_mid','post_mid_psu',
+       'panel_rear_l','panel_rear_r','panel_far_l','panel_far_r','panel_left_r','panel_left_f','panel_right_r','panel_right_f','cradle','psu_spacer','bracket_holder','bracket_washer','bridge_centre','bridge_strap','shim_05','shim_10','shim_15','coupon']
 out=[]
 out.append("# Dimensions\n\nAll numbers in mm, read from the rendered STLs in `build/stl/` (as laid out for printing) and `build/assembled/` (in place). Regenerate with `tools/dimensions.py`.\n")
 out.append("## Box\n\n| | X (length) | Y (width) | Z (height) |\n|---|---|---|---|")

@@ -318,6 +318,12 @@ tabs (rear wall on the PSU side, far wall on the card side); for the mid posts, 
 of the rear-wall and far-wall ones, and one in each foot boss of the PSU-side one. The two mid posts
 beside the lid's seam, PSU side and card side, also take one in a top boss, facing the rear.
 
+One of the three mid posts is `post_mid_psu`: it has a foot boss on one side only. It is the far wall's,
+and its bare side stands against the PSU's back end.
+
+The PSU goes all the way to the far wall, its back end against the floor's lip. `psu_spacer` then lies on
+the floor between the PSU's cable end and the bar, its two hooks round the ends of the bar.
+
 **Inserts for the seam bridges**, 12: one in each of the eight low bosses beside the floor's seams, two
 per floor piece, and one in each of the four bosses under the lid.
 

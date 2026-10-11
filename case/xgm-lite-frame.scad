@@ -119,8 +119,13 @@ psu_y1   = -atx_plug_clear;  psu_y0 = psu_y1 - psu_h;
 xi0 = -4;  xi1 = card_x1 + 3;
 yi0 = psu_y0 - psu_wall_gap;  yi1 = board_w + gap_y;
 zi1 = card_top + plug8_clear;                // interior height = lid underside
-psu_x0 = psu_iec_at_far ? xi1 - core - 1 - psu_l : xi0 + core + 1;  psu_x1 = psu_x0 + psu_l;
+// FOUND AT THE TEST FIT: the PSU goes all the way to the far wall, its back end against the floor's lip (plug and switch right at the
+// opening), not 1 mm short of the far posts' reach as first drawn. The floor was already printed, so its stop bar, side guides and
+// cable-tie slots stay where the first position put them (psu_x0_first, bay_x1_first), and psu_spacer fills the gap at the bar.
+psu_x0_first = psu_iec_at_far ? xi1 - core - 1 - psu_l : xi0 + core + 1;
+psu_x0 = psu_iec_at_far ? xi1 - 1.5 - 0.4 - psu_l : psu_x0_first;  psu_x1 = psu_x0 + psu_l;
 bay_x0 = psu_iec_at_far ? xi0 + 4 : psu_x1 + 4;  bay_x1 = psu_iec_at_far ? psu_x0 - 4 : xi1 - 4;   // cable bay, along X
+bay_x1_first = psu_iec_at_far ? psu_x0_first - 4 : xi1 - 4;
 xo0 = xi0 - wall;  xo1 = xi1 + wall;  yo0 = yi0 - wall;  yo1 = yi1 + wall;     // panel exterior
 xp0 = xo0 - lip;   xp1 = xo1 + lip;   yp0 = yo0 - lip;   yp1 = yo1 + lip;      // post / floor / lid outline
 slot_w = wall + slot_fit;
@@ -310,17 +315,19 @@ module corner_post_local(h = zi1) {
 }
 // mid post, local frame: the wall runs along Y (thin in X), interior toward +X, centred on the wall's seam.
 // The same on both sides, so that one part serves all four: a boss low down and one at the top on each side face.
-module midpost_yz_local(h = zi1) {
+// psu = true is the far wall's mid post: the PSU's back end lies along its +Y side, 1 mm away, so it has no foot boss on that side
+// (no tab faces it there anyway). FOUND AT THE TEST FIT: the standard post's boss stood where the PSU is.
+module midpost_yz_local(h = zi1, psu = false) {
   difference() {
     union() {
       translate([-wall-lip, -7, 0]) cube([wall+lip+core, 14, h]);
-      if (use_inserts) for (s = [0, 1]) mirror([0, s, 0]) translate([0, 7, 0]) { tie_boss(); tie_boss(top = true); }
+      if (use_inserts) for (s = [0, 1]) mirror([0, s, 0]) translate([0, 7, 0]) { if (!(psu && s == 0)) tie_boss(); tie_boss(top = true); }
     }
     translate([-wall-slot_fit/2, -8, -1]) cube([slot_w, 6, h+2]);
     translate([-wall-slot_fit/2,  2, -1]) cube([slot_w, 6, h+2]);
     if (use_inserts) {
       translate([core/2, 0, 0]) lid_insert(h);
-      for (s = [+1, -1]) { mid_tie(s, "hole"); mid_tie(s, "hole", top = true); }
+      for (s = [+1, -1]) { if (!(psu && s > 0)) mid_tie(s, "hole"); mid_tie(s, "hole", top = true); }
     } else translate([core/2, 0, 0]) top_socket(h);
   }
   translate([core/2, 0, 0]) bottom_peg();
@@ -331,7 +338,7 @@ module post_corner_rr() { at_corner(1) corner_post_local(); }
 module post_corner_fl() { at_corner(2) corner_post_local(); }
 module post_corner_fr() { at_corner(3) corner_post_local(); }
 module post_mid_rear()  { at_mid(0) midpost_yz_local(); }
-module post_mid_far()   { at_mid(1) midpost_yz_local(); }
+module post_mid_far()   { at_mid(1) midpost_yz_local(psu = psu_iec_at_far); }
 module post_mid_left()  { at_mid(2) midpost_yz_local(); }
 module post_mid_right() { at_mid(3) midpost_yz_local(); }
 module posts() { post_corner_rl(); post_corner_rr(); post_corner_fl(); post_corner_fr(); post_mid_rear(); post_mid_far(); post_mid_left(); post_mid_right(); }
@@ -394,10 +401,10 @@ module floor_full() {
       if (use_inserts) floor_ties("tab");                    // upright tabs: the posts are screwed down through them
       if (use_inserts) for (p = bridge_screws_floor()) translate([p[0], p[1], 0]) cylinder(d = boss_d_ins, h = bridge_boss_h, $fn = 40);   // bosses for the seam bridges
       // PSU stops: in front of the modular face (bottom edge only) and along the plug-zone side
-      if (psu_iec_at_far) box(psu_x0-3.5, psu_x0-0.5, psu_y0+6, psu_y1-6, 0, 6);
+      if (psu_iec_at_far) box(psu_x0_first-3.5, psu_x0_first-0.5, psu_y0+6, psu_y1-6, 0, 6);
       else                box(psu_x1+0.5, psu_x1+3.5, psu_y0+6, psu_y1-6, 0, 6);
-      box(psu_x0+2, psu_x0+16, psu_y1+0.5, psu_y1+2.5, 0, 6);
-      box(psu_x0+110, psu_x0+130, psu_y1+0.5, psu_y1+2.5, 0, 6);
+      box(psu_x0_first+2, psu_x0_first+16, psu_y1+0.5, psu_y1+2.5, 0, 6);
+      box(psu_x0_first+110, psu_x0_first+130, psu_y1+0.5, psu_y1+2.5, 0, 6);
     }
     for (p = post_centers()) translate([p[0]-(peg+peg_fit)/2, p[1]-(peg+peg_fit)/2, -floor_t-1]) cube([peg+peg_fit, peg+peg_fit, floor_t+2]);
     if (use_inserts) for (h = holes) translate([h[0], h[1], 0]) {      // insert in each board boss, screw clearance below it
@@ -410,7 +417,7 @@ module floor_full() {
     box(xi0-0.2, xi0+2, xg_exit_y[0], xg_exit_y[1], -0.1, 3.2);                                  // floor lip opened under the cable notch
     for (y = holder_holes_y) box(holder_hole_x-1.5, holder_hole_x+1.5, y-2, y+2, -floor_t-1, 1); // sockets for the holder's pegs
     // cable-tie slots in the cable bay
-    for (x = [bay_x0+10, (bay_x0+bay_x1)/2-5, bay_x1-20]) for (y = [psu_y0+20, psu_y0+55]) { box(x, x+1.8, y, y+6, -floor_t-1, 1); box(x+8, x+9.8, y, y+6, -floor_t-1, 1); }
+    for (x = [bay_x0+10, (bay_x0+bay_x1_first)/2-5, bay_x1_first-20]) for (y = [psu_y0+20, psu_y0+55]) { box(x, x+1.8, y, y+6, -floor_t-1, 1); box(x+8, x+9.8, y, y+6, -floor_t-1, 1); }
   }
 }
 
@@ -529,6 +536,20 @@ module bridges() {   // all five in place: one plate where the four floor pieces
 module bridge_heads() {
   for (p = bridge_screws_floor()) translate([p[0], p[1], bridge_boss_h + bridge_t]) cylinder(d = 5.6, h = 3.2, $fn = 24);
   for (p = bridge_screws_lid())   translate([p[0], p[1], zi1 - lid_boss_h - bridge_t - 3.2]) cylinder(d = 5.6, h = 3.2, $fn = 24);
+}
+
+/* ================= PSU spacer (separate part, lies on the floor) ================= */
+// Fills the gap between the floor's stop bar and the PSU's modular face, now that the PSU stands against the far wall: the PSU is
+// held between the floor's far lip and this. Two hooks go round the ends of the bar. 6 high like the bar: the cables pass over it.
+module psu_spacer() {
+  bx0 = psu_x0_first - 3.5;  bx1 = psu_x0_first - 0.5;       // the stop bar
+  y0 = psu_y0 + 6;  y1 = psu_y1 - 6;
+  x0 = bx1 + 0.2;  x1 = psu_x0 - 0.2;
+  box(x0, x1, y0-2.3, y1+2.3, 0, 6);
+  for (e = [[y0-2.3, y0-0.3, y0+3], [y1+0.3, y1+2.3, y1-3]]) {
+    box(bx0-2.3, x0+eps, e[0], e[1], 0, 6);                  // round the end of the bar
+    box(bx0-2.3, bx0-0.3, min(e[0], e[2]), max(e[1], e[2]), 0, 6);   // and 3 mm along its back
+  }
 }
 
 /* ================= far-end cradle (separate part, plugs into the floor) ================= */
@@ -704,7 +725,7 @@ module coupon_rear() { intersection() { panel_rear_r(); box(xo0-1, xi0+1, -3, bo
 
 /* ================= views ================= */
 module washer_placed() { translate([tab_screw[0], tab_screw[1], tab_z+0.95]) bracket_washer(); }   // on the tab, under the screw's head
-module structure() { floor_full(); posts(); panels(); lid_full(); cradle(); bracket_holder(); if (use_inserts) { bridges(); washer_placed(); } }
+module structure() { floor_full(); posts(); panels(); lid_full(); cradle(); bracket_holder(); if (psu_iec_at_far) psu_spacer(); if (use_inserts) { bridges(); washer_placed(); } }
 module assembly()  { structure(); ghosts(); }
 module inside()    { floor_full(); posts(); panel_rear_l(); panel_rear_r(); panel_far_l(); panel_far_r(); panel_left_r(); panel_left_f(); cradle(); bracket_holder(); ghosts(); }   // lid and +Y wall removed
 module bracket_heads() {
@@ -848,6 +869,9 @@ else if (part == "lid_fl") rotate([180,0,0]) translate([0,0,-(zi1+lid_t)]) lid_f
 else if (part == "lid_fr") rotate([180,0,0]) translate([0,0,-(zi1+lid_t)]) lid_fr();
 else if (part == "post_corner") rotate([180,0,0]) translate([0,0,-zi1]) corner_post_local();   // upside down: socket on the bed, peg up
 else if (part == "post_mid")    rotate([180,0,0]) translate([0,0,-zi1]) midpost_yz_local();
+else if (part == "post_mid_psu") rotate([180,0,0]) translate([0,0,-zi1]) midpost_yz_local(psu = true);   // the far wall's: one foot boss only
+else if (part == "psu_spacer") psu_spacer();
+else if (part == "asm_psu_spacer") psu_spacer();
 else if (part == "panel_rear_l")  flat_yz(xo0, -1) panel_rear_l();
 else if (part == "panel_rear_r")  flat_yz(xo0, -1) panel_rear_r();   // the boss for the holder points up
 else if (part == "panel_far_l")   flat_yz(xi1) panel_far_l();

@@ -24,7 +24,8 @@ All numbers in mm, read from the rendered STLs in `build/stl/` (as laid out for 
 | `lid_fl` | 1 | 126.7 | 126.5 | 9.0 | lid quarter (small-bed alternative) |
 | `lid_fr` | 1 | 126.7 | 124.0 | 9.0 | lid quarter (small-bed alternative) |
 | `post_corner` | 4 | 15.0 | 15.0 | 180.3 | corner post: two panel slots at 90°, peg below, insert holes in the top end and the sides |
-| `post_mid` | 4 | 15.0 | 20.0 | 180.3 | mid post: two panel slots in line, peg below, insert holes in the top end and the side bosses |
+| `post_mid` | 3 | 15.0 | 20.0 | 180.3 | mid post: two panel slots in line, peg below, insert holes in the top end and the side bosses |
+| `post_mid_psu` | 1 | 15.0 | 20.0 | 180.3 | the far wall's mid post, beside the PSU: as post_mid, with one foot boss instead of two |
 | `panel_rear_l` | 1 | 177.4 | 99.4 | 3.0 | rear wall, bay side: vents |
 | `panel_rear_r` | 1 | 177.4 | 123.4 | 12.3 | rear wall, board side: USB-C, port window, cable exit, vents, boss for the screw into the bracket holder |
 | `panel_far_l` | 1 | 177.4 | 99.4 | 3.0 | far wall, PSU side: PSU opening (IEC, switch, grille) |
@@ -34,6 +35,7 @@ All numbers in mm, read from the rendered STLs in `build/stl/` (as laid out for 
 | `panel_right_r` | 1 | 143.4 | 177.4 | 3.0 | +Y wall, rear part: GPU intake grille |
 | `panel_right_f` | 1 | 106.1 | 177.4 | 3.0 | +Y wall, far part: GPU intake grille |
 | `cradle` | 1 | 54.6 | 49.2 | 18.0 | support under the card's far end |
+| `psu_spacer` | 1 | 14.7 | 78.6 | 6.0 | fills the gap between the floor's stop bar and the PSU's cable end; the PSU stands against the far wall |
 | `bracket_holder` | 1 | 119.4 | 51.0 | 6.2 | stands in the board's 3 holes; the bracket tab is screwed to its top edge, its back to the rear wall |
 | `bracket_washer` | 2 | 8.0 | 8.0 | 1.6 | under the head of the bracket's screw |
 | `bridge_centre` | 1 | 30.0 | 30.0 | 3.0 | plate over the point where the four floor pieces meet |
@@ -76,7 +78,8 @@ All numbers in mm, read from the rendered STLs in `build/stl/` (as laid out for 
 | post_mid_left | 135.0 … 155.0 | 135.0 … 150.0 | -2.4 … 177.9 |
 | post_mid_rear | -9.0 … 6.0 | 30.0 … 50.0 | -2.4 … 177.9 |
 | post_mid_right | 135.0 … 155.0 | -94.0 … -79.0 | -2.4 … 177.9 |
-| psu | 85.7 … 245.7 | 48.0 … 134.0 | 0.1 … 150.0 |
+| psu | 94.8 … 254.8 | 48.0 … 134.0 | 0.1 … 150.0 |
+| psu_spacer | 79.9 … 94.6 | 51.7 … 130.3 | 0.0 … 6.0 |
 | screws | -1.8 … 254.4 | -86.8 … 142.8 | -0.5 … 183.9 |
 | zones | -17.0 … 284.7 | -84.6 … 134.0 | 0.4 … 177.8 |
 

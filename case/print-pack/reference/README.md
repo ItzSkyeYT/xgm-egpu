@@ -118,7 +118,7 @@ parameters with `tools/make_plan.py`, which runs OpenSCAD for the outlines and `
   board green, card grey, PSU black, plug and cable zones orange), `inside` (lid and intake wall
   removed), or any single part. Turn `vents` off for a faster preview.
 - **`xgm-lite-frame-assembled.3mf`**: every part in its assembled position as a separate, named,
-  coloured object (32 of them: the 4 floor quarters, 2 lid halves, 8 posts, 8 panels, cradle, holder
+  coloured object (33 of them: the 4 floor quarters, 2 lid halves, 8 posts, 8 panels, cradle, PSU spacer, holder
   and its washer, the seam bridges, every screw and every insert, plus the board, card, PSU and cable zones). Open it in 3dviewer.net, Bambu Studio, PrusaSlicer or
   OrcaSlicer and hide a wall or the lid in the object list to look inside. 3dviewer.net works on a
   phone. The same parts as individual in-place STLs are in `build/assembled/`.
@@ -139,13 +139,15 @@ in-place set and the 3MF.
 | `post_corner` | 4 | 15 × 15 × 180 | upright, as exported (top end on the bed, peg up) | identical: each is turned, not mirrored. Insert holes in the top end and in the two inner faces near the foot |
 | `bridge_centre` | 1 | 30 × 30 × 3 | flat | the plate over the point where the four floor pieces meet: one screw into each |
 | `bridge_strap` | 4 | 30 × 10 × 3 | flat | two across the floor's long seam, two under the lid's seam |
-| `post_mid` | 4 | 15 × 20 × 180 | upright | one per wall, where the panels split; identical and symmetric. Insert holes in the top end and in a small boss on each side, at the foot and at the top |
+| `post_mid` | 3 | 15 × 20 × 180 | upright | one per wall, where the panels split; identical and symmetric. Insert holes in the top end and in a small boss on each side, at the foot and at the top |
+| `post_mid_psu` | 1 | 15 × 17 × 180 | upright | the far wall's mid post. The PSU's back end lies along one side of it, so it has no foot boss there: stand it with its bare side toward the PSU |
 | `panel_rear_l`, `panel_rear_r`, `panel_far_l`, `panel_far_r` | 1 each | ≤ 178 × 124 × 3 (`panel_rear_r`: 12 with its boss) | flat | rear wall: bay vents, USB-C hole, display-port opening, laptop-cable exit, and a boss with a screw hole that reaches in to the bracket holder; far wall: PSU opening and GPU exhaust vents |
 | `panel_left_r`, `panel_left_f`, `panel_right_r`, `panel_right_f` | 1 each | ≤ 144 × 178 × 3 | flat | left = PSU intake grille; right = GPU intake grille |
 | `bracket_holder` | 1 | 119 × 51 × 6 | on its back, as exported | one flat plate: stands in the board's three holes, the bracket's tab is screwed to its top edge, its back is screwed to the rear wall. Insert holes in the top edge and in the back |
 | `bracket_washer` | 2 | Ø8 × 1.6 | flat | under the head of the bracket's screw, since the tab's oval hole is nearly as wide as the head; the second is a spare |
 | `shim_05`, `shim_10`, `shim_15` | print-only variant | 24 × 6 | flat | 0.5 / 1.0 / 1.5 mm shims for the holder's top edge |
 | `cradle` | 1 | 55 × 49 × 18 | on its side, as exported | supports the card's far end; height from `card_bottom_clear`. Its two pegs are 4.1 off-centre: the cheek nearer the pegs goes on the fan side |
+| `psu_spacer` | 1 | 15 × 79 × 6 | flat | lies on the floor between the stop bar and the PSU's cable end, its two hooks round the ends of the bar: the PSU cannot slide back from the far wall |
 | `coupon` | 1 file, 2 pieces | 60 × 82 × 9 | flat | fit test: the two pieces are tested against each other |
 | `coupon_rear` | 1 | 58 × 89 × 3 | flat | bottom of the rear wall: laptop-cable notch, USB-C hole, bottom of the port window |
 | `coupon_grommet` | 1 file, 3 pieces | 54 × 24 × 19 | flat | three grommet clips, slots 10.5 / 11.5 / 12.5: the one that grips sets `grommet_slot` |
@@ -208,15 +210,17 @@ bracket, shown in the last tile of the third picture.
    plate over the point where they meet and the two straps across the long seam: eight screws. The
    tabs stop the pieces pulling apart sideways; the plates stop one lifting past the other.
 3. Push the eight posts into the square holes in the floor: corner posts have two slots at 90°, mid
-   posts two slots in line. Turn each mid post so that its inserts face the tabs (and, on the PSU-side
+   posts two slots in line. The far wall's mid post is `post_mid_psu`, the one with a single foot
+   boss: its bare side goes toward the PSU. Turn each mid post so that its inserts face the tabs (and, on the PSU-side
    and card-side walls, so that its top insert faces the rear). Screw every post to the tab or tabs
    beside it, twelve screws: four of them go into a tab on the neighbouring floor piece and pull that
    seam shut.
 4. Board on its five bosses, screwed down with five M3×8 socket-head screws (M3×6 also works; nothing
    longer than 8, or the tips reach the floor). Bracket holder into its three holes, its back (the
    face with the insert) toward the rear wall.
-5. PSU on its side, fan toward the outer wall on the PSU side, IEC inlet toward the far wall, slid
-   forward against the stops.
+5. PSU on its side, fan toward the outer wall on the PSU side, its back end (plug and switch) pushed
+   all the way to the far wall, against the floor's lip. Then drop `psu_spacer` into the gap between
+   the PSU's cable end and the bar on the floor, its two hooks round the ends of the bar.
 6. Card into the slot: foot in the board's slot, tab over the holder's top edge, far end on the cradle.
    Screw the tab down: one M3×8 with a `bracket_washer` under its head, through the tab's oval hole
    into the holder, which rises a little to meet the tab. Then
