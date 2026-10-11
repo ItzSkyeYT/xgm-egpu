@@ -27,7 +27,7 @@ The defaults are the parts it was drawn around:
 | Part | Default | Parameter(s) |
 |---|---|---|
 | Board | XG Mobile Station Lite, 220 × 65 mm, five Ø3.2 holes, geometry read from osy's KiCad file | `board_*`, `holes`, `pcie_*` |
-| GPU | Inno3D RTX 3060 Twin X2 OC: 240 × 120 mm, 42.2 mm thick (measured), one 8-pin on top | `gpu_len`, `gpu_h`, `gpu_w` |
+| GPU | Inno3D RTX 3060 Twin X2 OC: 240 × 120 mm, 42.2 mm thick (measured), 6.6 of it behind the PCB (found at the test fit), one 8-pin on top | `gpu_len`, `gpu_h`, `gpu_w`, `gpu_backplate` |
 | PSU | ATX, 160 × 150 × 86 mm (Corsair RM850x and friends) | `psu_l`, `psu_w`, `psu_h` |
 
 Outside dimensions with the measured parts: **271 × 244 × 184 mm**. The PSU lies on its side along
@@ -145,13 +145,13 @@ in-place set and the 3MF.
 | `bracket_holder` | 1 | 119 × 51 × 6 | on its back, as exported | one flat plate: stands in the board's three holes, the bracket's tab is screwed to its top edge, its back is screwed to the rear wall. Insert holes in the top edge and in the back |
 | `bracket_washer` | 2 | Ø8 × 1.6 | flat | under the head of the bracket's screw, since the tab's oval hole is nearly as wide as the head; the second is a spare |
 | `shim_05`, `shim_10`, `shim_15` | print-only variant | 24 × 6 | flat | 0.5 / 1.0 / 1.5 mm shims for the holder's top edge |
-| `cradle` | 1 | 55 × 49 × 18 | on its side, as exported | supports the card's far end; height from `card_bottom_clear` |
+| `cradle` | 1 | 55 × 49 × 18 | on its side, as exported | supports the card's far end; height from `card_bottom_clear`. Its two pegs are 4.1 off-centre: the cheek nearer the pegs goes on the fan side |
 | `coupon` | 1 file, 2 pieces | 60 × 82 × 9 | flat | fit test: the two pieces are tested against each other |
 | `coupon_rear` | 1 | 58 × 89 × 3 | flat | bottom of the rear wall: laptop-cable notch, USB-C hole, bottom of the port window |
 | `coupon_grommet` | 1 file, 3 pieces | 54 × 24 × 19 | flat | three grommet clips, slots 10.5 / 11.5 / 12.5: the one that grips sets `grommet_slot` |
 | `coupon_inserts` | 1 | 52 × 17 × 9 | flat | three board bosses, insert holes 3.8 / 4.0 / 4.2: the one that takes an insert cleanly sets `insert_hole` |
 
-About 895 g of PETG, tests included, so one 1 kg spool, and about 31 hours of printing: those are real
+About 890 g of PETG, tests included, so one 1 kg spool, and about 31 hours of printing: those are real
 slices of the print pack's batches for a Bambu H2D at 3 walls and 15 % infill, which
 `tools/make_plates.py` writes to `build/weights.json`. A volume estimate runs about a quarter high, and 4 walls
 with 40 % infill go just past a kilo.

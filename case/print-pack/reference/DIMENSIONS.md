@@ -51,8 +51,8 @@ All numbers in mm, read from the rendered STLs in `build/stl/` (as laid out for 
 | bracket_holder | 5.8 … 12.0 | -66.0 … -15.0 | -1.9 … 117.5 |
 | bracket_washer | 4.7 … 12.7 | -43.1 … -35.1 | 118.5 … 120.2 |
 | bridges | 105.0 … 194.0 | 15.0 … 82.0 | 4.5 … 171.9 |
-| card | 2.7 … 253.7 | -59.6 … -15.4 | -1.1 … 133.9 |
-| cradle | 235.7 … 253.7 | -63.1 … -13.9 | -2.4 … 52.2 |
+| card | 2.7 … 253.7 | -56.9 … -13.3 | -1.1 … 133.9 |
+| cradle | 235.7 … 253.7 | -59.0 … -9.8 | -2.4 … 52.2 |
 | floor_fl | 135.0 … 261.7 | 23.5 … 150.0 | -3.0 … 21.0 |
 | floor_fr | 135.0 … 261.7 | -94.0 … 30.0 | -3.0 … 21.0 |
 | floor_rl | -9.0 … 141.5 | 23.5 … 150.0 | -3.0 … 21.0 |
@@ -85,6 +85,7 @@ All numbers in mm, read from the rendered STLs in `build/stl/` (as laid out for 
 | What | Value | Parameter |
 |---|---|---|
 | card thickness at the bracket end | 42.2 | `gpu_w` |
+| PCB's solder side → the backplate's outer face | 6.6 | `gpu_backplate` (from the test fit: the first cradle, printed for a guessed 2.5, stood 4.1 off) |
 | board top → underside of the bracket tab | 109.0 | `tab_above_board` |
 | bracket foot below the board top | 9.7 | `foot_below_board` |
 | bracket's top tab, end to end | 39.4 | `bracket_w` (41.5: the envelope of a two-slot bracket and its tab) |
@@ -107,5 +108,5 @@ All numbers in mm, read from the rendered STLs in `build/stl/` (as laid out for 
 | jigsaw tabs | 10.4 wide head, 6.0 neck, 6.5 long; slots are 0.2 larger per side (`tab_fit`) |
 | board bosses | Ø8.5, each with a Ø4.0 × 5.6 hole for an M3×5×4.5 heat-set insert (`insert_hole`); board underside at 7.0, top surface at 8.6 |
 | bracket holder | one plate 6.2 thick (x 5.8 … 12.0), top edge y 15 … 66, 108.9 above the board top; pegs 2.6 × 3.6; M3 inserts in the top edge (under the tab's oval hole, x 8.7, y 39.1) and in the back (y 61.5, 100 above the floor) |
-| cradle | inner width 43.2 (card 42.2 + 1), rest 18.6 above the board top |
+| cradle | inner width 43.2 (card 42.2 + 1), rest 18.6 above the board top; its pegs are 4.1 off-centre, nearer the fan-side cheek, because the floor's sockets were printed first |
 | vents | 3.0 wide slots, 20 long, 6.0 pitch, rows every 24 |

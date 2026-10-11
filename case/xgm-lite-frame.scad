@@ -28,7 +28,7 @@ atx_hdr_x = [30.5, 85.2];                                  // right-angle 24-pin
 xg_conn_x = [77.5, 136.2];                                 // the two micro-coax connectors of the laptop cable, Y 42..49
 
 gpu_len = 240;  gpu_h = 120;  gpu_w = 42.2;                // Inno3D RTX 3060 Twin X2 OC: length, height (Inno3D), thickness measured at the bracket end
-gpu_backplate = 2.5;                                       // backplate + gap on the solder side of the PCB
+gpu_backplate = 6.6;                                       // PCB's solder side -> the backplate's outer face. FOUND AT THE TEST FIT: the first cradle, printed for a guessed 2.5, stood 4.1 off
 bracket_to_a1 = pcie_a1_x - foot_slot_x;                   // 47.45: bracket plane = the board's foot slot (CEM Fig 9-1 gives 47.8 to its outer face, 0.4 further back)
 bracket_w = 41.5;  bracket_t = 0.86;                       // a two-slot bracket: 18.42 + 20.32 on paper, starting 2.6 inside bracket_y0; its top tab MEASURED 39.4 long, starting 0.6 inside
 bracket_port_w = 18.42;                                    // the display ports are all in the first slot's row
@@ -167,6 +167,7 @@ module ghost_card_detail() {   // the Inno3D Twin X2 OC as it actually looks; th
   color("darkgreen") box(pcb_x0, pcb_x1, pcie_y-0.8, pcie_y+0.8, pcb_z0, pcb_z1);                       // PCB
   color("goldenrod") box(pcie_x0+1, pcie_x1-1, pcie_y-0.8, pcie_y+0.8, card_z0, pcb_z0+eps);           // gold fingers
   color("black") box(pcb_x0+3, pcb_x1-2, card_y0, pcie_y-0.8, pcb_z0+3, pcb_z1-3);                     // backplate
+  color("black") box(pcb_x1-2-eps, card_x1-2, card_y0, pcie_y-0.8, card_bot, pcb_z1-3);                // which runs on past the PCB, over the heatsink's overhang
   color("dimgray") difference() {                                                                       // shroud + heatsink
     box(sh_x0, card_x1, pcie_y+0.8, card_y1, sh_z0, sh_z1);
     for (fx = [xb+70, xb+170]) translate([fx, card_y1+0.01, fan_z]) rotate([90,0,0]) cylinder(d = 88, h = 7);
@@ -369,7 +370,11 @@ module cable_saddle(x) {      // U on the floor, open at the top, 30 mm wide: bo
   for (y = [[psu_y1+1, psu_y1+4], [psu_y1+34, psu_y1+37]]) box(x, x+14, y[0], y[1], 0, 22);
   box(x, x+14, psu_y1+1, psu_y1+37, 0, 3);
 }
-module cradle_peg_centres() { for (y = [card_y0+7, card_y1-7]) translate([card_x1-9, y, 0]) children(); }
+// gpu_backplate was first a guess, 2.5, and three things were laid out from the card position that gave: the floor's two sockets for the
+// cradle (printed since), and the vents over the card in the lid and in the far wall. All three stay where that put them. Only the
+// cradle follows the measured value, so its pegs are 4.1 off-centre under it.
+card_y0_first = pcie_y - board_t/2 - 2.5;
+module cradle_peg_centres() { for (y = [card_y0_first+7, card_y0_first+gpu_w-7]) translate([card_x1-9, y, 0]) children(); }
 
 module floor_full() {
   difference() {
@@ -417,7 +422,7 @@ module lid_full() {
   difference() {
     box(xp0, xp1, yp0, yp1, zi1, zi1+lid_t);
     // vents over the card, but never within 3 mm of a jigsaw slot: keep clear of both seams
-    if (vents) for (p = grid(xb-4, card_x1+2, card_y0-4, yi1-5, vent_w, vent_pitch, vent_h, vent_row))
+    if (vents) for (p = grid(xb-4, card_x1+2, card_y0_first-4, yi1-5, vent_w, vent_pitch, vent_h, vent_row))
       if (!(p[0]+vent_w > x_seam-4 && p[0] < x_seam+10) && !(p[1]+vent_h > y_seam-4 && p[1] < y_seam+10) && !near_post(p[0], p[0]+vent_w, p[1], p[1]+vent_h))
         box(p[0], p[0]+vent_w, p[1], p[1]+vent_h, zi1-1, zi1+lid_t+1);
     if (use_inserts) for (p = post_centers()) translate([p[0], p[1], zi1-1]) cylinder(d = 3.4, h = lid_t + 2, $fn = 30);   // a lid screw into every post
@@ -431,7 +436,7 @@ module lid_full() {
   }
   // print-only: guides beside the two ends of the bracket's tab (with inserts the tab is screwed to the holder instead)
   if (!use_inserts) {
-    box(xb-4.5, xb+3,   bracket_y0-4.8, bracket_y0-0.8, tab_z-12, zi1+eps); // solder side: beside the bracket's edge (outside the plug zone)
+    box(xb-4.5, xb-0.3, bracket_y0-4.8, bracket_y0-0.8, tab_z-12, zi1+eps); // solder side: in front only (behind, the backplate reaches past the bracket's edge)
     box(xb-4.5, xb-0.3, bracket_y1+0.8, bracket_y1+4.8, tab_z-12, zi1+eps); // component side: in front only (the shroud is behind)
   }
 }
@@ -474,7 +479,7 @@ module rear_cutters() {
   vents_yz(xo0, xi0, psu_y1+6, -4, 30, zi1-9);                                      // over the 24-pin plug zone
 }
 module far_cutters() {
-  vents_yz(xi1, xo1, card_y0-8, yi1-4, 8, zi1-9);                                   // GPU exhaust
+  vents_yz(xi1, xo1, card_y0_first-8, yi1-4, 8, zi1-9);                             // GPU exhaust
   if (psu_iec_at_far) box(xi1-1, xo1+1, psu_y0+3, psu_y1-3, 3, psu_w-3);               // PSU rear face (IEC, switch, grille)
   else vents_yz(xi1, xo1, yi0+4, psu_y1-4, 8, zi1-9);                                // cable bay breathes too
 }
@@ -527,6 +532,8 @@ module bridge_heads() {
 }
 
 /* ================= far-end cradle (separate part, plugs into the floor) ================= */
+// Its pegs are off-centre (see card_y0_first) and nothing else tells its two ends apart, so it goes into the floor both ways round:
+// the right way has the longer overhang of its base on the card's backplate side. The other way it stands 8.2 from where the card is.
 module cradle() {
   rest = card_bot - 0.3;
   cx0 = card_x1 - 18;  cx1 = card_x1;
@@ -536,9 +543,8 @@ module cradle() {
       box(cx0, cx1, card_y0-0.5, card_y1+0.5, 0, rest);
       for (y = [[card_y0-3.5, card_y0-0.5], [card_y1+0.5, card_y1+3.5]]) box(cx0, cx1, y[0], y[1], 0, rest+25);
     }
-    // lead-in chamfers on the inner faces
-    translate([cx0-1, card_y0-0.5, rest+25]) rotate([45,0,0]) cube([cx1-cx0+2, 3, 3], center=true);
-    translate([cx0-1, card_y1+0.5, rest+25]) rotate([45,0,0]) cube([cx1-cx0+2, 3, 3], center=true);
+    // lead-in chamfers on the inner faces, along the whole of each cheek
+    for (y = [card_y0-0.5, card_y1+0.5]) translate([(cx0+cx1)/2, y, rest+25]) rotate([45,0,0]) cube([cx1-cx0+2, 3, 3], center=true);
   }
   cradle_peg_centres() translate([-peg/2, -peg/2, -(floor_t-0.6)]) cube([peg, peg, floor_t-0.6+eps]);
 }

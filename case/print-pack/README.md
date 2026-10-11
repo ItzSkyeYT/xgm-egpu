@@ -164,6 +164,7 @@ number changes in the model, and only the coupon is reprinted.
 - [ ] The holder's three pegs go down through the board's three small holes, into the floor. Its back, the face with the insert, looks away from the card.
 - [ ] With the card plugged in, the bracket's foot sits in the board's slot and its top tab lies over the holder's top edge.
 - [ ] The oval hole in the tab sits over the insert. An M3×8 with a `bracket_washer` under its head goes down through it and tightens; the holder lifts a little to meet the tab, which is intended.
+- [ ] The cradle stands in its two square sockets with the cheek nearer its pegs on the fan side; the other way round it is 8 mm off.
 - [ ] The card's far end rests on the cradle without lifting the card out of its slot.
 
 **If something fails:**
