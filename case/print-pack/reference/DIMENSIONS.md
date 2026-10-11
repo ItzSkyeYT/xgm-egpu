@@ -36,6 +36,7 @@ All numbers in mm, read from the rendered STLs in `build/stl/` (as laid out for 
 | `panel_right_f` | 1 | 106.1 | 177.4 | 3.0 | +Y wall, far part: GPU intake grille |
 | `cradle` | 1 | 54.6 | 49.2 | 18.0 | support under the card's far end |
 | `psu_spacer` | 1 | 14.7 | 78.6 | 6.0 | fills the gap between the floor's stop bar and the PSU's cable end; the PSU stands against the far wall |
+| `handle` | 1 | 54.0 | 244.0 | 18.0 | carrying handle: a beam across the lid, its ends through the lid onto the two long walls' mid posts |
 | `bracket_holder` | 1 | 119.4 | 51.0 | 6.2 | stands in the board's 3 holes; the bracket tab is screwed to its top edge, its back to the rear wall |
 | `bracket_washer` | 2 | 8.0 | 8.0 | 1.6 | under the head of the bracket's screw |
 | `bridge_centre` | 1 | 30.0 | 30.0 | 3.0 | plate over the point where the four floor pieces meet |
@@ -59,7 +60,8 @@ All numbers in mm, read from the rendered STLs in `build/stl/` (as laid out for 
 | floor_fr | 135.0 … 261.7 | -94.0 … 30.0 | -3.0 … 21.0 |
 | floor_rl | -9.0 … 141.5 | 23.5 … 150.0 | -3.0 … 21.0 |
 | floor_rr | -9.0 … 141.5 | -94.0 … 30.0 | -3.0 … 21.0 |
-| inserts | -1.2 … 253.9 | -86.2 … 142.2 | -0.5 … 177.9 |
+| handle | 135.5 … 153.5 | -94.0 … 150.0 | 177.9 … 231.9 |
+| inserts | -1.2 … 253.9 | -86.2 … 142.2 | -0.5 … 185.9 |
 | lid_l | -9.0 … 141.5 | -94.0 … 150.0 | 164.9 … 180.9 |
 | lid_r | 135.0 … 261.7 | -94.0 … 150.0 | 171.9 … 180.9 |
 | panel_far_l | 256.7 … 259.7 | 42.3 … 141.7 | 0.0 … 177.4 |
@@ -80,7 +82,7 @@ All numbers in mm, read from the rendered STLs in `build/stl/` (as laid out for 
 | post_mid_right | 135.0 … 155.0 | -94.0 … -79.0 | -2.4 … 177.9 |
 | psu | 94.8 … 254.8 | 48.0 … 134.0 | 0.1 … 150.0 |
 | psu_spacer | 79.9 … 94.6 | 51.7 … 130.3 | 0.0 … 6.0 |
-| screws | -1.8 … 254.4 | -86.8 … 142.8 | -0.5 … 183.9 |
+| screws | -1.8 … 254.4 | -86.8 … 142.8 | -0.5 … 185.9 |
 | zones | -17.0 … 284.7 | -84.6 … 134.0 | 0.4 … 177.8 |
 
 ## Measured inputs (from the real parts)
@@ -112,4 +114,5 @@ All numbers in mm, read from the rendered STLs in `build/stl/` (as laid out for 
 | board bosses | Ø8.5, each with a Ø4.0 × 5.6 hole for an M3×5×4.5 heat-set insert (`insert_hole`); board underside at 7.0, top surface at 8.6 |
 | bracket holder | one plate 6.2 thick (x 5.8 … 12.0), top edge y 15 … 66, 108.9 above the board top; pegs 2.6 × 3.6; M3 inserts in the top edge (under the tab's oval hole, x 8.7, y 39.1) and in the back (y 61.5, 100 above the floor) |
 | cradle | inner width 43.2 (card 42.2 + 1), rest 18.6 above the board top; its pegs are 4.1 off-centre, nearer the fan-side cheek, because the floor's sockets were printed first |
+| carrying handle | a beam 18 wide and 244 long across the lid at x 135.5 … 153.5; finger opening 104 × 30, grip 12 thick; its ends, 3 thick, sit on the mid posts of the two long walls and take their lid screws; two more M3×8 from inside the lid (y −112 and 8) |
 | vents | 3.0 wide slots, 20 long, 6.0 pitch, rows every 24 |

@@ -36,6 +36,8 @@ STAGES = [
          [('lid_l', 1)]),
         ('4H-lid-far', 'the far half of the lid', False,
          [('lid_r', 1)]),
+        ('4I-handle', 'the carrying handle', False,
+         [('handle', 1)]),
     ]),
 ]
 
@@ -54,6 +56,7 @@ NOTES = {
     'post_mid': 'between two wall panels; inserts in its top end and its sides',
     'post_mid_psu': "the far wall's mid post, beside the PSU: a mid post with one foot boss instead of two",
     'psu_spacer': "lies on the floor between the stop bar and the PSU's cable end, hooked round the bar",
+    'handle': "a beam across the lid, screwed down into the two long walls' mid posts; printed on its side",
     'panel_rear_r': 'USB-C opening, display-port window, laptop-cable notch, and the boss that is screwed to the bracket holder',
     'panel_rear_l': 'vents over the cable bay',
     'floor_rl': 'under the cable bay and the near end of the PSU, three post tabs',

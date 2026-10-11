@@ -20,7 +20,7 @@ desc={
  'floor_fl':'floor quarter, far / PSU side: PSU stops','floor_fr':'floor quarter, far / board side: 2 board bosses (inserts), cradle sockets',
  'lid_l':'lid, rear half: lip, strap bosses, two tabs for the mid posts','lid_r':'lid, far half: lip, strap bosses',
  'lid_rl':'lid quarter (small-bed alternative)','lid_rr':'lid quarter (small-bed alternative)','lid_fl':'lid quarter (small-bed alternative)','lid_fr':'lid quarter (small-bed alternative)',
- 'post_corner':'corner post: two panel slots at 90°, peg below, insert holes in the top end and the sides','post_mid':'mid post: two panel slots in line, peg below, insert holes in the top end and the side bosses','post_mid_psu':"the far wall's mid post, beside the PSU: as post_mid, with one foot boss instead of two",'psu_spacer':"fills the gap between the floor's stop bar and the PSU's cable end; the PSU stands against the far wall",
+ 'post_corner':'corner post: two panel slots at 90°, peg below, insert holes in the top end and the sides','post_mid':'mid post: two panel slots in line, peg below, insert holes in the top end and the side bosses','post_mid_psu':"the far wall's mid post, beside the PSU: as post_mid, with one foot boss instead of two",'psu_spacer':"fills the gap between the floor's stop bar and the PSU's cable end; the PSU stands against the far wall",'handle':"carrying handle: a beam across the lid, its ends through the lid onto the two long walls' mid posts",
  'panel_rear_l':'rear wall, bay side: vents','panel_rear_r':'rear wall, board side: USB-C, port window, cable exit, vents, boss for the screw into the bracket holder',
  'panel_far_l':'far wall, PSU side: PSU opening (IEC, switch, grille)','panel_far_r':'far wall, board side: GPU exhaust vents',
  'panel_left_r':'-Y wall, rear part: bay vents / PSU intake','panel_left_f':'-Y wall, far part: PSU intake grille',
@@ -29,7 +29,7 @@ desc={
  'bracket_washer':"under the head of the bracket's screw",'bridge_centre':'plate over the point where the four floor pieces meet','bridge_strap':'strap across a seam: two on the floor, two under the lid',
  'shim_05':'0.5 mm shim for the holder (print-only variant)','shim_10':'1.0 mm shim','shim_15':'1.5 mm shim','coupon':'fit test'}
 order=['floor_rl','floor_rr','floor_fl','floor_fr','lid_l','lid_r','lid_rl','lid_rr','lid_fl','lid_fr','post_corner','post_mid','post_mid_psu',
-       'panel_rear_l','panel_rear_r','panel_far_l','panel_far_r','panel_left_r','panel_left_f','panel_right_r','panel_right_f','cradle','psu_spacer','bracket_holder','bracket_washer','bridge_centre','bridge_strap','shim_05','shim_10','shim_15','coupon']
+       'panel_rear_l','panel_rear_r','panel_far_l','panel_far_r','panel_left_r','panel_left_f','panel_right_r','panel_right_f','cradle','psu_spacer','handle','bracket_holder','bracket_washer','bridge_centre','bridge_strap','shim_05','shim_10','shim_15','coupon']
 out=[]
 out.append("# Dimensions\n\nAll numbers in mm, read from the rendered STLs in `build/stl/` (as laid out for printing) and `build/assembled/` (in place). Regenerate with `tools/dimensions.py`.\n")
 out.append("## Box\n\n| | X (length) | Y (width) | Z (height) |\n|---|---|---|---|")
@@ -53,5 +53,5 @@ out.append("| panels | 3.0 thick; ends sit 7.0 deep in corner posts, 5.0 deep in
 out.append("| square pegs / sockets | 6.0 × 6.0 pegs, 6.4 × 6.4 sockets (`peg_fit` 0.4); floor sockets go through the 3.0 plate |\n| lid and floor lips | 1.5 thick, 4.0 tall (lid) and 3.0 tall (floor), inside the panels, broken at the posts |")
 out.append("| jigsaw tabs | 10.4 wide head, 6.0 neck, 6.5 long; slots are 0.2 larger per side (`tab_fit`) |\n| board bosses | Ø8.5, each with a Ø4.0 × 5.6 hole for an M3×5×4.5 heat-set insert (`insert_hole`); board underside at 7.0, top surface at 8.6 |")
 out.append("| bracket holder | one plate 6.2 thick (x 5.8 … 12.0), top edge y 15 … 66, 108.9 above the board top; pegs 2.6 × 3.6; M3 inserts in the top edge (under the tab's oval hole, x 8.7, y 39.1) and in the back (y 61.5, 100 above the floor) |\n| cradle | inner width 43.2 (card 42.2 + 1), rest 18.6 above the board top; its pegs are 4.1 off-centre, nearer the fan-side cheek, because the floor's sockets were printed first |")
-out.append("| vents | 3.0 wide slots, 20 long, 6.0 pitch, rows every 24 |")
+out.append("| carrying handle | a beam 18 wide and 244 long across the lid at x 135.5 … 153.5; finger opening 104 × 30, grip 12 thick; its ends, 3 thick, sit on the mid posts of the two long walls and take their lid screws; two more M3×8 from inside the lid (y −112 and 8) |\n| vents | 3.0 wide slots, 20 long, 6.0 pitch, rows every 24 |")
 open(os.path.join(DOCS,'DIMENSIONS.md'),'w').write("\n".join(out)+"\n"); print("docs/DIMENSIONS.md written")

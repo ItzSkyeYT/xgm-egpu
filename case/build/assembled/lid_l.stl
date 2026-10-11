@@ -3104,13 +3104,13 @@ solid OpenSCAD_Model
     outer loop
       vertex 2.6629 139.6470 180.9000
       vertex 135.0000 104.2000 180.9000
-      vertex 135.0000 150.0000 180.9000
+      vertex 135.0000 132.0000 180.9000
     endloop
   endfacet
   facet normal 0 0 1
     outer loop
       vertex 2.6629 139.6470 180.9000
-      vertex 135.0000 150.0000 180.9000
+      vertex 135.0000 132.0000 180.9000
       vertex 2.7000 140.0000 180.9000
     endloop
   endfacet
@@ -3245,6 +3245,13 @@ solid OpenSCAD_Model
       vertex 2.7000 40.0000 180.9000
       vertex 135.0000 55.4000 180.9000
       vertex 135.0000 98.2000 180.9000
+    endloop
+  endfacet
+  facet normal 0 0 1
+    outer loop
+      vertex 2.7000 140.0000 180.9000
+      vertex 135.0000 132.0000 180.9000
+      vertex 135.0000 150.0000 180.9000
     endloop
   endfacet
   facet normal -1 0 0
@@ -14906,6 +14913,13 @@ solid OpenSCAD_Model
     outer loop
       vertex 126.7000 -81.4000 180.9000
       vertex 135.0000 -94.0000 180.9000
+      vertex 135.0000 -76.0000 180.9000
+    endloop
+  endfacet
+  facet normal 0 0 1
+    outer loop
+      vertex 126.7000 -81.4000 180.9000
+      vertex 135.0000 -76.0000 180.9000
       vertex 126.7000 -61.4000 180.9000
     endloop
   endfacet
@@ -14919,7 +14933,7 @@ solid OpenSCAD_Model
   facet normal 0 0 1
     outer loop
       vertex 126.7000 -61.4000 180.9000
-      vertex 135.0000 -94.0000 180.9000
+      vertex 135.0000 -76.0000 180.9000
       vertex 135.0000 -48.2000 180.9000
     endloop
   endfacet
@@ -16788,8 +16802,15 @@ solid OpenSCAD_Model
   facet normal 0 0 -1
     outer loop
       vertex 131.9000 -79.0000 177.9000
-      vertex 135.0000 -48.2000 177.9000
+      vertex 135.0000 -76.0000 177.9000
       vertex 134.9000 -79.0000 177.9000
+    endloop
+  endfacet
+  facet normal 0 0 -1
+    outer loop
+      vertex 131.9000 -79.0000 177.9000
+      vertex 135.0000 -48.2000 177.9000
+      vertex 135.0000 -76.0000 177.9000
     endloop
   endfacet
   facet normal 0 0 -1
@@ -17761,7 +17782,7 @@ solid OpenSCAD_Model
   facet normal 0 0 -1
     outer loop
       vertex 134.9000 -79.0000 177.9000
-      vertex 135.0000 -48.2000 177.9000
+      vertex 135.0000 -76.0000 177.9000
       vertex 135.0000 -87.5000 177.9000
     endloop
   endfacet
@@ -17894,8 +17915,15 @@ solid OpenSCAD_Model
   facet normal 0 0 -1
     outer loop
       vertex 134.9000 135.0000 177.9000
-      vertex 135.0000 143.5000 177.9000
+      vertex 135.0000 132.0000 177.9000
       vertex 135.0000 104.2000 177.9000
+    endloop
+  endfacet
+  facet normal 0 0 -1
+    outer loop
+      vertex 134.9000 135.0000 177.9000
+      vertex 135.0000 143.5000 177.9000
+      vertex 135.0000 132.0000 177.9000
     endloop
   endfacet
   facet normal 1 0 0
@@ -18035,7 +18063,7 @@ solid OpenSCAD_Model
     outer loop
       vertex 135.0000 -94.0000 180.9000
       vertex 135.0000 -87.5000 177.9000
-      vertex 135.0000 -48.2000 180.9000
+      vertex 135.0000 -76.0000 180.9000
     endloop
   endfacet
   facet normal 1 0 0
@@ -18055,6 +18083,20 @@ solid OpenSCAD_Model
   facet normal 1 0 0
     outer loop
       vertex 135.0000 -87.5000 177.9000
+      vertex 135.0000 -76.0000 177.9000
+      vertex 135.0000 -76.0000 180.9000
+    endloop
+  endfacet
+  facet normal 1 0 0
+    outer loop
+      vertex 135.0000 -76.0000 177.9000
+      vertex 135.0000 -48.2000 177.9000
+      vertex 135.0000 -76.0000 180.9000
+    endloop
+  endfacet
+  facet normal 1 0 0
+    outer loop
+      vertex 135.0000 -76.0000 180.9000
       vertex 135.0000 -48.2000 177.9000
       vertex 135.0000 -48.2000 180.9000
     endloop
@@ -18314,29 +18356,43 @@ solid OpenSCAD_Model
   facet normal 1 0 0
     outer loop
       vertex 135.0000 104.2000 177.9000
+      vertex 135.0000 132.0000 177.9000
+      vertex 135.0000 104.2000 180.9000
+    endloop
+  endfacet
+  facet normal 1 0 0
+    outer loop
+      vertex 135.0000 104.2000 180.9000
+      vertex 135.0000 132.0000 177.9000
+      vertex 135.0000 132.0000 180.9000
+    endloop
+  endfacet
+  facet normal 0 0 1
+    outer loop
+      vertex 135.0000 104.2000 180.9000
+      vertex 136.0000 98.2000 180.9000
+      vertex 136.0000 104.2000 180.9000
+    endloop
+  endfacet
+  facet normal 0 1 0
+    outer loop
+      vertex 135.0000 104.2000 180.9000
+      vertex 136.0000 104.2000 180.9000
+      vertex 136.0000 104.2000 177.9000
+    endloop
+  endfacet
+  facet normal 1 0 0
+    outer loop
+      vertex 135.0000 132.0000 177.9000
       vertex 135.0000 143.5000 177.9000
-      vertex 135.0000 104.2000 180.9000
+      vertex 135.0000 132.0000 180.9000
     endloop
   endfacet
   facet normal 1 0 0
     outer loop
-      vertex 135.0000 104.2000 180.9000
+      vertex 135.0000 132.0000 180.9000
       vertex 135.0000 143.5000 177.9000
       vertex 135.0000 150.0000 180.9000
-    endloop
-  endfacet
-  facet normal 0 0 1
-    outer loop
-      vertex 135.0000 104.2000 180.9000
-      vertex 136.0000 98.2000 180.9000
-      vertex 136.0000 104.2000 180.9000
-    endloop
-  endfacet
-  facet normal 0 1 0
-    outer loop
-      vertex 135.0000 104.2000 180.9000
-      vertex 136.0000 104.2000 180.9000
-      vertex 136.0000 104.2000 177.9000
     endloop
   endfacet
   facet normal 1 0 0

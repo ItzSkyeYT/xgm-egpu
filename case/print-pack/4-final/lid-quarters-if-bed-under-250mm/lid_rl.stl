@@ -1983,7 +1983,7 @@ solid OpenSCAD_Model
   facet normal 0 0 -1
     outer loop
       vertex 11.6629 10.3530 0.0000
-      vertex 144.0000 0.0000 0.0000
+      vertex 144.0000 18.0000 0.0000
       vertex 11.7000 10.0000 0.0000
     endloop
   endfacet
@@ -1991,7 +1991,7 @@ solid OpenSCAD_Model
     outer loop
       vertex 11.6629 10.3530 0.0000
       vertex 144.0000 37.0000 0.0000
-      vertex 144.0000 0.0000 0.0000
+      vertex 144.0000 18.0000 0.0000
     endloop
   endfacet
   facet normal -0.994522 -0.104523 0
@@ -2062,6 +2062,13 @@ solid OpenSCAD_Model
       vertex 11.6629 110.3535 3.0000
       vertex 11.7000 110.0000 3.0000
       vertex 45.0000 120.0000 3.0000
+    endloop
+  endfacet
+  facet normal 0 0 -1
+    outer loop
+      vertex 11.7000 10.0000 0.0000
+      vertex 144.0000 18.0000 0.0000
+      vertex 144.0000 0.0000 0.0000
     endloop
   endfacet
   facet normal 0 0 1
@@ -6128,6 +6135,13 @@ solid OpenSCAD_Model
     outer loop
       vertex 140.9000 15.0000 3.0000
       vertex 143.9000 15.0000 3.0000
+      vertex 144.0000 18.0000 3.0000
+    endloop
+  endfacet
+  facet normal 0 0 1
+    outer loop
+      vertex 140.9000 15.0000 3.0000
+      vertex 144.0000 18.0000 3.0000
       vertex 144.0000 37.0000 3.0000
     endloop
   endfacet
@@ -6394,7 +6408,7 @@ solid OpenSCAD_Model
     outer loop
       vertex 143.9000 15.0000 3.0000
       vertex 144.0000 6.5000 3.0000
-      vertex 144.0000 37.0000 3.0000
+      vertex 144.0000 18.0000 3.0000
     endloop
   endfacet
   facet normal 1 0 0
@@ -6414,7 +6428,7 @@ solid OpenSCAD_Model
   facet normal 1 0 0
     outer loop
       vertex 144.0000 0.0000 0.0000
-      vertex 144.0000 37.0000 0.0000
+      vertex 144.0000 18.0000 0.0000
       vertex 144.0000 6.5000 3.0000
     endloop
   endfacet
@@ -6435,6 +6449,20 @@ solid OpenSCAD_Model
   facet normal 1 0 0
     outer loop
       vertex 144.0000 6.5000 3.0000
+      vertex 144.0000 18.0000 0.0000
+      vertex 144.0000 18.0000 3.0000
+    endloop
+  endfacet
+  facet normal 1 0 0
+    outer loop
+      vertex 144.0000 18.0000 0.0000
+      vertex 144.0000 37.0000 0.0000
+      vertex 144.0000 18.0000 3.0000
+    endloop
+  endfacet
+  facet normal 1 0 0
+    outer loop
+      vertex 144.0000 18.0000 3.0000
       vertex 144.0000 37.0000 0.0000
       vertex 144.0000 37.0000 3.0000
     endloop

@@ -2,9 +2,10 @@
 
 `xgm-lite-frame.scad` is a parametric OpenSCAD enclosure for an **XG Mobile Station Lite** board
 (osy's open-source XG Mobile dock, "Lite" variant), a **desktop graphics card** and an **ATX power
-supply**. It needs no glue, magnets or 90° power adapters. By default 41 M3×8 screws in heat-set
+supply**. It needs no glue, magnets or 90° power adapters. By default 43 M3×8 screws in heat-set
 inserts hold it together: five for the board, twelve between the posts and the floor, eight in the
-plates that bridge the floor's seams, ten for the lid, four in the straps under the lid's seam, one
+plates that bridge the floor's seams, ten for the lid, four in the straps under the lid's seam, two
+between the lid and its carrying handle, one
 through the card's bracket and one from the rear wall into the bracket holder
 (`use_inserts = false` gives the print-only version, with pegs and snap clips instead, and nothing
 tying the posts, the seams or the bracket). The panels slide into printed posts, the PSU is
@@ -15,7 +16,7 @@ a printed cradle under its far end.
 
 | | |
 |---|---|
-| [`print-pack/`](print-pack/) | **What goes to the printer.** Thirteen batch files in print order with the settings saved in them, plus checklists and pictures. Start with its [README](print-pack/README.md). |
+| [`print-pack/`](print-pack/) | **What goes to the printer.** Fourteen batch files in print order with the settings saved in them, plus checklists and pictures. Start with its [README](print-pack/README.md). |
 | `xgm-lite-frame.scad` | The model. Every number is a parameter at the top, and everything else in this folder is made from it. |
 | `xgm-lite-frame-assembled.3mf` | The whole case put together, to look at: open it in a slicer or a 3D viewer and hide parts. Not for printing. |
 | [`docs/`](docs/) | Every dimension ([`DIMENSIONS.md`](docs/DIMENSIONS.md)), the floor plan at 1:1 as PDFs, and the pictures on this page. |
@@ -148,6 +149,7 @@ in-place set and the 3MF.
 | `shim_05`, `shim_10`, `shim_15` | print-only variant | 24 × 6 | flat | 0.5 / 1.0 / 1.5 mm shims for the holder's top edge |
 | `cradle` | 1 | 55 × 49 × 18 | on its side, as exported | supports the card's far end; height from `card_bottom_clear`. Its two pegs are 4.1 off-centre: the cheek nearer the pegs goes on the fan side |
 | `psu_spacer` | 1 | 15 × 79 × 6 | flat | lies on the floor between the stop bar and the PSU's cable end, its two hooks round the ends of the bar: the PSU cannot slide back from the far wall |
+| `handle` | 1 | 54 × 244 × 18 | on its side, as exported | carrying handle: a beam across the lid from the PSU-side wall's mid post to the card-side wall's. Its ends go through two notches in the lid and are screwed down into those posts |
 | `coupon` | 1 file, 2 pieces | 60 × 82 × 9 | flat | fit test: the two pieces are tested against each other |
 | `coupon_rear` | 1 | 58 × 89 × 3 | flat | bottom of the rear wall: laptop-cable notch, USB-C hole, bottom of the port window |
 | `coupon_grommet` | 1 file, 3 pieces | 54 × 24 × 19 | flat | three grommet clips, slots 10.5 / 11.5 / 12.5: the one that grips sets `grommet_slot` |
@@ -186,11 +188,11 @@ every batch with OrcaSlicer's command line and rebuilds the print pack. About fo
 
 ## Assembly
 
-Where the 41 inserts and screws go, all M3×8: 25 at floor level, 14 for the lid, and two at the card's
+Where the 43 inserts and screws go, all M3×8: 25 at floor level, 16 for the lid and its handle, and two at the card's
 bracket, shown in the last tile of the third picture.
 
 ![The 25 screws at floor level](docs/img/screws-floor.png)
-![The 14 screws of the lid](docs/img/screws-lid.png)
+![The lid's screws; the two that tie it to the handle are not drawn here](docs/img/screws-lid.png)
 ![The kinds of joint](docs/img/screws-closeups.png)
 
 1. Heat-set inserts first, while the parts are loose, with a soldering iron at about 230 °C, pressed
@@ -198,7 +200,9 @@ bracket, shown in the last tile of the third picture.
    - five into the round board bosses (three on `floor_rr`, two on `floor_fr`);
    - eight into the low bosses beside the floor's seams, two on each floor piece, and four into the
      bosses under the lid, two on each half;
-   - one into the top end of each of the eight posts;
+   - one into the top end of each of the eight posts. The two in the mid posts of the long walls must
+     sit truly flush: the handle's ends rest on those two post tops;
+   - two into the underside of the handle's beam;
    - two into the bracket holder: one into the hole in its top edge (gently: there is only a millimetre
      of plastic on either side of it), one into the hole in its back;
    - corner posts: one into the higher side hole of all four, and one into the lower side hole of two
@@ -233,8 +237,11 @@ bracket, shown in the last tile of the third picture.
    the cable. Then the screw that ties the holder to that panel: on the end of the hex key, down the
    hole in the panel and its boss, into the holder's back.
 8. Lid: join its two halves upside down on the table and screw the two straps across the seam, four
-   screws; it is now one piece. Lower it: the rear half's two tabs come down beside the mid posts. Eight
-   screws go down through the lid into the posts, and two go sideways through those tabs.
+   screws; it is now one piece. Lay the handle in the lid's two notches, grip toward the PSU side, and
+   put two screws up through the lid into its beam. Lower the lid: the rear half's two tabs come down
+   beside the mid posts, and the handle's two ends come down onto the tops of those same posts. Six
+   screws go down through the lid into the other posts, two go down through the handle's ends into the
+   mid posts, their heads sunk in the beam, and two go sideways through the tabs.
 
 The horizontal screws are M3×8 exactly: a longer one bottoms out in the post before it clamps.
 
@@ -246,6 +253,9 @@ with a hand under the floor all the same, since that is what the PSU and the car
 
 - The card is held at its bracket, like in a PC: the tab screwed to the holder, the holder screwed to
   the rear wall. Its far end only rests in the cradle, so carry the box upright.
+- The handle carries the loaded box, about 4.2 kg, level and by hand. It hangs from two inserts in two
+  post tops, with the lid as a second path, and the floor under it is four plates on jigsaw seams, which
+  sag a few millimetres when lifted. Lift it, don't swing it; for a car or a bag, support it from below.
 - The display ports sit 18 mm inside the rear wall; the opening in the panel is sized for plugs.
 - It is not sealed against dust; it's a ventilated frame.
 

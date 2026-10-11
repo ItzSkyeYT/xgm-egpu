@@ -57,13 +57,19 @@ pin_fit = 0.3;        // board pegs vs the O3.2 holes (on diameter)
 tab_fit = 0.2;        // jigsaw tabs between floor / lid pieces (per side)
 standoff = 7;         // board underside above the floor (the bracket foot reaches 9.7 below the board top: it ends inside the floor's slot)
 boss_d = 7;
-use_inserts = true;   // M3x5x4.5 heat-set inserts + M3 socket-head screws: 5 board, 12 posts to floor, 8 floor bridges, 10 lid, 4 lid bridges, 1 bracket tab, 1 holder to rear wall. false = print-only pegs and clips
+use_inserts = true;   // M3x5x4.5 heat-set inserts + M3 socket-head screws: 5 board, 12 posts to floor, 8 floor bridges, 10 lid, 4 lid bridges, 2 handle, 1 bracket tab, 1 holder to rear wall. false = print-only pegs and clips
 insert_hole = 4.2;    // hole for the M3x5x4.5 inserts (4.5 across). TESTED with coupon_inserts in PETG on the H2D: 4.2 takes one flush and clean, 4.0 only just and pushes plastic up around it
 insert_depth = 5.6;   // insert length 5 + 0.6
 boss_d_ins = 8.5;     // board boss with an insert
 gap_y = 24;           // board +Y (fan-side) edge -> wall: the laptop-cable harness and its boot run along this edge
 x_mid = 145;  y_mid = -40;      // mid posts (panels split here)
 x_seam = 135; y_seam = -30;     // floor and lid pieces split here (jigsaw tabs), 3 mm from a mid post's side: its screw tab stands across the seam
+// carrying handle: a separate beam across the lid, from one long wall's mid post to the other's, screwed straight down into both
+handle = true;
+handle_w = 18;  handle_x0 = x_seam + 0.5;   // 18 wide, a little more than a seam strap's 10: from the lid's seam, over the mid posts' tops
+handle_grip = [-98, 6];         // the opening for the fingers, 104 long: its middle is where the loaded box balances (y about -46)
+handle_screws_y = [-112, 8];    // M3x8 up through the lid's far half into inserts in the beam: clear of the lid's jigsaw tabs and of the card's 8-pin plug (y 13..56)
+handle_base = 9;  handle_room = 30;  handle_bar = 12;   // the beam's depth on the lid, the room for the fingers, the grip's thickness
 // screw ties: a horizontal M3 through an upright tab on the floor (or under the lid) into an insert in the post's side
 tie_z = 8;            // screw axis above the floor, and below the lid's underside
 tie_z2 = 16;          // a corner post's tie on its +Y face: higher, so that the two inserts do not meet inside the post, and so that
@@ -430,9 +436,13 @@ module lid_full() {
     box(xp0, xp1, yp0, yp1, zi1, zi1+lid_t);
     // vents over the card, but never within 3 mm of a jigsaw slot: keep clear of both seams
     if (vents) for (p = grid(xb-4, card_x1+2, card_y0_first-4, yi1-5, vent_w, vent_pitch, vent_h, vent_row))
-      if (!(p[0]+vent_w > x_seam-4 && p[0] < x_seam+10) && !(p[1]+vent_h > y_seam-4 && p[1] < y_seam+10) && !near_post(p[0], p[0]+vent_w, p[1], p[1]+vent_h))
+      if (!(p[0]+vent_w > x_seam-4 && p[0] < x_seam+10) && !(p[1]+vent_h > y_seam-4 && p[1] < y_seam+10) && !near_post(p[0], p[0]+vent_w, p[1], p[1]+vent_h)
+          && !(use_inserts && handle && p[0]+vent_w > handle_x0-2 && p[0] < handle_x0+handle_w+2))     // nor under the handle
         box(p[0], p[0]+vent_w, p[1], p[1]+vent_h, zi1-1, zi1+lid_t+1);
     if (use_inserts) for (p = post_centers()) translate([p[0], p[1], zi1-1]) cylinder(d = 3.4, h = lid_t + 2, $fn = 30);   // a lid screw into every post
+    if (use_inserts && handle) for (y = handle_screws_y) translate([x_mid, y, zi1-1]) cylinder(d = 3.4, h = lid_t + 2, $fn = 30);   // the handle's screws, from inside
+    // the handle's two ends go through the lid and sit on the mid posts' tops: the lid is notched there, from its seam to just past the handle
+    if (use_inserts && handle) for (y = [[yp0-1, yi0+core+3], [yi1-core-3, yp1+1]]) box(x_seam, handle_x0+handle_w+0.3, y[0], y[1], zi1-1, zi1+lid_t+1);
   }
   lip_ring(zi1-4, zi1);
   if (!use_inserts) for (p = post_centers()) translate([p[0]-peg/2, p[1]-peg/2, zi1-3.6]) cube([peg, peg, 3.6+eps]);   // print-only: pegs into the posts
@@ -537,6 +547,50 @@ module bridge_heads() {
   for (p = bridge_screws_floor()) translate([p[0], p[1], bridge_boss_h + bridge_t]) cylinder(d = 5.6, h = 3.2, $fn = 24);
   for (p = bridge_screws_lid())   translate([p[0], p[1], zi1 - lid_boss_h - bridge_t - 3.2]) cylinder(d = 5.6, h = 3.2, $fn = 24);
 }
+
+/* ================= carrying handle (separate part, screwed down into two posts) ================= */
+// The loaded box weighs about 4.2 kg (PSU 1.65, card up to 1.05, cables, the case itself), and a 3 mm lid full of vents is no place to
+// hang that from. So the handle is a beam from the PSU-side wall's mid post to the card-side wall's: its two ends go through notches in
+// the lid, sit on the post tops and take those posts' lid screws. Those are the two posts with two floor ties each, one into each
+// floor piece beside them, so all four floor pieces are picked up, and the PSU and the card stand right next to them. Two more screws
+// tie the lid's far half to the beam: a second path, through the lid to the other posts.
+// A closed loop (grip, two uprights, the beam under them), deepening toward the uprights. Printed on its side: the layers run along
+// the load instead of being pulled apart by it.
+module handle_profile() {       // y across the box, z above the lid's top face
+  up = handle_bar;  h = handle_base + handle_room + handle_bar;  g0 = handle_grip[0];  g1 = handle_grip[1];
+  pa = yi0 + core + 3;  pb = yi1 - core - 3;                   // the lid's notches end here, 3 mm inboard of the posts
+  difference() {
+    union() {
+      offset(r = -6) offset(delta = 6) union() {              // rounds every inside corner
+        translate([yp0, 0]) square([yp1 - yp0, handle_base]);                      // the beam, from one edge of the lid to the other
+        hull() {                                                                    // the arch
+          translate([g0 - up, 0]) square([g1 - g0 + 2*up, handle_base]);
+          for (y = [g0, g1]) translate([y, h - 12]) circle(r = 12, $fn = 64);
+        }
+        polygon([[pa, 0], [g0 - up, 0], [g0 - up, 22], [pa, handle_base]]);        // the beam deepens toward each upright
+        polygon([[pb, 0], [g1 + up, 0], [g1 + up, 26], [pb, handle_base]]);
+      }
+      translate([yp0, -lid_t]) square([pa - 0.3 - yp0, lid_t + eps]);              // the two ends, down through the lid onto the post tops
+      translate([pb + 0.3, -lid_t]) square([yp1 - pb - 0.3, lid_t + eps]);
+    }
+    hull() for (y = [g0 + 8, g1 - 8]) for (z = [handle_base + 8, handle_base + handle_room - 8]) translate([y, z]) circle(r = 8, $fn = 48);
+  }
+}
+module handle() {
+  zt = zi1 + lid_t;  n = 5;  st = 0.4;                        // 2 mm chamfers on both faces, in steps of two layers
+  if (use_inserts && handle) difference() {                   // (the print-only variant has no screws to hold it, so no handle)
+    translate([handle_x0, 0, zt]) rotate([90, 0, 90]) {
+      translate([0, 0, n*st]) linear_extrude(handle_w - 2*n*st) handle_profile();
+      for (i = [0 : n-1]) for (s = [0, 1]) translate([0, 0, s ? handle_w - n*st + i*st - eps : (n-1-i)*st]) linear_extrude(st + eps) offset(delta = -(i+1)*st) handle_profile();
+    }
+    for (i = [6, 7]) translate([post_centers()[i][0], post_centers()[i][1], 0]) {   // the post's lid screw: its head sinks through the beam onto the 3 mm end
+      translate([0, 0, zi1 - 1]) cylinder(d = 3.4, h = lid_t + 2, $fn = 30);
+      translate([0, 0, zt]) cylinder(d = 6.4, h = 40, $fn = 40);
+    }
+    for (y = handle_screws_y) translate([x_mid, y, zt - eps]) { cylinder(d = insert_hole, h = insert_depth, $fn = 40); cylinder(d = 3.3, h = 7.2, $fn = 24); }
+  }
+}
+module handle_heads() { for (y = handle_screws_y) translate([x_mid, y, zi1 - 3.2]) cylinder(d = 5.6, h = 3.2, $fn = 24); }   // under the lid
 
 /* ================= PSU spacer (separate part, lies on the floor) ================= */
 // Fills the gap between the floor's stop bar and the PSU's modular face, now that the PSU stands against the far wall: the PSU is
@@ -725,14 +779,14 @@ module coupon_rear() { intersection() { panel_rear_r(); box(xo0-1, xi0+1, -3, bo
 
 /* ================= views ================= */
 module washer_placed() { translate([tab_screw[0], tab_screw[1], tab_z+0.95]) bracket_washer(); }   // on the tab, under the screw's head
-module structure() { floor_full(); posts(); panels(); lid_full(); cradle(); bracket_holder(); if (psu_iec_at_far) psu_spacer(); if (use_inserts) { bridges(); washer_placed(); } }
+module structure() { floor_full(); posts(); panels(); lid_full(); cradle(); bracket_holder(); if (psu_iec_at_far) psu_spacer(); if (use_inserts) { bridges(); washer_placed(); if (handle) handle(); } }
 module assembly()  { structure(); ghosts(); }
 module inside()    { floor_full(); posts(); panel_rear_l(); panel_rear_r(); panel_far_l(); panel_far_r(); panel_left_r(); panel_left_f(); cradle(); bracket_holder(); ghosts(); }   // lid and +Y wall removed
 module bracket_heads() {
   translate([tab_screw[0], tab_screw[1], tab_z+2.55]) cylinder(d = 5.6, h = 3.2, $fn = 24);                                  // on the washer
   translate([tie_tip-3-3.2, wall_tie[0], wall_tie[1]]) rotate([0, 90, 0]) cylinder(d = 5.6, h = 3.2, $fn = 24);            // down the well in the rear wall's boss
 }
-module tie_heads()  { floor_ties("head"); lid_ties("head"); bridge_heads(); bracket_heads(); }
+module tie_heads()  { floor_ties("head"); lid_ties("head"); bridge_heads(); bracket_heads(); if (handle) handle_heads(); }
 module collision() { intersection() { union() { structure(); if (use_inserts) tie_heads(); } ghosts_hard(); } }
 
 /* ================= pictures: where every insert and screw goes ================= */
@@ -762,6 +816,10 @@ module hardware(what, where) {   // what: "screw" or "insert"; where: "floor" (t
     for (p = post_centers()) translate([p[0], p[1], 0]) {
       if (what == "screw")  translate([0, 0, zi1 + lid_t]) m3();
       if (what == "insert") translate([0, 0, zi1 - 5]) cylinder(d = 4.5, h = 5, $fn = 24);
+    }
+    if (handle) for (y = handle_screws_y) translate([x_mid, y, 0]) {       // up through the lid's far half into the handle's beam
+      if (what == "screw")  translate([0, 0, zi1]) rotate([180, 0, 0]) m3();
+      if (what == "insert") translate([0, 0, zi1 + lid_t]) cylinder(d = 4.5, h = 5, $fn = 24);
     }
   }
 }
@@ -871,6 +929,8 @@ else if (part == "post_corner") rotate([180,0,0]) translate([0,0,-zi1]) corner_p
 else if (part == "post_mid")    rotate([180,0,0]) translate([0,0,-zi1]) midpost_yz_local();
 else if (part == "post_mid_psu") rotate([180,0,0]) translate([0,0,-zi1]) midpost_yz_local(psu = true);   // the far wall's: one foot boss only
 else if (part == "psu_spacer") psu_spacer();
+else if (part == "handle") rotate([0, -90, 0]) translate([-handle_x0, 0, -(zi1 + lid_t)]) handle();   // on its side
+else if (part == "asm_handle") handle();
 else if (part == "asm_psu_spacer") psu_spacer();
 else if (part == "panel_rear_l")  flat_yz(xo0, -1) panel_rear_l();
 else if (part == "panel_rear_r")  flat_yz(xo0, -1) panel_rear_r();   // the boss for the holder points up

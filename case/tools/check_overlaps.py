@@ -18,7 +18,7 @@ from paths import SCAD, ASSEMBLED
 # assembled STL name -> the module that draws it in place
 MODULES = {n: n + '()' for n in '''floor_rl floor_rr floor_fl floor_fr lid_l lid_r post_corner_rl post_corner_rr post_corner_fl
     post_corner_fr post_mid_rear post_mid_far post_mid_left post_mid_right panel_rear_l panel_rear_r panel_far_l panel_far_r
-    panel_left_r panel_left_f panel_right_r panel_right_f cradle psu_spacer bracket_holder bridges'''.split()}
+    panel_left_r panel_left_f panel_right_r panel_right_f cradle psu_spacer handle bracket_holder bridges'''.split()}
 MODULES['bracket_washer'] = 'washer_placed()'
 DEFINES = []
 SMALL = 0.05                                                # mm3: below this, two parts merely touch

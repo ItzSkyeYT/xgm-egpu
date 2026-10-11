@@ -157,7 +157,7 @@ else:
 md = f"""# XGM Lite frame · print pack
 
 A print-only case for the **XG Mobile Station Lite** board, an **Inno3D RTX 3060 Twin X2 OC** and a
-**Corsair RM850**. No glue: the parts peg, slot and slide together, and 41 M3×8 screws in heat-set
+**Corsair RM850**. No glue: the parts peg, slot and slide together, and 43 M3×8 screws in heat-set
 inserts hold the board, the posts, the lid, the seams between the floor's and the lid's pieces, and
 the card's bracket.
 
@@ -324,14 +324,20 @@ and its bare side stands against the PSU's back end.
 The PSU goes all the way to the far wall, its back end against the floor's lip. `psu_spacer` then lies on
 the floor between the PSU's cable end and the bar, its two hooks round the ends of the bar.
 
+**The handle** (`4I-handle`) prints on its side. Two inserts go into the underside of its beam. Its two
+ends go through the notches in the lid and sit on the tops of the two long walls' mid posts, whose
+inserts must be flush; those posts' lid screws go down through the handle's ends instead of the lid.
+It carries the loaded box, about 4.2 kg: lift it level, don't swing it.
+
 **Inserts for the seam bridges**, 12: one in each of the eight low bosses beside the floor's seams, two
 per floor piece, and one in each of the four bosses under the lid.
 
 **Screws**, all M3×8: every post to the floor tab or tabs beside it; the centre plate over the point
 where the four floor pieces meet, and a strap across the long seam on each side of it; then the lid.
 Join its two halves upside down and screw the other two straps across the seam, so that it is one
-piece; lower it, and put eight screws down into the posts and two sideways through the tabs under its
-rear half.
+piece. Lay the handle in the lid's two notches, grip toward the PSU side, and put two screws up through
+the lid into its beam. Lower the lid, and put six screws down through it into the posts, two down through
+the handle's ends into the two long walls' mid posts, and two sideways through the tabs under its rear half.
 
 **The bracket holder to the rear wall**, one screw: `panel_rear_r` has a short boss on its inside with a hole
 right through from the outside. Once that panel is down in its slots, put an M3×8 on the end of the hex key,
@@ -345,12 +351,12 @@ instead of the two lid batches.
 
 ## Where every insert and screw goes
 
-41 inserts and 41 M3×8 socket-head screws: 25 at floor level, 14 for the lid and 2 at the card's bracket, which
+43 inserts and 43 M3×8 socket-head screws: 25 at floor level, 16 for the lid and its handle, and 2 at the card's bracket, which
 are the last picture below. The horizontal ones must be M3×8: a longer screw bottoms out before it clamps.
 
 ![The 25 screws at floor level](img/screws-floor.png)
 
-![The 14 screws of the lid](img/screws-lid.png)
+![The lid's screws; the two that tie it to the handle are not drawn here](img/screws-lid.png)
 
 ![The kinds of joint](img/screws-closeups.png)
 
