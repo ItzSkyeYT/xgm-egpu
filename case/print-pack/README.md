@@ -34,7 +34,7 @@ the card's bracket.
 | 1 | [`1-tests`](1-tests/) | your printer's fits, the real plugs in the real openings, the grommet clip, the insert holes | 1 | 1 h 06 | ≈ 25 g |
 | 2 | [`2-board-and-card`](2-board-and-card/) | the board screwed down on its five inserts, the card on its two supports | 2 | 3 h 04 | ≈ 110 g |
 | 3 | [`3-structure-sample`](3-structure-sample/) | full-height posts, and a wall in its slots | 2 | 6 h 36 | ≈ 140 g |
-| 4 | [`4-final`](4-final/) | the rest of the box | 9 | 21 h 08 | ≈ 660 g |
+| 4 | [`4-final`](4-final/) | the rest of the box | 9 | 20 h 46 | ≈ 650 g |
 
 ### Print order
 
@@ -66,7 +66,7 @@ nothing below it is worth the plastic until it has passed.
     ├── panel_right_r               intake grille for the card's fans, rear half
     └── panel_right_f               intake grille for the card's fans, far half
 
-4 · The rest                              21 h 08 · 660 g
+4 · The rest                              20 h 46 · 650 g
 ├── 4A-floor-cable-bay.3mf                1 h 20 · 45 g
 │   └── floor_rl                    under the cable bay and the near end of the PSU, three post tabs
 ├── 4B-floor-psu.3mf                      1 h 21 · 45 g
@@ -80,7 +80,7 @@ nothing below it is worth the plastic until it has passed.
 ├── 4D-rear-wall.3mf                      2 h 39 · 80 g
 │   ├── panel_rear_r                USB-C opening, display-port window, laptop-cable notch, and the boss that is screwed to the bracket holder
 │   └── panel_rear_l                vents over the cable bay
-├── 4E-far-wall.3mf                       1 h 45 · 65 g
+├── 4E-far-wall.3mf                       1 h 23 · 50 g
 │   ├── panel_far_l                 opening for the PSU's power inlet and switch
 │   └── panel_far_r                 exhaust grille for the card
 ├── 4F-psu-side-wall.3mf                  2 h 44 · 100 g
@@ -108,9 +108,9 @@ OrcaSlicer; if it does, set the values from the table by hand. For any other sli
 `stl/` folder.
 
 Print the stages in order, and start a stage only when the previous one passed. Only the stage 1 tests
-are throwaway: everything else ends up in the finished case. About **935 g** of PETG in total.
+are throwaway: everything else ends up in the finished case. About **925 g** of PETG in total.
 
-The times and weights are real slices of these very files, not estimates: OrcaSlicer 2.4.2, Bambu Lab H2D, Bambu PETG Basic, 3 walls, 15 % infill. At these settings **one 1 kg spool covers the whole pack**, tests included, with about 65 g to spare; 4 walls and 40 % infill push it just past a kilo. Allow about 32 hours of printing in all. The longest single batch is `4C-posts`, at 6 h 08: tall, thin posts print slowly, one small layer at a time.
+The times and weights are real slices of these very files, not estimates: OrcaSlicer 2.4.2, Bambu Lab H2D, Bambu PETG Basic, 3 walls, 15 % infill. At these settings **one 1 kg spool covers the whole pack**, tests included, with about 75 g to spare; 4 walls and 40 % infill push it just past a kilo. Allow about 32 hours of printing in all. The longest single batch is `4C-posts`, at 6 h 08: tall, thin posts print slowly, one small layer at a time.
 
 ---
 
@@ -215,7 +215,7 @@ each of the mid post's two foot bosses.
 | 2 | [`4B-floor-psu.3mf`](4-final/4B-floor-psu.3mf) | `floor_fl`, `bridge_centre`, 4 × `bridge_strap` | 1 h 21 | ≈ 45 g |
 | 3 | [`4C-posts.3mf`](4-final/4C-posts.3mf) | 3 × `post_corner`, 2 × `post_mid`, `post_mid_psu` | 6 h 08 | ≈ 140 g |
 | 4 | [`4D-rear-wall.3mf`](4-final/4D-rear-wall.3mf) | `panel_rear_r`, `panel_rear_l` | 2 h 39 | ≈ 80 g |
-| 5 | [`4E-far-wall.3mf`](4-final/4E-far-wall.3mf) | `panel_far_l`, `panel_far_r` | 1 h 45 | ≈ 65 g |
+| 5 | [`4E-far-wall.3mf`](4-final/4E-far-wall.3mf) | `panel_far_l`, `panel_far_r` | 1 h 23 | ≈ 50 g |
 | 6 | [`4F-psu-side-wall.3mf`](4-final/4F-psu-side-wall.3mf) | `panel_left_r`, `panel_left_f`, `psu_spacer` | 2 h 44 | ≈ 100 g |
 | 7 | [`4G-lid-rear.3mf`](4-final/4G-lid-rear.3mf) | `lid_l` | 2 h 10 | ≈ 80 g |
 | 8 | [`4H-lid-far.3mf`](4-final/4H-lid-far.3mf) | `lid_r` | 1 h 47 | ≈ 70 g |

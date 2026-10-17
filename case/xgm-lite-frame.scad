@@ -28,6 +28,9 @@ atx_hdr_x = [30.5, 85.2];                                  // right-angle 24-pin
 xg_conn_x = [77.5, 136.2];                                 // the two micro-coax connectors of the laptop cable, Y 42..49
 
 gpu_len = 240;  gpu_h = 120;  gpu_w = 42.2;                // Inno3D RTX 3060 Twin X2 OC: length, height (Inno3D), thickness measured at the bracket end
+gpu_overrun = 3;                                           // MEASURED 2026-10-17: the real card ends 3 mm past gpu_len, flush with the far wall's inside face
+                                                           // (its end spans 31..135 above the floor's underside). Only the far wall's window and the
+                                                           // collision envelope use it, so nothing already printed moves.
 gpu_backplate = 6.6;                                       // PCB's solder side -> the backplate's outer face. FOUND AT THE TEST FIT: the first cradle, printed for a guessed 2.5, stood 4.1 off
 bracket_to_a1 = pcie_a1_x - foot_slot_x;                   // 47.45: bracket plane = the board's foot slot (CEM Fig 9-1 gives 47.8 to its outer face, 0.4 further back)
 bracket_w = 41.5;  bracket_t = 0.86;                       // a two-slot bracket: 18.42 + 20.32 on paper, starting 2.6 inside bracket_y0; its top tab MEASURED 39.4 long, starting 0.6 inside
@@ -165,7 +168,7 @@ module ghost_board() {
   }
 }
 module ghost_card() {
-  color("gray", 0.5) box(xb, card_x1, card_y0, card_y1, card_bot, card_top);
+  color("gray", 0.5) box(xb, card_x1 + gpu_overrun, card_y0, card_y1, card_bot, card_top);
   color("gray", 0.5) box(pcie_x0-1, pcie_x1+1, pcie_y-0.8, pcie_y+0.8, card_z0, card_bot+eps);   // finger tab
   color("silver", 0.7) box(xb, xb+bracket_t, bracket_y0, bracket_y1, card_z0-7.9, tab_z);
   color("silver", 0.7) box(xb-tab_reach, xb, bracket_y0, bracket_y1, tab_z, tab_z+0.9);
@@ -497,6 +500,7 @@ module rear_cutters() {
 }
 module far_cutters() {
   vents_yz(xi1, xo1, card_y0_first-8, yi1-4, 8, zi1-9);                             // GPU exhaust
+  box(xi1-1, xo1+1, card_y0-2, card_y1+2, card_bot-1.5, card_top+1.5);             // window for the card's far end, which reaches the wall's inside face
   if (psu_iec_at_far) box(xi1-1, xo1+1, psu_y0+3, psu_y1-3, 3, psu_w-3);               // PSU rear face (IEC, switch, grille)
   else vents_yz(xi1, xo1, yi0+4, psu_y1-4, 8, zi1-9);                                // cable bay breathes too
 }
