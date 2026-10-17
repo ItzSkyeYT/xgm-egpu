@@ -29,7 +29,7 @@ All numbers in mm, read from the rendered STLs in `build/stl/` (as laid out for 
 | `panel_rear_l` | 1 | 177.4 | 99.4 | 3.0 | rear wall, bay side: vents |
 | `panel_rear_r` | 1 | 177.4 | 123.4 | 12.3 | rear wall, board side: USB-C, port window, cable exit, vents, boss for the screw into the bracket holder |
 | `panel_far_l` | 1 | 177.4 | 99.4 | 3.0 | far wall, PSU side: PSU opening (IEC, switch, grille) |
-| `panel_far_r` | 1 | 177.4 | 123.4 | 3.0 | far wall, board side: GPU exhaust vents |
+| `panel_far_r` | 1 | 177.4 | 123.4 | 5.5 | far wall, board side: GPU exhaust vents |
 | `panel_left_r` | 1 | 143.4 | 177.4 | 3.0 | -Y wall, rear part: bay vents / PSU intake |
 | `panel_left_f` | 1 | 106.1 | 177.4 | 3.0 | -Y wall, far part: PSU intake grille |
 | `panel_right_r` | 1 | 143.4 | 177.4 | 3.0 | +Y wall, rear part: GPU intake grille |
@@ -65,7 +65,7 @@ All numbers in mm, read from the rendered STLs in `build/stl/` (as laid out for 
 | lid_l | -9.0 … 141.5 | -94.0 … 150.0 | 164.9 … 180.9 |
 | lid_r | 135.0 … 261.7 | -94.0 … 150.0 | 171.9 … 180.9 |
 | panel_far_l | 256.7 … 259.7 | 42.3 … 141.7 | 0.0 … 177.4 |
-| panel_far_r | 256.7 … 259.7 | -85.7 … 37.7 | 0.0 … 177.4 |
+| panel_far_r | 254.2 … 259.7 | -85.7 … 37.7 | 0.0 … 177.4 |
 | panel_left_f | 147.3 … 253.4 | 145.0 … 148.0 | 0.0 … 177.4 |
 | panel_left_r | -0.7 … 142.7 | 145.0 … 148.0 | 0.0 … 177.4 |
 | panel_rear_l | -7.0 … -4.0 | 42.3 … 141.7 | 0.0 … 177.4 |

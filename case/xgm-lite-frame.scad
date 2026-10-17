@@ -525,7 +525,14 @@ module panel_rear_r()  {
   }
 }
 module panel_far_l()   { panel_yz(xi1, xo1, yi0+core-slot_d+0.3, y_mid-2.3) far_cutters(); }
-module panel_far_r()   { panel_yz(xi1, xo1, y_mid+2.3, yi1-core+slot_d-0.3) far_cutters(); }
+module panel_far_r()   { panel_yz(xi1, xo1, y_mid+2.3, yi1-core+slot_d-0.3) far_cutters(); card_window_frame(); }
+module card_window_frame() {   // stiffens the panel round the card's window: through the wall, and 2.5 proud of its inside face (that face prints up; the cradle ends 3 short of it)
+  w = 5;  d = 2.5;
+  difference() {
+    box(xi1-d, xo1, card_y0-2-w, card_y1+2+w, card_bot-1.5-w, card_top+1.5+w);
+    box(xi1-d-1, xo1+1, card_y0-2, card_y1+2, card_bot-1.5, card_top+1.5);
+  }
+}
 module panel_left_r()  { panel_xz(xi0+core-slot_d+0.3, x_mid-2.3, yo0, yi0) left_cutters(); }
 module panel_left_f()  { panel_xz(x_mid+2.3, xi1-core+slot_d-0.3, yo0, yi0) left_cutters(); }
 module panel_right_r() { panel_xz(xi0+core-slot_d+0.3, x_mid-2.3, yi1, yo1) right_cutters(); }
