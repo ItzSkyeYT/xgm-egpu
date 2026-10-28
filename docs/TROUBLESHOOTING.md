@@ -73,6 +73,13 @@ then browsers, Electron apps, VMs, and compositors.
 `lsof` is used to find them when present; otherwise the script walks `/proc`
 itself, so a missing `lsof` no longer causes the check to silently pass.
 
+**If the list names half your system** (systemd, NetworkManager, your shell,
+`lsof` itself), you have a version from before 2026-10-28: there, `lsof` could
+report every process on a machine with no NVIDIA device on the bus, and
+`--force-kill` would have signalled all of them. Update first. Now only
+processes with an NVIDIA node actually open are listed, and `--force-kill`
+checks each one again in `/proc` and never signals PID 1.
+
 ---
 
 ## Write hangs, process unkillable, `Ctrl-C` does nothing
@@ -204,6 +211,87 @@ sudo ln -sf "$(command -v xgm-egpu)" /usr/local/bin/xgm-egpu
 ```
 
 `install.sh` does this for you.
+
+---
+
+## `no external NVIDIA device appeared after 20s`
+
+The write went through and the firmware switched the lanes, but no GPU showed
+up on the bus. The tool now says which case you are in:
+
+- **`pending_reboot` went from 0 to 1 on that write** (the kernel also logs
+  *"Success changing the eGPU status, a reboot is strongly advised"*): the
+  firmware powered the dock, read the GPU's ID over the link and got nothing
+  back. On the osy boards the cable LED is red at this point. This is a
+  hardware fault on the dock side, and rebooting does not fix it. Check, one change at a
+  time: the GPU seated in the slot, its 8-pin, the dock's PSU on; the XGM cable
+  fully in at both ends (40-pin connectors home, bar locked, shield screw
+  tight); then another cable, another board, the GPU in a desktop. Fans
+  spinning only proves the card has power. If Windows fails the same way on the
+  same machine, that settles it. Seen on a 2023 Flow X13 with an osy board
+  (2026-10-27): another cable and the 0.6 board fixed it.
+- **Otherwise:** look at `dmesg | grep -iE 'pci|asus|egpu|pciehp' | tail -40`
+  for a link that came up and went down again, and see the link sections below.
+
+Either way `egpu_enable` is now 1 and stays 1 across reboots: unplug the XGM
+cable and run `sudo xgm-egpu off` to get the internal dGPU back
+([RECOVERY.md](RECOVERY.md)).
+
+---
+
+## `ROOT_PORT` was not detected, or you had to set it by hand
+
+The port is normally found as the parent bridge of the internal dGPU, which only
+works while that GPU is visible. Two things hide it:
+
+- **Eco mode** (`dgpu_disable=1`, from G-Helper or Armoury Crate). Switch to
+  Standard or Optimized, then run `xgm-egpu detect` again.
+- **`egpu_enable` still 1** from an earlier attempt, here or in Windows. Unplug
+  the XGM cable, `sudo xgm-egpu off`, then `detect`.
+
+Since 2026-10-28 detection also reads the port from ACPI in both cases: the
+bridge whose ACPI node holds the dGPU's `PEGP` (`0000:00:01.1` on the 2021 and
+2023 Flow X13). `xgm-egpu detect` prints where its answer came from, and warns
+if a hand-set `ROOT_PORT` disagrees with ACPI. To check by hand, with the
+internal dGPU visible:
+
+```sh
+lspci -D | grep -i nvidia     # e.g. 0000:01:00.0
+basename "$(dirname "$(readlink -f /sys/bus/pci/devices/0000:01:00.0)")"   # e.g. 0000:00:01.1
+```
+
+---
+
+## A monitor on the eGPU stays black
+
+Plain `go` is render-only and keeps the card's display engine off, so the
+monitor is detected but never lights up. Use `go --display`, then
+`desktop pin --outputs`, then log out and in: see "A monitor on the eGPU's own
+ports" in the [README](../README.md). If it is still black, send
+`xgm-egpu desktop status` and `ls /sys/class/drm` taken while the eGPU is on.
+
+---
+
+## On Windows (for people who arrive from the osy Discord)
+
+This repo is about Linux, but the same docks come up here. What we have seen:
+
+- **XGMDriver is all you need.** XGMActivator is outdated; osy replaced it with
+  XGMDriver in release 0.5. Use the latest installer and pick the right vendor:
+  installers before 0.5.1 swapped the AMD and NVIDIA choices.
+- **Lite board on a ROG Ally:** in one case (2026-10-21) the lanes only switched once
+  the board's USB-C link was plugged in and the XGM cable replugged with Windows
+  running. The Lite cannot tell which way round that USB-C plug is, so if the
+  cable LED stays white after activating, flip it over.
+- **The LED:** white = cable connected and host on, red = PCIe lanes switched.
+- **Error 43:** the egpu.io *nvidia-error43-fixer* (1.1.3, Feb 2021, still the
+  latest) lives in [its forum thread](https://egpu.io/forums/expresscard-mpcie-m-2-adapters/script-nvidia-error43-fixer/),
+  behind a free login; the short link in osy's README is dead. Run it as
+  administrator after the NVIDIA driver, and again after every driver update.
+  Many setups never need it.
+- **Games on the internal GPU:** Settings → System → Display → Graphics, set the
+  game (or the default) to High performance; or plug the monitor into the
+  eGPU.
 
 ---
 

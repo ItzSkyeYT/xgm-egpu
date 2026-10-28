@@ -601,6 +601,71 @@ assert_has "unit stops before shutdown"                  "$out" "Conflicts=shutd
 assert_has "stopping it runs off with the safe flags"    "$out" "ExecStop=/usr/local/bin/xgm-egpu off --keep-desktop --force-kill --no-relaunch --no-capture"
 assert_has "arming is dry-run aware"                     "$(DRY_RUN=1 shutdown_guard_arm 2>&1)" "would arm"
 
+echo "== holders: only real NVIDIA nodes count, whatever lsof prints (2026-10-27) =="
+load    # earlier sections stub and unset read_attr, nv_holders and friends: start clean
+mkdir -p "$T/bin"
+cat > "$T/bin/lsof" <<'SH'
+#!/bin/sh
+printf 'p1\ncsystemd\nfcwd\nn/\nf3\nn/dev/null\n'
+printf 'p200\ncnvidia-powerd\nf5\nn/dev/nvidiactl\nf6\nn/dev/nvidia0\n'
+printf 'p300\nckwin_wayland\nf12\nn/dev/dri/card2\n'
+printf 'p400\ncDiscord\nf9\nn/dev/dri/card1\n'
+SH
+chmod +x "$T/bin/lsof"
+nvidia_drm_nodes() { printf '/dev/dri/card2\n'; }
+lsof() { "$T/bin/lsof" "$@"; }
+out=$(nv_holders)
+assert_eq  "keeps the NVIDIA holders, drops the rest"   "$(printf '%s' "$out" | tr '\n' ';')" "200 nvidia-powerd;300 kwin_wayland"
+unset -f nvidia_drm_nodes lsof
+load
+assert_rc  "pid_holds_nv: never PID 1"                  1 pid_holds_nv 1
+assert_rc  "pid_holds_nv: not a pid"                    1 pid_holds_nv abc
+assert_rc  "pid_holds_nv: a process that is gone"       1 pid_holds_nv 999999999
+
+echo "== the dGPU's root port from ACPI (PEGP) =="
+mkdir -p "$T/pci/0000:00:01.1/firmware_node/device:04" "$T/pci/0000:00:08.1/firmware_node/device:09" "$T/pci/0000:01:00.0"
+echo 0x060400 > "$T/pci/0000:00:01.1/class"; echo '\_SB_.PCI0.GPP0.PEGP' > "$T/pci/0000:00:01.1/firmware_node/device:04/path"
+echo 0x060400 > "$T/pci/0000:00:08.1/class"; echo '\_SB_.PCI0.GP17.VGA_' > "$T/pci/0000:00:08.1/firmware_node/device:09/path"
+echo 0x030000 > "$T/pci/0000:01:00.0/class"
+assert_eq  "finds the bridge above PEGP"                "$(acpi_pegp_port)" "0000:00:01.1"
+mkdir -p "$T/pci/0000:00:02.1/firmware_node/device:07"
+echo 0x060400 > "$T/pci/0000:00:02.1/class"; echo '\_SB_.PCI0.GPP1.PEGP' > "$T/pci/0000:00:02.1/firmware_node/device:07/path"
+assert_rc  "two candidates: refuses to guess"           1 acpi_pegp_port
+rm -rf "$T/pci/0000:00:02.1"
+
+echo "== detect: a Flow in Eco mode still gets its port =="
+mkdir -p "$T/fw"
+SAVE_ATTR_ENABLE=$ATTR_ENABLE SAVE_ATTR_DGPU=$ATTR_DGPU SAVE_CONFIG_FILE=$CONFIG_FILE SAVE_STATE_FILE=$STATE_FILE
+ATTR_ENABLE=$T/fw/egpu_enable ATTR_DGPU=$T/fw/dgpu_disable CONFIG_FILE=$T/none.conf STATE_FILE=$T/state/none
+detect_internal_dgpu() { return 1; }; hotplug_slots() { :; }
+echo 0 > "$T/fw/egpu_enable"; echo 1 > "$T/fw/dgpu_disable"
+ROOT_PORT='' ROOT_PORT_SOURCE='' INTERNAL_DGPU='' _TOPOLOGY_DONE=0; detect_topology 2>/dev/null
+assert_eq  "dgpu_disable=1: port from ACPI"             "$ROOT_PORT" "0000:00:01.1"
+assert_has "...and says so"                             "$ROOT_PORT_SOURCE" "PEGP"
+echo 1 > "$T/fw/egpu_enable"; echo 0 > "$T/fw/dgpu_disable"
+ROOT_PORT='' ROOT_PORT_SOURCE='' INTERNAL_DGPU='' _TOPOLOGY_DONE=0; detect_topology 2>/dev/null
+assert_eq  "eGPU still active, no cache: port from ACPI" "$ROOT_PORT" "0000:00:01.1"
+echo 0 > "$T/fw/egpu_enable"
+ROOT_PORT='' ROOT_PORT_SOURCE='' INTERNAL_DGPU='' _TOPOLOGY_DONE=0; detect_topology 2>/dev/null
+assert_eq  "Ally case (no dGPU, nothing hidden): ACPI not used" "$ROOT_PORT" ""
+echo 1 > "$T/fw/dgpu_disable"; rm -rf "$T/pci/0000:00:01.1/firmware_node"
+ROOT_PORT='' ROOT_PORT_SOURCE='' INTERNAL_DGPU='' _TOPOLOGY_DONE=0; out=$(detect_topology 2>&1)
+assert_has "no port found in Eco mode: says why"        "$out" "dgpu_disable=1"
+unset -f detect_internal_dgpu hotplug_slots
+ATTR_ENABLE=$SAVE_ATTR_ENABLE ATTR_DGPU=$SAVE_ATTR_DGPU CONFIG_FILE=$SAVE_CONFIG_FILE STATE_FILE=$SAVE_STATE_FILE
+ROOT_PORT='' ROOT_PORT_SOURCE='' _TOPOLOGY_DONE=0
+
+echo "== a switch the GPU never answered is explained =="
+mkdir -p "$T/fwr"; SAVE_FW=$FW; FW=$T/fwr
+echo 1 > "$T/fwr/pending_reboot"
+out=$(explain_no_answer 0 2>&1)
+assert_has "pending_reboot 0 -> 1: the GPU did not answer" "$out" "NO ANSWER"
+assert_has "...points at the dock side"                 "$out" "XGM cable"
+assert_has "...and at the way back"                     "$out" "off"
+out=$(explain_no_answer 1 2>&1)
+assert_not "already 1 before: no firm claim"            "$out" "NO ANSWER"
+FW=$SAVE_FW
+
 echo "== library mode =="
 assert_rc "sourcing in library mode does not dispatch" 0 bash -c 'XGM_LIBRARY_MODE=1 source bin/xgm-egpu; declare -F cmd_on >/dev/null'
 assert_rc "script still parses"               0 bash -n bin/xgm-egpu

@@ -55,6 +55,11 @@ answering.
    ```
 
    `--force-kill` sends SIGTERM to the listed processes, waits 3 s, then SIGKILL.
+   **If that list names half your system** (systemd, NetworkManager, your
+   shell), do not use `--force-kill`: you have a version from before 2026-10-28,
+   whose `lsof` check could list every process when no NVIDIA device is on the
+   bus. Update the tool first. Current versions list only real holders, check
+   each one again before signalling it, and never touch PID 1.
    In the unbootable-machine case there is usually nothing holding the GPU
    anyway — `egpu_enable=1` means the internal card is switched off, so no
    driver is bound to anything.

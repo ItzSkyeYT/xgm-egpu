@@ -114,6 +114,25 @@ start it again when the run ends, success or not, so you land on a login
 screen rather than a dead console (`--keep-desktop` skips that). `go` checks
 for a compositor holding the GPU before it touches anything.
 
+## A monitor on the eGPU's own ports (KDE Plasma, Wayland)
+
+Plain `go` keeps the eGPU's display engine switched off on purpose (render-only
+mode), so a monitor plugged into the card is detected but stays black. For the
+monitor, in this order:
+
+1. `sudo xgm-egpu go --display`: the variant with the display engine on.
+2. `xgm-egpu desktop pin --outputs` (no sudo): kwin may now drive the eGPU's
+   ports, and still renders on the laptop's own GPU.
+3. **Log out and back in.** kwin reads the pin only at login, and the eGPU has
+   to be up by then.
+4. System Settings → Display Configuration: enable and place the new screen if
+   it is off.
+
+In this mode kwin holds the eGPU, so `off` has to run from a TTY (Ctrl+Alt+F3):
+`sudo xgm-egpu off`. To go back to render-only, run `xgm-egpu desktop pin`
+without `--outputs` and log out and in once more. Games then render on the eGPU
+and can be shown on either screen; a monitor on the card is the faster path.
+
 ## Gaming Mode (gamescope sessions: Bazzite, ChimeraOS, SteamOS-style)
 
 A gamescope session composites on one GPU and drives only that GPU's

@@ -48,6 +48,13 @@ build on this.
 
 The internal dGPU's parent bridge, since the XGM shares its lanes.
 
+When that dGPU is hidden (Eco mode, `dgpu_disable=1`, or `egpu_enable` still 1)
+the bridge is read from ACPI instead: the one whose ACPI node has a `PEGP`
+child. `PEGP` is the dGPU's ACPI name, and it is what the firmware's eGPU switch
+ejects (`\_SB_.PCI0.GPP0.PEGP` on the AMD Flows; [FINDINGS §6](../FINDINGS.md)).
+The ACPI node stays when the PCI device is gone, which is the point. Only a single
+match is used; two or more and detection does not guess.
+
 With no internal dGPU there is nothing to walk up from, so detection falls back
 to `/sys/bus/pci/slots/` — the hotplug slots `pciehp` registers. The slot address
 is the *downstream* bus, so the port is the bridge whose `secondary_bus_number`

@@ -1006,9 +1006,11 @@ feature report `"^ASUS Tech.Inc.\0"`, then `GetEGPUID` = `5E CE 03`), writes the
 result to `HKLM\SOFTWARE\ASUS\eGPU`, waits for the lock event `0xBA`, and
 requires user confirmation via `GPUSwitchDialog.exe` before calling ACPI.
 
-DIY docks need two shims purely to get past that: `XGMDriver` to make Armoury
-Crate accept the dock as official, and `XGMActivator` to inject the GPU model
-into the registry.
+DIY docks need a shim purely to get past that: `XGMDriver`, a virtual HID
+device that makes Armoury Crate accept the dock as official and trigger its
+activation pop-up. (An earlier shim, `XGMActivator`, injected the GPU model into
+the registry instead; osy replaced it with XGMDriver in release 0.5, and its
+folder now says it is outdated. This paragraph listed both until 2026-10-28.)
 
 Linux performs none of that validation or settling and fires `DEVS` immediately.
 Whether the missing identity handshake *matters* to the EC is unproven — the AML

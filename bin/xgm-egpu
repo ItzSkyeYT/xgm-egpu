@@ -38,6 +38,7 @@ ATTR_DGPU=$FW/dgpu_disable/current_value
 # it is meant to work everywhere and a machine it fails on is a bug worth fixing.
 INTERNAL_DGPU=${INTERNAL_DGPU:-}
 ROOT_PORT=${ROOT_PORT:-}
+ROOT_PORT_SOURCE=      # how ROOT_PORT was found, for 'detect'
 INTERNAL_DEVID=${INTERNAL_DEVID:-}
 
 CONFIG_FILE=${XGM_CONFIG:-/etc/xgm-egpu.conf}
@@ -709,6 +710,25 @@ detect_internal_dgpu() {
     return 1
 }
 
+# The PCIe bridge whose ACPI node has a PEGP child. PEGP is the internal dGPU's ACPI
+# name, and the firmware's eGPU switch ejects \_SB_.PCI0.GPP0.PEGP before handing its
+# lanes to the XGM (FINDINGS §6), so its bridge is the XGM's root port: 0000:00:01.1
+# on the 2021 and 2023 Flow X13. Unlike the PCI device, the ACPI node stays when the
+# dGPU is hidden (eGPU active, or dgpu_disable=1), which is when this is needed.
+# Prints the bridge only if exactly one qualifies.
+acpi_pegp_port() {
+    local d c found=()
+    for d in "$SYSFS_PCI"/*/; do
+        [[ $(cat "$d/class" 2>/dev/null) == 0x0604* ]] || continue
+        for c in "$d"firmware_node/*/path; do
+            [[ -r $c && $(cat "$c" 2>/dev/null) == *.PEGP ]] || continue
+            found+=("$(basename "$d")"); break
+        done
+    done
+    (( ${#found[@]} == 1 )) || return 1
+    printf '%s' "${found[0]}"
+}
+
 load_state()  { [[ -r $STATE_FILE ]] && . "$STATE_FILE"; return 0; }
 
 save_state() {
@@ -734,8 +754,10 @@ detect_topology() {
     _TOPOLOGY_DONE=1
 
     [[ -r $CONFIG_FILE ]] && . "$CONFIG_FILE"
+    local preset=${ROOT_PORT:-}
 
     local egpu_state; egpu_state=$(cat "$ATTR_ENABLE" 2>/dev/null || echo 0)
+    local dgpu_off; dgpu_off=$(cat "$ATTR_DGPU" 2>/dev/null || echo 0)
 
     if [[ $egpu_state == 0 ]]; then
         # Internal dGPU, if any, is visible right now. This is the only moment we
@@ -757,22 +779,43 @@ detect_topology() {
             # The XGM shares the internal dGPU's lanes, so its port is that dGPU's
             # parent bridge.
             ROOT_PORT=$(pci_parent "$INTERNAL_DGPU")
+            ROOT_PORT_SOURCE="parent bridge of the internal dGPU ($INTERNAL_DGPU)"
         else
-            # No internal dGPU (ROG Ally). Fall back to the hotplug slots: if
-            # exactly one is unoccupied, that is the XGM port. More than one and we
-            # refuse to guess.
-            local empty; empty=$(hotplug_slots | awk '$3 == 0 {print $1}')
-            if [[ $(printf '%s\n' "$empty" | grep -c .) -eq 1 ]]; then
-                ROOT_PORT=$empty
-            elif [[ -n $empty ]]; then
-                warn "several empty hotplug slots; cannot tell which is the XGM port:"
-                printf '    %s\n' $empty >&2
-                warn "set ROOT_PORT in $CONFIG_FILE or pass --root-port. See docs/PORTING.md"
+            # No internal dGPU visible. Either there is none (ROG Ally), or a Flow's
+            # is hidden right now: eGPU still active, or dgpu_disable=1 (G-Helper's or
+            # Armoury Crate's Eco mode). The second case used to fall through to the
+            # Ally logic below and leave a Flow with no port (2023 X13, 2026-10-27).
+            local pegp; pegp=$(acpi_pegp_port || true)
+            if [[ ( $egpu_state != 0 || $dgpu_off == 1 ) && -n $pegp ]]; then
+                ROOT_PORT=$pegp
+                ROOT_PORT_SOURCE="ACPI: the bridge above the internal dGPU's PEGP node"
+            else
+                # ROG Ally. Fall back to the hotplug slots: if exactly one is
+                # unoccupied, that is the XGM port. More than one and we refuse to guess.
+                local empty; empty=$(hotplug_slots | awk '$3 == 0 {print $1}')
+                if [[ $(printf '%s\n' "$empty" | grep -c .) -eq 1 ]]; then
+                    ROOT_PORT=$empty
+                    ROOT_PORT_SOURCE="the only empty hotplug slot"
+                elif [[ -n $empty ]]; then
+                    warn "several empty hotplug slots; cannot tell which is the XGM port:"
+                    printf '    %s\n' $empty >&2
+                    warn "set ROOT_PORT in $CONFIG_FILE or pass --root-port. See docs/PORTING.md"
+                fi
+            fi
+            if [[ -z $ROOT_PORT ]]; then
+                [[ $dgpu_off == 1 ]] && warn "dgpu_disable=1 (Eco mode in G-Helper or Armoury Crate) hides the internal dGPU, which is how the port is normally found: switch to Standard/Optimized and run detect again"
+                [[ $egpu_state != 0 ]] && warn "egpu_enable=$egpu_state hides the internal dGPU, which is how the port is normally found: unplug the XGM cable, run '$0 off', then detect again (docs/RECOVERY.md)"
             fi
         fi
     fi
+    if [[ -n $ROOT_PORT && -z $ROOT_PORT_SOURCE ]]; then
+        if [[ $ROOT_PORT == "$preset" ]]; then ROOT_PORT_SOURCE="set by hand ($CONFIG_FILE, --root-port or the environment)"
+        else ROOT_PORT_SOURCE="cached by an earlier detect ($STATE_FILE)"; fi
+    fi
 
-    [[ $egpu_state == 0 && -n $ROOT_PORT ]] && save_state
+    # Never cache a Flow seen in Eco mode: its internal dGPU identity would be empty,
+    # and once the dGPU is back egpu_bdf() could take it for the eGPU.
+    [[ $egpu_state == 0 && -n $ROOT_PORT && ! ( -z $INTERNAL_DGPU && $dgpu_off == 1 ) ]] && save_state
     return 0
 }
 
@@ -784,6 +827,12 @@ cmd_detect() {
     echo
     echo "Detected topology:"
     printf '  %-16s %s\n' "ROOT_PORT" "${ROOT_PORT:-<none — set it manually>}"
+    [[ -n $ROOT_PORT_SOURCE ]] && printf '  %-16s %s\n' "" "($ROOT_PORT_SOURCE)"
+    local pegp; pegp=$(acpi_pegp_port || true)
+    if [[ -n $pegp && -n $ROOT_PORT && $pegp != "$ROOT_PORT" ]]; then
+        warn "ACPI places the internal dGPU (PEGP) under $pegp, not under ROOT_PORT=$ROOT_PORT."
+        warn "On the Flows the firmware switches exactly those lanes: check ROOT_PORT before 'on'."
+    fi
     if [[ -n $INTERNAL_DGPU ]]; then
         printf '  %-16s %s (devid %s)\n' "INTERNAL_DGPU" "$INTERNAL_DGPU" "${INTERNAL_DEVID:-?}"
     else
@@ -1937,6 +1986,21 @@ nvidia_drm_nodes() {
         for r in "$c"/device/drm/renderD*; do [[ -e $r ]] && printf '/dev/dri/%s\n' "$(basename "$r")"; done
     done
 }
+# True if process $1 has an NVIDIA node open. A process whose fds cannot be read
+# (not root) counts as holding: this is a second check, not a replacement for
+# nv_holders, and it must not turn a real holder into a skipped one.
+pid_holds_nv() {
+    local pid=$1 fd t nodes
+    [[ $pid =~ ^[0-9]+$ && $pid -gt 1 ]] || return 1
+    [[ -d /proc/$pid ]] || return 1
+    ls "/proc/$pid/fd" >/dev/null 2>&1 || return 0
+    nodes=$(nvidia_drm_nodes | tr '\n' '|'); nodes=${nodes%|}
+    for fd in /proc/"$pid"/fd/*; do
+        t=$(readlink -- "$fd" 2>/dev/null) || continue
+        [[ $t == /dev/nvidia* || ( -n $nodes && $t =~ ^($nodes)$ ) ]] && return 0
+    done
+    return 1
+}
 proc_nv_holders() {
     local fd target pid comm nodes
     nodes=$(nvidia_drm_nodes | tr '\n' '|'); nodes=${nodes%|}
@@ -1959,12 +2023,22 @@ nv_holders() {
     # holders", and the check that exists to prevent an unkillable D-state wedge
     # silently passed. A safety guard that fails OPEN is worse than no guard,
     # because it is trusted. Hence the fallback rather than a hard dependency.
-    local out
+    #
+    # Only files that really ARE NVIDIA nodes count. lsof can report more than the
+    # names it was handed: on a 2023 Flow X13 with no NVIDIA device on the bus
+    # (2026-10-27) this listed every process on the system, systemd, the shell and
+    # lsof itself included, and this list is exactly what --force-kill kills. So
+    # lsof hands back its file names too and they get the same test as in
+    # proc_nv_holders.
+    local out nodes
+    nodes=$(nvidia_drm_nodes | tr '\n' ' ')
     if command -v lsof >/dev/null 2>&1; then
-        # shellcheck disable=SC2046
-        out=$(lsof -Fpc -- /dev/nvidia* $(nvidia_drm_nodes) 2>/dev/null | awk '
-            /^p/ { pid = substr($0,2) }
-            /^c/ { print pid, substr($0,2) }' | sort -u)
+        # shellcheck disable=SC2086
+        out=$(lsof -Fpcn -- /dev/nvidia* $nodes 2>/dev/null | awk -v nodes=" $nodes " '
+            /^p/ { pid = substr($0,2); next }
+            /^c/ { comm = substr($0,2); next }
+            /^n/ { n = substr($0,2)
+                   if (n ~ /^\/dev\/nvidia/ || index(nodes, " " n " ")) print pid, comm }' | sort -u)
     else
         out=$(proc_nv_holders)
     fi
@@ -2160,7 +2234,7 @@ cmd_status() {
     info "Open handles on /dev/nvidia* (these block the ACPI eject)"
     local h; h=$(nv_holders)
     if [[ -n $h ]]; then
-        printf '  %s\n' "$h"
+        printf '%s\n' "$h" | sed 's/^/  /'
     elif [[ $EUID -ne 0 ]]; then
         echo "  (none visible — but as a normal user lsof cannot see root daemons"
         echo "   such as nvidia-powerd. Re-run as root for a truthful answer.)"
@@ -2315,6 +2389,9 @@ kill_nv_holders() {
     add_exit_hook relaunch_killed
     while read -r pid _; do
         [[ -n $pid ]] || continue
+        # Second line of defence behind nv_holders: PID 1 and anything that turns out
+        # not to hold an NVIDIA node are never signalled.
+        pid_holds_nv "$pid" || { warn "  not killing $pid ($(cat "/proc/$pid/comm" 2>/dev/null || echo gone)): it holds no NVIDIA node"; continue; }
         remember_holder "$pid"
         info "  SIGTERM $pid"
         [[ $DRY_RUN -eq 1 ]] || kill -TERM "$pid" 2>/dev/null
@@ -2323,6 +2400,7 @@ kill_nv_holders() {
     while read -r pid _; do
         [[ -n $pid ]] || continue
         kill -0 "$pid" 2>/dev/null || continue
+        pid_holds_nv "$pid" || continue
         warn "  SIGKILL $pid"
         [[ $DRY_RUN -eq 1 ]] || kill -KILL "$pid" 2>/dev/null
     done <<<"$(nv_holders)"
@@ -2613,6 +2691,39 @@ egpu_bdf() {
         return 0
     done
     return 1
+}
+
+# After a write that went through but left no eGPU on the bus: say what that means.
+# $1 = pending_reboot as it read before the write.
+#
+# The firmware's last step (FINDINGS §6, AML step 9) powers the dock, waits 2 s and
+# reads the GPU's vendor/device ID over the link. All ones means nothing answered,
+# and the WMI call then returns 0x02, which the kernel logs as "a reboot is strongly
+# advised" and turns into pending_reboot=1. So pending_reboot going from 0 to 1 on
+# this very write is the firmware saying: lanes switched, GPU silent. On the osy
+# boards the cable LED is red by then. Seen on a 2023 Flow X13 (2026-10-27): another
+# cable and board fixed it, and Windows had failed the same way.
+explain_no_answer() {
+    local before=$1 now; now=$(read_attr "$FW/pending_reboot")
+    warn ""
+    if [[ $now == 1 && $before == 0 ]]; then
+        warn "The firmware accepted the switch and then got NO ANSWER from the GPU behind it:"
+        warn "it reads the card's ID over the link after powering the dock, read nothing, and"
+        warn "asked for a reboot (pending_reboot went 0 -> 1). Rebooting will not fix that."
+        warn "The software side did its part. Check the dock side, one change at a time:"
+    else
+        warn "Nothing answered on the bus. If the cable LED turned red, the lanes did switch and"
+        warn "the GPU is not answering behind them. Check the dock side, one change at a time:"
+    fi
+    warn "  - the GPU seated in the board's slot, its 8-pin in, the dock's PSU on (fans spinning"
+    warn "    only proves the card has power, not that it talks over the link)"
+    warn "  - the XGM cable fully in at both ends: 40-pin connectors home, bar locked, shield screw tight"
+    warn "  - another XGM cable, then another board, then the GPU in a desktop"
+    warn "If Windows fails the same way on this machine, it is that hardware, not this tool."
+    warn ""
+    warn "egpu_enable stays 1 across reboots and power-offs. To get the internal dGPU back:"
+    warn "unplug the XGM cable, then:  $0 off   (docs/RECOVERY.md)"
+    warn ""
 }
 
 # Pin the link to a fixed PCIe generation on the root port.
@@ -2912,6 +3023,7 @@ $(printf '     %s\n' "$d")"
     # with no record of how far it got.
     command -v journalctl >/dev/null 2>&1 && journalctl --flush 2>/dev/null
     sync
+    local reboot_before; reboot_before=$(read_attr "$FW/pending_reboot")
     # Capture the status directly. Inside `if ! cmd; then`, $? is the status of the
     # negation — always 0 — so reading it there silently loses the 124 and skips
     # the warning below, which is the most important thing this script ever prints.
@@ -2953,6 +3065,7 @@ $(printf '     %s\n' "$d")"
     if [[ -z $bdf ]]; then
         warn "no external NVIDIA device appeared after ${SETTLE}s"
         warn "egpu_enable now reads: $(read_attr "$ATTR_ENABLE")"
+        explain_no_answer "$reboot_before"
         warn "check: dmesg | grep -iE 'pci|asus|egpu' | tail -40"
         return 1
     fi
