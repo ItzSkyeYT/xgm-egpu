@@ -4,9 +4,10 @@ OrcaSlicer project with the batch's parts arranged on the bed and the print sett
 File > Open Project, Slice, Print. Each project is then sliced to check that it fits one plate and that the
 settings took, and its real print time and filament go into build/weights.json for make_print_pack.py.
 
-The profile is the machine the case is printed on: Bambu Lab H2D 0.4, Bambu PETG Basic, 0.20 mm,
-textured PEI plate. Takes a minute or two; run it after render.sh whenever the model changes.
-usage: make_plates.py [--batches-only]     (ORCA=/path/to/orca-slicer to use another install)"""
+The profile is the machine the case is printed on: since November 2026 a Bambu Lab P2S 0.4 at home, before that the
+fablab's H2D (PRINTER=H2D still builds for it). Bambu PETG Basic, 0.20 mm, textured PEI plate. Takes a minute or two;
+run it after render.sh whenever the model changes.
+usage: [PRINTER=P2S|H2D] make_plates.py [--batches-only]     (ORCA=/path/to/orca-slicer to use another install)"""
 import sys
 sys.dont_write_bytecode = True        # no __pycache__ beside the scripts
 import glob, json, os, re, shutil, subprocess, tempfile, zipfile
@@ -15,7 +16,19 @@ from stages import STAGES
 
 ORCA = os.environ.get('ORCA', '/opt/orca-slicer/AppRun')
 PROFILES = os.path.join(os.path.dirname(os.path.realpath(ORCA)), 'resources', 'profiles', 'BBL')
-MACHINE, PROCESS, FILAMENT = 'Bambu Lab H2D 0.4 nozzle', '0.20mm Standard @BBL H2D', 'Bambu PETG Basic @BBL H2D 0.4 nozzle'
+# Each printer: the stock presets, and ZONE, the part of the bed every batch must stay inside.
+# P2S: 256 x 256 bed. At the back it keeps X 153 to 216 free from Y 235 for its nozzle-wrap check, so the batches
+#   stay in front of that line; the longest parts (244 mm) lie across the bed.
+# H2D: two nozzles 25 mm apart, the left one reaches X 0 to 325 of its 350 x 320 bed, the right one X 25 to 350.
+#   Everything stays in the strip both can reach, so a batch prints whichever nozzle the spool is loaded on, and in
+#   front of the strip the printer keeps free at the back (X 145 to 256, from Y 310).
+# Both draw their start line off the front edge of the bed, so nothing has to keep clear of that.
+PRINTERS = {
+    'P2S': ('Bambu Lab P2S 0.4 nozzle', '0.20mm Standard @BBL P2S', 'Bambu PETG Basic @BBL P2S 0.4 nozzle', (0, 0, 256, 235)),
+    'H2D': ('Bambu Lab H2D 0.4 nozzle', '0.20mm Standard @BBL H2D', 'Bambu PETG Basic @BBL H2D 0.4 nozzle', (25, 0, 325, 308)),
+}
+PRINTER = os.environ.get('PRINTER', 'P2S')
+MACHINE, PROCESS, FILAMENT, ZONE = PRINTERS[PRINTER]          # ZONE: min x, min y, max x, max y
 PLATE = 'Textured PEI Plate'          # Bambu's PETG profile refuses the smooth Cool Plate, and so does the slicer
 
 # On top of Bambu's stock profile, for every batch. The tests get exactly the same, so that their fits carry over.
@@ -26,10 +39,6 @@ SETTINGS = {
     'brim_type': 'no_brim',           # jigsaw edges and wall edges must come off the plate clean
 }
 POSTS = {'brim_type': 'outer_only', 'brim_width': '5'}   # 15 mm square, 180 mm tall: a brim keeps them standing
-# The H2D has two nozzles 25 mm apart: the left one reaches X 0 to 325 of its 350 x 320 bed, the right one X 25 to 350. Everything stays in the
-# strip both can reach, so a batch prints whichever nozzle the spool is loaded on, and in front of the strip the printer keeps free at the back
-# (X 145 to 256, from Y 310). Its start line is drawn off the front edge of the bed, so nothing has to keep clear of that.
-ZONE = (25, 0, 325, 308)          # min x, min y, max x, max y
 def inside(box):
     return box[0] >= ZONE[0] and box[1] >= ZONE[1] and box[2] <= ZONE[2] and box[3] <= ZONE[3]
 
@@ -91,6 +100,17 @@ def turned(stl, folder):
     open(path, 'w').write(text)
     return path
 
+def laid_across(stl, folder):
+    """A copy of an STL turned a quarter about Z and set in the middle of the zone, for a part to be left where it is.
+    The arranger lays a single long part lengthwise whatever it is told, and on the P2S that runs into the keep-clear area."""
+    text = open(turned(stl, folder)).read()
+    xs, ys = zip(*((float(x), float(y)) for x, y in re.findall(r'vertex\s+(\S+)\s+(\S+)\s+\S+', text)))
+    dx, dy = (ZONE[0] + ZONE[2] - min(xs) - max(xs)) / 2, (ZONE[1] + ZONE[3] - min(ys) - max(ys)) / 2
+    move = lambda m: f'vertex {float(m.group(1)) + dx:.6f} {float(m.group(2)) + dy:.6f} {m.group(3)}'
+    path = os.path.join(folder, 'across-' + os.path.basename(stl))
+    open(path, 'w').write(re.sub(r'vertex\s+(\S+)\s+(\S+)\s+(\S+)', move, text))
+    return path
+
 def objects_in_order(config):
     """The project's list of objects, sorted by id. The slicer writes it in a different order from one run to the next."""
     blocks = re.findall(r'^  <object id="\d+">\n.*?^  </object>\n', config, re.S | re.M)
@@ -149,16 +169,20 @@ for stage, _, stage_batches in STAGES:
         out = os.path.join(tmp, 'batch-' + batch)
         os.makedirs(out)
         arrange = load_args(process_file(batch, overrides)) + ['--clone-objects', ','.join(str(c) for _, c in rows),
-                   '--avoid-extrusion-cali-region', '--arrange', '1', '--outputdir', out, '--export-3mf', 'raw.3mf']
+                   '--avoid-extrusion-cali-region', '--outputdir', out, '--export-3mf', 'raw.3mf']
         stls = [os.path.join(STL, n + '.stl') for n, _ in rows]
-        # the arranger may lay the parts out wider than the zone: if so, turn them a quarter and forbid it to turn them back
-        for attempt in (['--allow-rotations'] + stls, [turned(stl, os.path.join(out, 'turned')) for stl in stls]):
+        # the arranger may lay the parts out wider than the zone: if so, turn them a quarter and forbid it to turn them back,
+        # and if it is a single part that still does not fit, lay it across the zone by hand
+        attempts = [['--arrange', '1', '--allow-rotations'] + stls, ['--arrange', '1'] + [turned(stl, os.path.join(out, 'turned')) for stl in stls]]
+        if len(rows) == 1 and rows[0][1] == 1:
+            attempts.append(['--arrange', '0', laid_across(stls[0], os.path.join(out, 'turned'))])
+        for attempt in attempts:
             code, error = orca(arrange + attempt, out)
             box = footprint(os.path.join(out, 'raw.3mf')) if code == 0 else None
             if box and inside(box):
                 break
         if code != 0 or not inside(box):
-            failed.append((batch, (error or f'exit {code}') if code else 'it covers x %.1f..%.1f, y %.1f..%.1f: outside what both nozzles reach' % (box[0], box[2], box[1], box[3])))
+            failed.append((batch, (error or f'exit {code}') if code else 'it covers x %.1f..%.1f, y %.1f..%.1f: outside the printable zone' % (box[0], box[2], box[1], box[3])))
             continue
         # The project names Bambu's stock presets. The slicer's window only applies the values listed as different from them.
         project = os.path.join(PLATES, stage, batch + '.3mf')

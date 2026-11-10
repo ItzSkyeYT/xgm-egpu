@@ -13,6 +13,12 @@ DEST = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else paths.PACK
 WEIGHTS = {}                                                  # real slices from make_plates.py, when it has been run
 if os.path.exists(paths.WEIGHTS):
     WEIGHTS = json.load(open(paths.WEIGHTS))
+PRINTER = WEIGHTS.get('printer', 'Bambu Lab P2S 0.4 nozzle').replace(' 0.4 nozzle', '')
+WHERE = {                                                     # where make_plates.py keeps each printer's batches, and why
+    'Bambu Lab P2S': "The parts sit in front of the strip the P2S keeps clear at the back of its bed for its nozzle check: leave them where they are.",
+    'Bambu Lab H2D': ("The parts sit in the middle 300 mm of the bed, the part that both of the H2D's nozzles can reach, so a batch prints "
+                      "whichever nozzle your spool is loaded on: leave them where they are."),
+}[PRINTER]
 
 def stl_info(name):
     xs, ys, zs, tri, vol = [], [], [], [], 0.0
@@ -176,10 +182,10 @@ the card's bracket.
 | Avoid crossing walls | On. PETG strings, and this keeps travel moves inside the part instead of across the vents. |
 | Supports | **None.** Nothing in this pack needs them. |
 | Orientation | As exported. Every file is already laid out for the bed. |
-| Bed | 180 × 180 mm, except the two-piece lid, which needs 250 mm. On a Bambu H2D (350 × 320 mm) every part fits whole. |
+| Bed | 256 × 256 mm takes every batch as it is laid out. Every part fits 180 × 180 mm except the two lid halves and the handle, which are 244 mm long. |
 | Height | 182 mm, for the posts |
 
-> **The batch files already carry all of this**, on top of Bambu's stock profile for the H2D and PETG Basic. The table
+> **The batch files already carry all of this**, on top of Bambu's stock profile for the {PRINTER.replace('Bambu Lab ', '')} and PETG Basic. The table
 > is there to check against, and for another slicer or printer. The tests use exactly the same settings as the case, so
 > what fits in stage 1 fits in stage 4.
 
@@ -204,12 +210,11 @@ nothing below it is worth the plastic until it has passed.
 ### Printing a batch
 
 1. In OrcaSlicer, **File → Open Project** and pick the batch's `.3mf`. The parts come in already arranged, with the
-   printer (Bambu Lab H2D, 0.4 nozzle), the filament (Bambu PETG Basic), the textured plate and the settings above.
+   printer ({PRINTER}, 0.4 nozzle), the filament (Bambu PETG Basic), the textured plate and the settings above.
 2. Check that the filament slot matches where your spool sits in the AMS, then **Slice plate**.
 3. **Print plate**, or export the sliced file to the printer's card.
 
-The parts sit in the middle 300 mm of the bed, the part that both of the H2D's nozzles can reach, so a batch prints
-whichever nozzle your spool is loaded on: leave them where they are. Bambu Studio may offer to load only the geometry of a file made by
+{WHERE} Bambu Studio may offer to load only the geometry of a file made by
 OrcaSlicer; if it does, set the values from the table by hand. For any other slicer, the loose STLs are in each stage's
 `stl/` folder.
 

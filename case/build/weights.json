@@ -1,209 +1,209 @@
 {
  "slicer": "OrcaSlicer 2.4.2",
- "printer": "Bambu Lab H2D 0.4 nozzle",
- "filament": "Bambu PETG Basic @BBL H2D 0.4 nozzle",
- "process": "0.20mm Standard @BBL H2D",
+ "printer": "Bambu Lab P2S 0.4 nozzle",
+ "filament": "Bambu PETG Basic @BBL P2S 0.4 nozzle",
+ "process": "0.20mm Standard @BBL P2S",
  "walls": 3,
  "infill": "15%",
  "plate": "Textured PEI Plate",
  "parts": {
   "bracket_holder": {
-   "g": 10.5,
-   "min": 23
+   "g": 10.4,
+   "min": 28
   },
   "bracket_washer": {
    "g": 0.1,
-   "min": 7
+   "min": 13
   },
   "bridge_centre": {
    "g": 2.2,
-   "min": 11
+   "min": 17
   },
   "bridge_strap": {
    "g": 0.8,
-   "min": 9
+   "min": 15
   },
   "coupon": {
-   "g": 9.2,
-   "min": 28
+   "g": 9.1,
+   "min": 33
   },
   "coupon_grommet": {
-   "g": 3.2,
-   "min": 27
+   "g": 3.1,
+   "min": 32
   },
   "coupon_inserts": {
-   "g": 3.1,
-   "min": 19
+   "g": 3.0,
+   "min": 24
   },
   "coupon_rear": {
-   "g": 8.4,
-   "min": 21
+   "g": 8.3,
+   "min": 27
   },
   "cradle": {
-   "g": 13.0,
-   "min": 31
+   "g": 12.9,
+   "min": 36
   },
   "floor_fl": {
-   "g": 37.5,
-   "min": 67
+   "g": 37.4,
+   "min": 75
   },
   "floor_fr": {
    "g": 39.2,
-   "min": 72
+   "min": 80
   },
   "floor_rl": {
-   "g": 44.9,
-   "min": 80
+   "g": 44.8,
+   "min": 88
   },
   "floor_rr": {
    "g": 44.8,
-   "min": 81
+   "min": 88
   },
   "handle": {
    "g": 42.9,
-   "min": 74
+   "min": 79
   },
   "lid_fl": {
    "g": 35.8,
-   "min": 54
+   "min": 62
   },
   "lid_fr": {
    "g": 34.5,
-   "min": 68
+   "min": 74
   },
   "lid_l": {
    "g": 82.4,
-   "min": 130
+   "min": 139
   },
   "lid_r": {
    "g": 69.7,
-   "min": 107
+   "min": 116
   },
   "lid_rl": {
-   "g": 42.4,
-   "min": 63
+   "g": 42.3,
+   "min": 72
   },
   "lid_rr": {
-   "g": 40.8,
-   "min": 82
+   "g": 40.7,
+   "min": 88
   },
   "panel_far_l": {
    "g": 15.6,
-   "min": 29
+   "min": 35
   },
   "panel_far_r": {
    "g": 41.1,
-   "min": 68
+   "min": 75
   },
   "panel_left_f": {
-   "g": 39.6,
-   "min": 81
+   "g": 39.5,
+   "min": 87
   },
   "panel_left_r": {
-   "g": 56.2,
-   "min": 81
+   "g": 56.1,
+   "min": 89
   },
   "panel_rear_l": {
    "g": 37.3,
-   "min": 75
+   "min": 80
   },
   "panel_rear_r": {
    "g": 42.3,
-   "min": 90
+   "min": 96
   },
   "panel_right_f": {
    "g": 39.9,
-   "min": 77
+   "min": 83
   },
   "panel_right_r": {
    "g": 53.8,
-   "min": 101
+   "min": 107
   },
   "post_corner": {
    "g": 23.6,
-   "min": 201
+   "min": 206
   },
   "post_mid": {
-   "g": 22.8,
-   "min": 199
+   "g": 22.7,
+   "min": 204
   },
   "post_mid_psu": {
-   "g": 22.5,
-   "min": 199
+   "g": 22.4,
+   "min": 205
   },
   "psu_spacer": {
    "g": 3.3,
-   "min": 14
+   "min": 20
   },
   "shim_05": {
    "g": 0.1,
-   "min": 6
+   "min": 12
   },
   "shim_10": {
-   "g": 0.2,
-   "min": 7
+   "g": 0.1,
+   "min": 13
   },
   "shim_15": {
-   "g": 0.3,
-   "min": 7
+   "g": 0.2,
+   "min": 13
   }
  },
  "batches": {
   "1A-tests": {
-   "g": 23.7,
-   "min": 66
+   "g": 23.6,
+   "min": 70
   },
   "2A-floor-board-rear": {
-   "g": 55.4,
-   "min": 98
+   "g": 55.3,
+   "min": 106
   },
   "2B-floor-board-far": {
-   "g": 52.2,
-   "min": 86
+   "g": 52.1,
+   "min": 93
   },
   "3A-posts-sample": {
    "g": 46.4,
    "min": 223
   },
   "3B-card-side-wall": {
-   "g": 93.7,
-   "min": 173
+   "g": 93.6,
+   "min": 179
   },
   "4A-floor-cable-bay": {
-   "g": 44.9,
-   "min": 80
+   "g": 44.8,
+   "min": 88
   },
   "4B-floor-psu": {
    "g": 42.6,
-   "min": 81
+   "min": 88
   },
   "4C-posts": {
    "g": 138.8,
-   "min": 368
+   "min": 353
   },
   "4D-rear-wall": {
    "g": 79.6,
-   "min": 159
+   "min": 165
   },
   "4E-far-wall": {
-   "g": 56.7,
-   "min": 91
+   "g": 56.6,
+   "min": 98
   },
   "4F-psu-side-wall": {
    "g": 98.9,
-   "min": 164
+   "min": 172
   },
   "4G-lid-rear": {
    "g": 82.4,
-   "min": 130
+   "min": 139
   },
   "4H-lid-far": {
    "g": 69.7,
-   "min": 107
+   "min": 116
   },
   "4I-handle": {
    "g": 42.9,
-   "min": 74
+   "min": 79
   }
  }
 }
