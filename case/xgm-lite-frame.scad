@@ -434,6 +434,10 @@ module floor_full() {
 // no vent over a post: a lid screw's head needs a flat seat, and a mid post's top bosses reach 11 mm along the wall on each side
 function near_post(x0, x1, y0, y1) = len([for (i = [0:7]) let(p = post_centers()[i], mx = i >= 6 ? 11 : 5, my = (i == 4 || i == 5) ? 11 : 5)
   if (x1 > p[0]-mx && x0 < p[0]+mx && y1 > p[1]-my && y0 < p[1]+my) 1]) > 0;
+// the handle's two ends go through the lid and sit on the mid posts' tops: the lid is notched there, from its seam to just past the handle
+module handle_notches() {
+  if (use_inserts && handle) for (y = [[yp0-1, yi0+core+3], [yi1-core-3, yp1+1]]) box(x_seam, handle_x0+handle_w+0.3, y[0], y[1], zi1-5, zi1+lid_t+1);
+}
 module lid_full() {
   difference() {
     box(xp0, xp1, yp0, yp1, zi1, zi1+lid_t);
@@ -444,10 +448,9 @@ module lid_full() {
         box(p[0], p[0]+vent_w, p[1], p[1]+vent_h, zi1-1, zi1+lid_t+1);
     if (use_inserts) for (p = post_centers()) translate([p[0], p[1], zi1-1]) cylinder(d = 3.4, h = lid_t + 2, $fn = 30);   // a lid screw into every post
     if (use_inserts && handle) for (y = handle_screws_y) translate([x_mid, y, zi1-1]) cylinder(d = 3.4, h = lid_t + 2, $fn = 30);   // the handle's screws, from inside
-    // the handle's two ends go through the lid and sit on the mid posts' tops: the lid is notched there, from its seam to just past the handle
-    if (use_inserts && handle) for (y = [[yp0-1, yi0+core+3], [yi1-core-3, yp1+1]]) box(x_seam, handle_x0+handle_w+0.3, y[0], y[1], zi1-1, zi1+lid_t+1);
+    handle_notches();
   }
-  lip_ring(zi1-4, zi1);
+  difference() { lip_ring(zi1-4, zi1); handle_notches(); }   // the lip too: 2.5 mm of it reach past the seam, and would hang in the notch with nothing above
   if (!use_inserts) for (p = post_centers()) translate([p[0]-peg/2, p[1]-peg/2, zi1-3.6]) cube([peg, peg, 3.6+eps]);   // print-only: pegs into the posts
   if (use_inserts) lid_ties("tab");                                                      // lid_l's tabs beside the two mid posts at the seam
   if (use_inserts) for (p = bridge_screws_lid()) translate([p[0], p[1], zi1 - lid_boss_h]) difference() {   // bosses for the seam bridges
