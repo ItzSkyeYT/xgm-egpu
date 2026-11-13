@@ -82,6 +82,27 @@ checks each one again in `/proc` and never signals PID 1.
 
 ---
 
+## On a Flow with an NVIDIA dGPU, `go` fails or the machine panics in Hybrid mode
+
+Switch the GPU mode to Integrated and reboot, then run `go` again: Eco in
+G-Helper or Armoury Crate, Integrated in ROG Control Center, or
+`supergfxctl -m Integrated`. With the internal dGPU already off, activation has
+nothing to eject and the compositor has no NVIDIA device to hold, which removes
+the two steps that fail most.
+
+Reported on a 2023 X13 with an RTX 4070 dGPU and an RTX 5070 in a DIY Lite
+v0.6 dock (osy Discord, 2026-11-12). In Hybrid mode `go` would not run after
+`desktop pin` and a log-out, and from a TTY it went further but the machine hit
+a kernel panic a while later. In Integrated mode the first `go` brought the
+RTX 5070 up and `nvidia-smi` saw it. The reference 2021 X13 works in Hybrid
+mode, with the eject.
+
+If Hybrid mode panics for you too, the log of that run is the useful part:
+`xgm-egpu logs` lists the runs and `xgm-egpu logs show` prints one, kernel log
+included. Put it in an issue.
+
+---
+
 ## Write hangs, process unkillable, `Ctrl-C` does nothing
 
 See [RECOVERY.md § terminal wedged](RECOVERY.md#symptom-terminal-wedged-process-unkillable).
@@ -242,18 +263,23 @@ cable and run `sudo xgm-egpu off` to get the internal dGPU back
 ## `ROOT_PORT` was not detected, or you had to set it by hand
 
 The port is normally found as the parent bridge of the internal dGPU, which only
-works while that GPU is visible. Two things hide it:
+works while that GPU is visible. Three things hide it:
 
-- **Eco mode** (`dgpu_disable=1`, from G-Helper or Armoury Crate). Switch to
-  Standard or Optimized, then run `xgm-egpu detect` again.
+- **Eco mode** (`dgpu_disable=1`, from G-Helper or Armoury Crate, or a Linux
+  tool that sets the same switch).
+- **Linux's Integrated mode** (`supergfxctl -m Integrated`, ROG Control Center),
+  which takes the dGPU off the bus without setting `dgpu_disable`.
 - **`egpu_enable` still 1** from an earlier attempt, here or in Windows. Unplug
   the XGM cable, `sudo xgm-egpu off`, then `detect`.
 
-Since 2026-10-28 detection also reads the port from ACPI in both cases: the
+None of these is a reason to leave Integrated or Eco mode: on a Flow with an
+NVIDIA dGPU it is the easier way to run the eGPU (next section). Since
+2026-10-28 detection reads the port from ACPI when the dGPU is hidden: the
 bridge whose ACPI node holds the dGPU's `PEGP` (`0000:00:01.1` on the 2021 and
-2023 Flow X13). `xgm-egpu detect` prints where its answer came from, and warns
-if a hand-set `ROOT_PORT` disagrees with ACPI. To check by hand, with the
-internal dGPU visible:
+2023 Flow X13). If detection still finds nothing, run `xgm-egpu detect` once
+in Hybrid mode, or set `ROOT_PORT=` in `/etc/xgm-egpu.conf`. `xgm-egpu detect` prints where its answer
+came from, and warns if a hand-set `ROOT_PORT` disagrees with ACPI. To check by
+hand, with the internal dGPU visible:
 
 ```sh
 lspci -D | grep -i nvidia     # e.g. 0000:01:00.0
@@ -269,6 +295,31 @@ monitor is detected but never lights up. Use `go --display`, then
 `desktop pin --outputs`, then log out and in: see "A monitor on the eGPU's own
 ports" in the [README](../README.md). If it is still black, send
 `xgm-egpu desktop status` and `ls /sys/class/drm` taken while the eGPU is on.
+
+---
+
+## A game runs on the laptop's iGPU, or does not start with `prime-run`
+
+With render offload, a program uses the eGPU only if it asks for it. Proton
+games (DXVK, VKD3D) and most Vulkan programs pick the NVIDIA card by themselves;
+OpenGL programs use the laptop's iGPU unless started with `prime-run`. That is
+why an OpenGL benchmark can show iGPU numbers (about 30 fps in FurMark at
+1080p on a 2023 X13) while its Vulkan mode shows the eGPU's.
+
+If a Steam game does not start at all with `prime-run %command%` but starts
+with empty launch options, check `which prime-run`: it comes from the
+`nvidia-prime` package, and when it is missing Steam fails silently. Without
+it, the same thing by hand:
+
+```sh
+__NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia __VK_LAYER_NV_optimus=NVIDIA_only %command%
+```
+
+Shown on the laptop's screen, every frame travels back over the link to the
+iGPU, so a monitor plugged into the eGPU is faster for the same game (Vulkan
+on an RTX 5070 behind a 2023 X13: 175 fps on the laptop screen, about 280 with
+a monitor on the eGPU; two users on the osy Discord). See the README's display
+mode.
 
 ---
 

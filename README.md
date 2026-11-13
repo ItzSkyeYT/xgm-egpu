@@ -26,6 +26,7 @@ screen. `off` must run from a TTY in that mode, because kwin holds the card.
 | ROG Flow X13 GV301QH (2021, AMD 5900HS) | DIY osy Lite v0.6.1, ALC04-S40EIA-00 instead of I-PEX CABLINE-VS | RTX 3060 (GA104, 10de:2487) | **works**, PCIe Gen3 x8, zero AER | render offload to the laptop screen (`go`); full display path with a monitor on the eGPU's HDMI (`go --display` + `desktop pin --outputs`) | `install-rules` (RTD3 off), `drm nokms` or `drm nofbdev`, `pcie gen3`, `--freeze-link`; ~40 W idle |
 | ROG Ally RC71L | DIY osy | RTX 3080 | in progress | | `pci=realloc=on pci=hpmmiosize=128M` on the kernel line for the BAR window |
 | ROG Ally RC71L (BIOS 342) | *(dock not reported yet)* | RTX 5070 (Blackwell) | **works**, PCIe Gen4 x4, NVIDIA 610.57 | desktop mode on CachyOS Handheld; Gaming Mode needs the [gamescope variables](#gaming-mode-gamescope-sessions-bazzite-chimeraos-steamos-style) | reported on the osy Discord, 2026-09-10; no internal dGPU, so no eject |
+| ROG Flow X13 (2023), RTX 4070 dGPU | DIY osy Lite v0.6 | RTX 5070 (Blackwell) | **works** in Integrated GPU mode | render offload to the laptop screen (`go`) | the GPU mode set to Integrated (dGPU off) and a reboot before `go`; Hybrid mode failed. Reported on the osy Discord, 2026-11-12 |
 | *your machine* | | | | | `xgm-egpu report` prints a row - see [HARDWARE.md](HARDWARE.md) |
 
 Full details, dock revisions and the per-model notes from the osy community
@@ -71,10 +72,22 @@ proves the result with `nvidia-smi` at Gen3 and `glxinfo` run as you inside
 your session, naming the eGPU. The EC write can take up to two minutes; slow
 is not stuck.
 
-Games: Steam launch options `prime-run %command%` (add `mangohud` to see the
-GPU name in the overlay; native Wayland games need `SDL_VIDEODRIVER=x11`).
-When done: `sudo xgm-egpu off`. Every setting persists; the activation is
-one command per boot.
+**On a Flow with an NVIDIA dGPU, try Integrated mode first.** Set the GPU mode
+to Integrated (Eco in G-Helper or Armoury Crate, Integrated in ROG Control
+Center or `supergfxctl -m Integrated`), reboot, then `go`. With the internal
+dGPU already off there is nothing to eject and nothing for the compositor to
+hold, and the eject is the fragile part. On a 2023 X13 (RTX 4070 dGPU) with an
+RTX 5070 this worked first time where Hybrid mode failed; the reference 2021
+X13 also works in Hybrid mode, with the eject. See
+[TROUBLESHOOTING](docs/TROUBLESHOOTING.md#on-a-flow-with-an-nvidia-dgpu-go-fails-or-the-machine-panics-in-hybrid-mode).
+
+Games: Proton games (DXVK, VKD3D) pick the eGPU on their own, so empty launch
+options are fine. OpenGL games, and some native Vulkan ones, otherwise run on
+the laptop's iGPU: give them `prime-run %command%`. `prime-run` comes from the
+`nvidia-prime` package; without it Steam silently fails to start the game.
+Add `mangohud` to see the GPU name in the overlay; native Wayland games need
+`SDL_VIDEODRIVER=x11`. When done: `sudo xgm-egpu off`. Every setting persists;
+the activation is one command per boot.
 
 ## What the working configuration is
 
@@ -201,8 +214,8 @@ for an issue. "It died at stage 3" is as useful as "it works". See
 
 - Whether the idle PCIe downshift can be prevented without locking the
   clocks (a registry key rather than P0 forever, which costs ~40 W idle).
-- Whether the idle downshift can be prevented without locking clocks (a
-  registry key rather than P0 forever).
+- Why Hybrid mode panics on the 2023 X13 with an RTX 4070 dGPU, where
+  Integrated mode works: a `xgm-egpu logs show` from such a run would say.
 - Official docks: the reference machine is the most marginal build that
   exists. An official dock may need none of `--freeze-link`.
 

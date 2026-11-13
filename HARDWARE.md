@@ -16,6 +16,7 @@ on the eGPU's ports).
 | ROG Flow X13 GV301QH (BIOS 415) | DIY osy Lite v0.6.1, ALC04-S40EIA-00 instead of I-PEX CABLINE-VS | RTX 3060 (GA104, 10de:2487) | CachyOS, 7.2.3-1-cachyos, NVIDIA 580.178.04 | works | 8.0 GT/s x8 | render + display; monitor on the eGPU HDMI via `desktop pin --outputs` | 2026-09-09 | `go`; needs `pcie gen3` + `--freeze-link`, dies ~10 s after bind without them ([FINDINGS §8](FINDINGS.md#8-the-ten-second-link-death--rtd3-was-not-the-cause)). ~40 W idle |
 | ROG Ally (RC71L) | DIY osy | RTX 3080 | CachyOS | in progress | | | 2026-09 | BAR0 / bridge window: `pci=realloc=on pci=hpmmiosize=128M` on the kernel line |
 | ROG Ally RC71L (BIOS RC71L.342) | *(dock not yet reported)* | RTX 5070 (Blackwell) | CachyOS Handheld, 7.2.3-1-cachyos-deckify, NVIDIA 610.57.04 | works | 16.0 GT/s x4 (Gen4 x4, the Ally's XGM port) | desktop mode | 2026-09-10 | Reported on the osy Discord by armenazizbek (`xgm-egpu report`). No internal dGPU, so no eject. In the gamescope "Gaming Mode" session the eGPU's monitor stays dark: gamescope drives only the GPU it composites on; see the README's Gaming Mode section for the two-variable fix (untested) |
+| ROG Flow X13 (2023), RTX 4070 dGPU | DIY osy Lite v0.6 | RTX 5070 (Blackwell) | CachyOS | works | *(not reported yet)* | render (`go`), laptop screen | 2026-11-12 | Reported on the osy Discord by Faith. Works with the GPU mode set to Integrated (dGPU off) and a reboot before `go`; in Hybrid mode `go` failed, and from a TTY the machine hit a kernel panic later. `ROOT_PORT=0000:00:01.1` set by hand. Vulkan (FurMark, 1080p windowed): 175 fps on the laptop screen; OpenGL ran on the iGPU (no `prime-run`). Proton games ran with empty launch options |
 
 ## Dock revisions and connectors
 
@@ -29,3 +30,4 @@ need none of the link-freezing. Please say which in your row.
 - Flow: power the XG Mobile up before connecting the laptop's own PSU, or the boot crashes even with the PC off (Faith).
 - Cold boot with the eGPU attached can leave the link at PCIe 1.1 until the XG Mobile is power-cycled (SR20GODSMOTOR). Probably the same retrain problem seen from Windows.
 - Ada/Blackwell cards reportedly cause a hard-shutdown hang that PCIe 4.0-or-lower cards do not (Semih). The reference card is Ampere.
+- 2023 X13 with an RTX 4070 dGPU: run the eGPU in Integrated GPU mode (dGPU off, then reboot). Hybrid mode failed, and its TTY route ended in a kernel panic (Faith). The cause is not known yet; a `xgm-egpu logs show` from such a run would tell.
