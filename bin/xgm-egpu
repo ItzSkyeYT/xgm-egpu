@@ -782,11 +782,15 @@ detect_topology() {
             ROOT_PORT_SOURCE="parent bridge of the internal dGPU ($INTERNAL_DGPU)"
         else
             # No internal dGPU visible. Either there is none (ROG Ally), or a Flow's
-            # is hidden right now: eGPU still active, or dgpu_disable=1 (G-Helper's or
-            # Armoury Crate's Eco mode). The second case used to fall through to the
-            # Ally logic below and leave a Flow with no port (2023 X13, 2026-10-27).
+            # is hidden right now: eGPU still active, dgpu_disable=1 (G-Helper's or
+            # Armoury Crate's Eco mode), or taken off the bus by Linux's Integrated mode
+            # (supergfxctl), which leaves dgpu_disable at 0. The hidden cases used to fall
+            # through to the Ally logic below and leave a Flow with no port (2023 X13,
+            # 2026-10-27). For Integrated mode, a dGPU remembered by an earlier detect is
+            # what tells a Flow from an Ally (2023 X13, 2026-11-12).
             local pegp; pegp=$(acpi_pegp_port || true)
-            if [[ ( $egpu_state != 0 || $dgpu_off == 1 ) && -n $pegp ]]; then
+            local seen_dgpu; seen_dgpu=$( [[ -r $STATE_FILE ]] && . "$STATE_FILE" 2>/dev/null; printf '%s' "${INTERNAL_DGPU:-}" )
+            if [[ ( $egpu_state != 0 || $dgpu_off == 1 || -n $seen_dgpu ) && -n $pegp ]]; then
                 ROOT_PORT=$pegp
                 ROOT_PORT_SOURCE="ACPI: the bridge above the internal dGPU's PEGP node"
             else
@@ -805,6 +809,7 @@ detect_topology() {
             if [[ -z $ROOT_PORT ]]; then
                 [[ $dgpu_off == 1 ]] && warn "dgpu_disable=1 (Eco mode in G-Helper or Armoury Crate) hides the internal dGPU, which is how the port is normally found: switch to Standard/Optimized and run detect again"
                 [[ $egpu_state != 0 ]] && warn "egpu_enable=$egpu_state hides the internal dGPU, which is how the port is normally found: unplug the XGM cable, run '$0 off', then detect again (docs/RECOVERY.md)"
+                [[ $dgpu_off != 1 && $egpu_state == 0 ]] && warn "no internal dGPU visible. On a Flow in Integrated mode (supergfxctl, ROG Control Center) run detect once in Hybrid mode so it remembers the dGPU, or set ROOT_PORT in $CONFIG_FILE"
             fi
         fi
     fi

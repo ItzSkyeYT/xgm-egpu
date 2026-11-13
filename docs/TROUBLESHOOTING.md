@@ -276,8 +276,10 @@ None of these is a reason to leave Integrated or Eco mode: on a Flow with an
 NVIDIA dGPU it is the easier way to run the eGPU (next section). Since
 2026-10-28 detection reads the port from ACPI when the dGPU is hidden: the
 bridge whose ACPI node holds the dGPU's `PEGP` (`0000:00:01.1` on the 2021 and
-2023 Flow X13). If detection still finds nothing, run `xgm-egpu detect` once
-in Hybrid mode, or set `ROOT_PORT=` in `/etc/xgm-egpu.conf`. `xgm-egpu detect` prints where its answer
+2023 Flow X13). Since 2026-11-13 that includes Linux's Integrated mode, once a
+`detect` has seen the dGPU on this machine (it remembers it). If detection
+still finds nothing, run `xgm-egpu detect` once in Hybrid mode, or set
+`ROOT_PORT=` in `/etc/xgm-egpu.conf`. `xgm-egpu detect` prints where its answer
 came from, and warns if a hand-set `ROOT_PORT` disagrees with ACPI. To check by
 hand, with the internal dGPU visible:
 

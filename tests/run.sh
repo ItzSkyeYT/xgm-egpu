@@ -648,6 +648,16 @@ assert_eq  "eGPU still active, no cache: port from ACPI" "$ROOT_PORT" "0000:00:0
 echo 0 > "$T/fw/egpu_enable"
 ROOT_PORT='' ROOT_PORT_SOURCE='' INTERNAL_DGPU='' _TOPOLOGY_DONE=0; detect_topology 2>/dev/null
 assert_eq  "Ally case (no dGPU, nothing hidden): ACPI not used" "$ROOT_PORT" ""
+# Linux's Integrated mode (supergfxctl) takes the dGPU off the bus and leaves dgpu_disable at 0. An earlier
+# detect that saw a dGPU is what tells that apart from an Ally (2023 X13, 2026-11-12).
+mkdir -p "$T/state"; printf 'INTERNAL_DGPU=0000:01:00.0\nINTERNAL_DEVID=0x2860\nROOT_PORT=0000:00:01.1\n' > "$T/state/flow"
+STATE_FILE=$T/state/flow
+ROOT_PORT='' ROOT_PORT_SOURCE='' INTERNAL_DGPU='' _TOPOLOGY_DONE=0; detect_topology 2>/dev/null
+assert_eq  "Integrated mode, a dGPU seen before: port from ACPI" "$ROOT_PORT" "0000:00:01.1"
+assert_has "...and says so"                             "$ROOT_PORT_SOURCE" "PEGP"
+STATE_FILE=$T/state/none
+ROOT_PORT='' ROOT_PORT_SOURCE='' INTERNAL_DGPU='' _TOPOLOGY_DONE=0; out=$(detect_topology 2>&1)
+assert_has "nothing found, nothing hidden: names Integrated mode" "$out" "Integrated mode"
 echo 1 > "$T/fw/dgpu_disable"; rm -rf "$T/pci/0000:00:01.1/firmware_node"
 ROOT_PORT='' ROOT_PORT_SOURCE='' INTERNAL_DGPU='' _TOPOLOGY_DONE=0; out=$(detect_topology 2>&1)
 assert_has "no port found in Eco mode: says why"        "$out" "dgpu_disable=1"

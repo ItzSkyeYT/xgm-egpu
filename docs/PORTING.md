@@ -48,7 +48,10 @@ build on this.
 
 The internal dGPU's parent bridge, since the XGM shares its lanes.
 
-When that dGPU is hidden (Eco mode, `dgpu_disable=1`, or `egpu_enable` still 1)
+When that dGPU is hidden (Eco mode, `dgpu_disable=1`, or `egpu_enable` still 1,
+or Linux's Integrated mode, which takes it off the bus without `dgpu_disable`;
+that last case is recognised by the dGPU an earlier `detect` cached, since
+nothing else tells it from a host without one)
 the bridge is read from ACPI instead: the one whose ACPI node has a `PEGP`
 child. `PEGP` is the dGPU's ACPI name, and it is what the firmware's eGPU switch
 ejects (`\_SB_.PCI0.GPP0.PEGP` on the AMD Flows; [FINDINGS §6](../FINDINGS.md)).
